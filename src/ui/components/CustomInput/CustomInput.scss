@@ -66,6 +66,16 @@ ion-item.custom-input {
       --ion-item-border-color: var(--ion-color-neutral-400);
       min-height: 3.125rem;
 
+      input {
+        font-size: 1rem;
+        color: var(--ion-color-neutral-700);
+        font-weight: 400;
+
+        &::placeholder {
+          color: var(--ion-color-neutral-500);
+        }
+      }
+
       .label-text-wrapper {
         display: none;
       }
@@ -79,13 +89,14 @@ ion-item.custom-input {
       --background: transparent;
       --background-activated: var(--ion-color-neutral-400);
       --box-shadow: none;
+      color: var(--ion-color-neutral-500);
 
       &::part(native) {
         padding: 0;
       }
 
       ion-icon {
-        font-size: 1.85em;
+        font-size: 1.875em;
       }
     }
   }
