@@ -1,10 +1,10 @@
 const markSeedPhraseAsVerifiedMock = jest.fn();
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
-import TRANSLATIONS from "../../../../../locales/en/en.json";
-import { TabsRoutePath } from "../../../../../routes/paths";
-import { makeTestStore } from "../../../../utils/makeTestStore";
-import { passcodeFiller } from "../../../../utils/passcodeFiller";
+import TRANSLATIONS from "../../../locales/en/en.json";
+import { TabsRoutePath } from "../../../routes/paths";
+import { makeTestStore } from "../../utils/makeTestStore";
+import { passcodeFiller } from "../../utils/passcodeFiller";
 import { VerifySeedPhraseCard } from "./VerifySeedPhraseCard";
 import { VerifySeedPhraseModal } from "./VerifySeedPhraseModal";
 

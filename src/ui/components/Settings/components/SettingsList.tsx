@@ -67,6 +67,7 @@ import {
 } from "../Settings.types";
 import { ChangePin } from "./ChangePin";
 import "./SettingsList.scss";
+import { VerifySeedPhraseCard } from "../../VerifySeedPhrase";
 
 const SettingsList = ({ switchView, handleClose }: SettingsListProps) => {
   const dispatch = useAppDispatch();
@@ -497,6 +498,7 @@ const SettingsList = ({ switchView, handleClose }: SettingsListProps) => {
 
   return (
     <>
+      <VerifySeedPhraseCard />
       <InfoCard
         content={i18n.t("settings.info")}
         icon={informationCircleOutline}

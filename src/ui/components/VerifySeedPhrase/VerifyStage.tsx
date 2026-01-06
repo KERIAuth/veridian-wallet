@@ -1,10 +1,10 @@
 import { IonButton, IonIcon } from "@ionic/react";
 import { backspaceOutline } from "ionicons/icons";
 import { useCallback, useEffect, useState } from "react";
-import { i18n } from "../../../../../i18n";
-import { Alert } from "../../../../components/Alert";
-import { PageFooter } from "../../../../components/PageFooter";
-import { SeedPhraseModule } from "../../../../components/SeedPhraseModule";
+import { i18n } from "../../../i18n";
+import { Alert } from "../Alert";
+import { PageFooter } from "../PageFooter";
+import { SeedPhraseModule } from "../SeedPhraseModule";
 import { VerifyStageProps } from "./VerifySeedPhraseModal.types";
 import "./VerifyStage.scss";
 

@@ -1,12 +1,12 @@
 import { IonButton, IonIcon } from "@ionic/react";
 import { checkmark, syncOutline } from "ionicons/icons";
 import { useState } from "react";
-import { i18n } from "../../../../../i18n";
-import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
+import { i18n } from "../../../i18n";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import {
   getAuthentication,
   setAuthentication,
-} from "../../../../../store/reducers/stateCache";
+} from "../../../store/reducers/stateCache";
 import "./VerifySeedPhraseCard.scss";
 import { VerifySeedPhraseModal } from "./VerifySeedPhraseModal";
 

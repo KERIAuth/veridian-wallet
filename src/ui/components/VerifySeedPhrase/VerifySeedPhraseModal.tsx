@@ -1,11 +1,11 @@
 import { IonModal } from "@ionic/react";
 import { useState } from "react";
-import { Agent } from "../../../../../core/agent/agent";
-import { i18n } from "../../../../../i18n";
-import { ScrollablePageLayout } from "../../../../components/layout/ScrollablePageLayout";
-import { PageHeader } from "../../../../components/PageHeader";
-import { RecoverySeedPhrase } from "../../../../components/Settings/components/RecoverySeedPhrase";
-import { showError } from "../../../../utils/error";
+import { Agent } from "../../../core/agent/agent";
+import { i18n } from "../../../i18n";
+import { ScrollablePageLayout } from "../../components/layout/ScrollablePageLayout";
+import { PageHeader } from "../../components/PageHeader";
+import { RecoverySeedPhrase } from "../../components/Settings/components/RecoverySeedPhrase";
+import { showError } from "../../utils/error";
 import {
   Step,
   VerifySeedPhraseModalProps,

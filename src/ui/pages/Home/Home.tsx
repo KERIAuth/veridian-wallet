@@ -19,7 +19,7 @@ import { Profiles } from "../Profiles";
 import "./Home.scss";
 import { RotateKeyModal } from "./components/RotateKeyModal";
 import { ScanToLogin } from "./components/ScanToLogin";
-import { VerifySeedPhraseCard } from "./components/VerifySeedPhrase";
+import { VerifySeedPhraseCard } from "../../components/VerifySeedPhrase";
 
 const Home = () => {
   const pageId = "home-tab";

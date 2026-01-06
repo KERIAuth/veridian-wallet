@@ -10,8 +10,9 @@ import {
 import FilledIcon from "../../assets/images/filled.png";
 import MissingMobileImage from "../../assets/images/mobile_question.png";
 import PasswordImage from "../../assets/images/password_icon.png";
-import { VerifySeedPhraseModal } from "../../pages/Home/components/VerifySeedPhrase";
+
 import "./VerifySeedPhraseAlert.scss";
+import { VerifySeedPhraseModal } from "../VerifySeedPhrase/VerifySeedPhraseModal";
 
 export const VerifySeedPhraseAlert = () => {
   const pageId = "verify-seedphrase-alert";
