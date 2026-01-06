@@ -825,10 +825,16 @@
             "close": "Close",
             "warning": "This feature isn’t available yet. Once it’s live you’ll be able to login to services such as: apps, games, social media, banking and much more!",
             "description": "Use your Veridian wallet to securely sign in to apps, games, social media, banking, and other services. Simply scan the QR code provided by the service you wish to access.",
-            "content": {
-              "title": "What is “scan to login”?",
-              "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n\nUt enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.\n\nExcepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-            }
+            "content": [
+              {
+                "subtitle": "What is “scan to login”?",
+                "text": "Scan to login is a secure way to access online services by scanning a QR code with your wallet.\n\nInstead of relying on passwords that can be guessed, stolen, or reused, this method uses strong cryptographic keys stored safely on your device.\n\nThis protects you from phishing, impersonation, and data leaks by ensuring only you can approve a login. With a quick scan, you stay in control — no personal details are shared unless you choose to."
+              },
+              {
+                "subtitle": "Safeguarding online",
+                "text": "Scan to login introduces a safer way for everyone — including children — to access online services.\n\nBy using verifiable credentials such as birth certificates or age-attested IDs, apps and websites can confirm a is of age without exposing any sensitive information.\n\nThis means parents and guardians can ensure that their children only access age-appropriate spaces, and service providers can create safer communities by allowing only verified users into their platforms.\n\nWith every login approved directly inside your wallet, it becomes much harder for strangers to impersonate others or create fake accounts."
+              }
+            ]
           },
           "rotatekeys": {
             "title": "Rotate key",
