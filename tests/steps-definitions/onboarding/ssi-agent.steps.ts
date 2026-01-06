@@ -18,6 +18,13 @@ Then(/^user can see SSI Agent Details screen$/, async function () {
   await SsiAgentDetailsScreen.loads();
 });
 
+Then(/^user can see Connect to Veridian screen$/, async function () {
+  const summaryTitle = $('[data-testid="ssi-agent-summary-title"]');
+  await summaryTitle.waitForDisplayed({ timeout: 15000 });
+  await expect(summaryTitle).toBeDisplayed();
+  await expect(summaryTitle).toHaveText("Connect to Veridian");
+});
+
 Given(/^user generate passcode and skip password and verify recovery phrase$/, async function() {
   if (await OnboardingScreen.getStartedButton.isExisting()) {
     await OnboardingScreen.tapOnGetStartedButton();

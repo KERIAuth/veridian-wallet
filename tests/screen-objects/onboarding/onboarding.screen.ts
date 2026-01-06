@@ -16,6 +16,8 @@ export class OnboardingScreen {
   }
 
   async loads() {
+    // Wait for screen to load
+    await this.getStartedButton.waitForDisplayed({ timeout: 10000 });
     await expect(this.getStartedButton).toBeDisplayed();
     await expect(this.iAlreadyHaveAWalletButton).toBeDisplayed();
   }

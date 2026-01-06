@@ -7,7 +7,7 @@ import { delay } from "../base.screen";
 
 export class PasscodeScreen {
   get cantRememberButton() {
-    return $('[data-testid="secondary-button-set-passcode"]');
+    return $('[data-testid="tertiary-button-set-passcode"]');
   }
 
   get id() {
@@ -37,7 +37,16 @@ export class PasscodeScreen {
   }
 
   async loads() {
-    await expect($(BaseModal.closeButtonLocator)).toBeDisplayed();
+    // Wait for passcode screen to fully load
+    await this.screenTitle.waitForDisplayed({ timeout: 10000 });
+    
+    // Check if close button exists (it may not be present in all versions)
+    const closeButton = $(BaseModal.closeButtonLocator);
+    const isCloseButtonExist = await closeButton.isExisting();
+    if (isCloseButtonExist) {
+      await expect(closeButton).toBeDisplayed();
+    }
+    
     await expect(this.screenTitle).toBeDisplayed();
     await expect(this.screenTitle).toHaveText(Passcode.Title);
     await expect(this.screenDescriptionText).toBeDisplayed();

@@ -38,6 +38,9 @@ export const config = {
         "appium:app": process.env.APP_PATH,
         "appium:newCommandTimeout": 260,
         "appium:webviewConnectTimeout": 80 * 1000, // 80 seconds
+        "appium:adbExecTimeout": 60000, // 60 seconds for ADB commands
+        // Auto grant all Android permissions
+        "appium:autoGrantPermissions": true,
       },
     ]
   },

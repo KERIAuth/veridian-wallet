@@ -47,11 +47,11 @@ export class CreatePasswordScreen {
   }
 
   get pageInforTitle() {
-    return $(".setup-password > .page-info");
+    return $('[data-testid="create-password-page"] .setup-password > .page-info');
   }
 
   get addPasswordButton() {
-    return $("[data-testid='primary-button']");
+    return $('[data-testid="create-password-page"] [data-testid="primary-button"]');
   }
 
   get setUpLaterButton() {
@@ -59,6 +59,8 @@ export class CreatePasswordScreen {
   }
 
   async loads() {
+    // Wait for screen to load with longer timeout
+    await this.screenTitle.waitForDisplayed({ timeout: 15000 });
     await expect(this.screenTitle).toBeDisplayed();
     await expect(this.screenTitle).toHaveText(CreatePassword.Title);
     await expect(this.screenTopParagraph).toBeDisplayed();

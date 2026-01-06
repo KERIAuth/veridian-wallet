@@ -1,7 +1,7 @@
 export enum CreatePassword {
   AcceptCriteria = "Must be between 8-64 characters, contain a lowercase and uppercase letter, a number, and a symbol.",
   Description = "Add an extra layer of security for sensitive actions in your wallet by creating an optional password.",
-  Title = "Create password",
+  Title = "Create a password",
 }
 
 export enum IdentifierDetails {
@@ -9,11 +9,11 @@ export enum IdentifierDetails {
 }
 
 export enum Passcode {
-  Description = "Create a passcode to secure your wallet and to continue the onboarding process",
+  Description = "Create a PIN to secure your wallet and to continue the onboarding process",
   DescriptionNewPasscode = "Create a new passcode to secure your wallet",
   DescriptionEnterPasscode = "Please enter your passcode to verify",
-  Title = "Create your Passcode",
-  TitleReEnter = "Re-enter your Passcode",
+  Title = "Create your PIN",
+  TitleReEnter = "Re-enter your PIN",
   TitleNewPasscode = "Create new passcode",
   TitleEnterPasscode = "Enter passcode",
   TitleReEnterNewPasscode = "Re-enter new passcode",
