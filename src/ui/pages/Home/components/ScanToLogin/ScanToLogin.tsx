@@ -3,7 +3,7 @@ import { informationCircleOutline } from "ionicons/icons";
 import { ScrollablePageLayout } from "../../../../components/layout/ScrollablePageLayout";
 import { PageHeader } from "../../../../components/PageHeader";
 import { i18n } from "../../../../../i18n";
-import { ScanToLoginProps } from "./ScanToLogin.types";
+import { ScanToLoginContent, ScanToLoginProps } from "./ScanToLogin.types";
 import { InfoCard } from "../../../../components/InfoCard";
 import "./ScanToLogin.scss";
 
@@ -17,7 +17,7 @@ const ScanToLogin = ({ isOpen, setIsOpen }: ScanToLoginProps) => {
   const componentId = "scan-to-login";
   const content = i18n.t("tabs.home.tab.modals.scan.content", {
     returnObjects: true,
-  }) as Array<{ subtitle: string; text: string }>;
+  }) as ScanToLoginContent[];
 
   const handleClose = () => {
     setIsOpen(false);

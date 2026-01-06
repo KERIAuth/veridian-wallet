@@ -7,6 +7,7 @@ import { IonReactMemoryRouter } from "@ionic/react-router";
 import EN_TRANSLATIONS from "../../../../../locales/en/en.json";
 import { makeTestStore } from "../../../../utils/makeTestStore";
 import { ScanToLogin } from "./ScanToLogin";
+import { ScanToLoginContent } from "./ScanToLogin.types";
 
 afterEach(() => {
   cleanup();
@@ -42,12 +43,7 @@ describe("ScanToLogin component", () => {
 
     expect(getByText(scanTranslations.title)).toBeInTheDocument();
 
-    const firstSection = (
-      scanTranslations.content as Array<{
-        subtitle: string;
-        text: string;
-      }>
-    )[0];
+    const firstSection = (scanTranslations.content as ScanToLoginContent[])[0];
     const firstParagraph = firstSection.text.split(/\r?\n\r?\n+/)[0].trim();
 
     await waitFor(() => {
