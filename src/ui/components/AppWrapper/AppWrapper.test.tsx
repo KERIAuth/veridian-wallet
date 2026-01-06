@@ -640,7 +640,7 @@ describe("KERIA operation state changed handler", () => {
       })
     );
     expect(dispatch).toBeCalledWith(
-      setToastMsg(ToastMsgType.IDENTIFIER_UPDATED)
+      setToastMsg(ToastMsgType.CREATE_IDENTIFIER_FAIL)
     );
   });
 
