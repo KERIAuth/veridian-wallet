@@ -71,7 +71,7 @@ const operationFailureHandler = async (
           creationStatus: CreationStatus.FAILED,
         })
       );
-      dispatch(setToastMsg(ToastMsgType.IDENTIFIER_UPDATED));
+      dispatch(setToastMsg(ToastMsgType.CREATE_IDENTIFIER_FAIL));
       break;
     }
     case OperationPendingRecordType.Oobi: {

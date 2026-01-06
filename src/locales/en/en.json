@@ -1553,7 +1553,8 @@
     "connecturlmismatch": "There’s a URL mismatch",
     "invalidbooturlerror": "Incorrect boot url",
     "invalidconnecturlerror": "Incorrect connect url",
-    "networkerror": "Unable to reach the cloud"
+    "networkerror": "Unable to reach the cloud",
+    "createidentifiererror": "Unable to create profile"
   },
   "request": {
     "sign": {
