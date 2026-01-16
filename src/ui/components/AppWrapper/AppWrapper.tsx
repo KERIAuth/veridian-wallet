@@ -249,6 +249,10 @@ const AppWrapper = (props: { children: ReactNode }) => {
       dispatch(setNotificationsEnabled(enabled));
       dispatch(setNotificationsConfigured(configured));
 
+      if (!Agent.agent.dependenciesInitialized) {
+        return;
+      }
+
       try {
         await Agent.agent.basicStorage.createOrUpdateBasicRecord(
           new BasicRecord({
@@ -265,7 +269,7 @@ const AppWrapper = (props: { children: ReactNode }) => {
 
   useEffect(() => {
     const syncNotificationsPreferences = async (): Promise<void> => {
-      if (!areDependenciesReady) {
+      if (!areDependenciesReady || !Agent.agent.dependenciesInitialized) {
         return;
       }
 
@@ -766,6 +770,9 @@ const AppWrapper = (props: { children: ReactNode }) => {
     }
 
     notificationService.setProfileSwitcher(async (profileId: string) => {
+      if (!Agent.agent.dependenciesInitialized) {
+        return;
+      }
       dispatch(setCurrentProfile(profileId));
       await Agent.agent.basicStorage.createOrUpdateBasicRecord(
         new BasicRecord({
