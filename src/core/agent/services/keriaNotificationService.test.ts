@@ -301,6 +301,7 @@ describe("Signify notification service of agent", () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     markNotificationMock.mockResolvedValue({ status: "done" });
     identifiersGetMock.mockResolvedValueOnce(hab);
   });
@@ -3123,7 +3124,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("Should handle long operations with type witness", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -3165,7 +3165,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("Completed group operations for deleted groups does not cause an error", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -3210,7 +3209,6 @@ describe("Long running operation tracker", () => {
 
   test("Can handle connection completion (OOBI resolution) for multiple profiles at once", async () => {
     const oobiResolutionTime = Date.now();
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -3357,7 +3355,6 @@ describe("Long running operation tracker", () => {
 
   test("Should skip connection completion logic for already completed connection pairs", async () => {
     const oobiResolutionTime = Date.now();
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -4106,7 +4103,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("ExchangeReceiveCredential operations must have an exchange route of /ipex/admit", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
