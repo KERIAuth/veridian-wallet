@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { Configuration } from "./configurationService.types";
 // eslint-disable-next-line no-undef
 
@@ -46,20 +47,82 @@ class ConfigurationService {
     return this.configurationEnv;
   }
 
+  private getKeriaHost(): string | undefined {
+    // If KERIA_IP is explicitly set, use it
+    if (keriaIP) {
+      return keriaIP;
+    }
+
+    // Automatically use 10.0.2.2 for Android emulator
+    // 10.0.2.2 is the special alias Android emulator uses to reach the host machine
+    try {
+      if (Capacitor.getPlatform() === "android") {
+        return "10.0.2.2";
+      }
+    } catch {
+      // If Capacitor is not available (e.g., in tests), fall back to undefined
+    }
+
+    return undefined;
+  }
+
   private setKeriaIp() {
+    const keriaHost = this.getKeriaHost();
+    if (!keriaHost) {
+      // No host override needed
+      return;
+    }
+
     const keriaUrl = ConfigurationService.configurationEnv.keri?.keria?.url;
     const keriaBootUrl =
       ConfigurationService.configurationEnv.keri?.keria?.bootUrl;
-    if (keriaIP && ConfigurationService.configurationEnv.keri?.keria?.url) {
-      ConfigurationService.configurationEnv.keri.keria.url = keriaUrl?.replace(
+
+    if (keriaUrl && ConfigurationService.configurationEnv.keri?.keria) {
+      ConfigurationService.configurationEnv.keri.keria.url = keriaUrl.replace(
         /\/\/[^:]+/,
-        `//${keriaIP}`
+        `//${keriaHost}`
       );
     }
-    if (keriaIP && ConfigurationService.configurationEnv.keri?.keria?.bootUrl) {
+    if (keriaBootUrl && ConfigurationService.configurationEnv.keri?.keria) {
       ConfigurationService.configurationEnv.keri.keria.bootUrl =
-        keriaBootUrl?.replace(/\/\/[^:]+/, `//${keriaIP}`);
+        keriaBootUrl.replace(/\/\/[^:]+/, `//${keriaHost}`);
     }
+  }
+
+  /**
+   * Get the resolved Keria connect URL
+   * This is the centralized method for getting the Keria connect URL
+   * @returns The resolved Keria connect URL
+   */
+  static getKeriaConnectUrl(): string {
+    const url = ConfigurationService.configurationEnv?.keri?.keria?.url;
+    if (!url) {
+      throw new Error("Keria connect URL is not configured");
+    }
+    return url;
+  }
+
+  /**
+   * Get the resolved Keria boot URL
+   * This is the centralized method for getting the Keria boot URL
+   * @returns The resolved Keria boot URL
+   */
+  static getKeriaBootUrl(): string {
+    const url = ConfigurationService.configurationEnv?.keri?.keria?.bootUrl;
+    if (!url) {
+      throw new Error("Keria boot URL is not configured");
+    }
+    return url;
+  }
+
+  /**
+   * Get the Keria host (IP address) used for URL resolution
+   * This is useful for replacing http://keria:3902 in OOBI URLs
+   * @returns The Keria host IP (e.g., "10.0.2.2" for Android emulator, "127.0.0.1" for others)
+   */
+  static getKeriaHost(): string {
+    const keriaHost = new ConfigurationService().getKeriaHost();
+    return keriaHost || "127.0.0.1";
   }
 
   private configurationValid(

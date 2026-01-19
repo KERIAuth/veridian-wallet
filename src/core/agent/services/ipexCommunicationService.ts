@@ -1280,10 +1280,18 @@ class IpexCommunicationService extends AgentService {
     // Indexer role indicates issuer site hosting OOBIs for e.g. schemas.
     // This can be improved by resolving the indexer OOBI and using KERIA to retrieve the /loc/scheme URL.
     // For now this works, and doesn't impose security risks since schemas are secured by their SAID.
+
+    // Use centralized Keria host resolution from ConfigurationService
+    // This ensures consistency with the main Keria URL resolution
+    const { ConfigurationService } = await import(
+      "../../configuration/configurationService"
+    );
+    const keriaHost = ConfigurationService.getKeriaHost();
+
     const agentBase = agentOobi
       .split("/agent")[0]
       .split("/controller")[0]
-      .replace("http://keria:3902", "http://127.0.0.1:3902");
+      .replace("http://keria:3902", `http://${keriaHost}:3902`);
 
     const indexerOobiResult = await (
       await fetch(`${agentBase}/indexer/${prefix}`)

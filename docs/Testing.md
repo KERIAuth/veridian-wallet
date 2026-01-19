@@ -27,19 +27,20 @@ npm run test
   - install driver for chrome ``` appium driver install chromium ```
   - install driver for safari ``` appium driver install safari ```
 - Android Emulator for [Samsung Galaxy S23 Ultra](https://developer.samsung.com/galaxy-emulator-skin/guide.html) is configured or iOS Simulator for [iPhone 15 Pro / 15 Pro Max](https://developer.apple.com/documentation/xcode/installing-additional-simulator-runtimes)
-- Create .env file in your local root project folder with APP_PATH, KERIA_IP property with path to app build for chosen platform
+- Create .env file in your local root project folder with APP_PATH, and optionally KERIA_IP property with path to app build for chosen platform
 ```
-# Android
+# Android Emulator
 APP_PATH=<LOCAL_PATH/app-release-unsigned.apk>
-KERIA_IP=<IP_V4>
+# KERIA_IP is optional for Android emulator - it automatically uses 10.0.2.2
+# KERIA_IP=10.0.2.2
 
-# iOS
+# iOS Simulator or Physical Devices
 APP_PATH=<LOCAL_PATH/App.app>
 KERIA_IP=<IP_V4>
 ```
 
 #### How to get IP v4 address:
-This is required to connect the simulator to the locally running KERIA docker container on your machine.
+This is required to connect iOS simulators or physical devices to the locally running KERIA docker container on your machine. **Note:** Android emulators automatically use `10.0.2.2` to reach the host machine, so `KERIA_IP` is optional for Android emulator testing.
 #### MacOS:
 ````bash
 ifconfig | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | grep -v 127.0.0.1 | head -1 | awk '{ print $2 }'
@@ -70,11 +71,11 @@ npm run wdio:ios:15promax
 ```
 - for specific feature
 ```
-npm run wdio:ios:15promax -- --spec ./tests/features/passcode.feature
+npm run wdio:ios:15promax -- --spec ./tests/features/onboarding/onboarding-pin.feature
 ```
 - for specific scenario in feature you want to run it put a line number at which there is scenario title
 ```
-npm run wdio:ios:15promax -- --spec ./tests/features/passcode.feature:18
+npm run wdio:ios:15promax -- --spec ./tests/features/onboarding/onboarding-pin.feature:18
 ```
 - If there are issues with appium service run by WDIO, please start appium in terminal separately
 - In case WDIO tests will not exit on its own kill the process yourself e.g. ``` pkill -9 -f wdio ```

@@ -8,6 +8,7 @@ const config: CapacitorConfig = {
   android: {
     webContentsDebuggingEnabled: process.env.ENVIRONMENT !== "prod",
     adjustMarginsForEdgeToEdge: "disable",
+    allowMixedContent: true, // Allow HTTP requests from HTTPS pages (needed for Android emulator to reach Keria)
   },
   ios: {
     webContentsDebuggingEnabled: process.env.ENVIRONMENT !== "prod",
