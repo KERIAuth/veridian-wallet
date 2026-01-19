@@ -1,0 +1,79 @@
+name: E2E PR Check - Onboarding Intro
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'tests/steps-definitions/onboarding/**'
+      - 'tests/features/onboarding/**'
+      - 'tests/helpers/**'
+      - 'tests/screen-objects/onboarding/**'
+      - 'src/ui/pages/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  e2e-onboarding-intro:
+    timeout-minutes: 30
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 18
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 36
+          target: default
+          arch: x86_64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project for E2E
+        run: |
+          export LANG=en_US.UTF-8
+          npm run build:e2e
+
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+          cd ..
+
+      - name: Create .env file
+        run: |
+          APP_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo APP_PATH=$APP_PATH > .env
+          echo "APP_PATH set to: $APP_PATH"
+
+      - name: Start Appium
+        run: |
+          npm install -g appium
+          appium driver install uiautomator2
+          appium &
+
+      - name: Wait for Appium
+        run: |
+          timeout 30 bash -c 'until curl -s http://127.0.0.1:4723/wd/hub/status; do sleep 1; done'
+
+      - name: Run onboarding-intro E2E test
+        run: |
+          npm run wdio:android:s24ultra -- --spec ./tests/features/onboarding/onboarding-intro.feature
+
+      - name: Cleanup
+        if: always()
+        run: |
+          adb emu kill || true
+          pkill -f appium || true
