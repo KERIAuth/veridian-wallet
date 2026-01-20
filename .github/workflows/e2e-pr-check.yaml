@@ -30,6 +30,16 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+        id: java
+
+      - name: Verify Java installation
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          if ! java -version 2>&1 | grep -q "21"; then
+            echo "ERROR: Java 21 is not installed!"
+            exit 1
+          fi
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -37,6 +47,11 @@ jobs:
           api-level: 36
           target: default
           arch: x86_64
+
+      - name: Verify Java after Android SDK setup
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
 
       - name: Install dependencies
         run: npm ci
@@ -49,7 +64,10 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          export JAVA_HOME="$JAVA_HOME"
+          echo "Using JAVA_HOME: $JAVA_HOME"
+          java -version
+          ./gradlew assembleDebug -Dorg.gradle.java.home="$JAVA_HOME"
           cd ..
 
       - name: Create .env file
