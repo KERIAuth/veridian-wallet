@@ -26,7 +26,7 @@ jobs:
           node-version: 20
 
       - name: Setup Java
-        uses: actions/setup-java@cd92f1f64a4a3cfc50b6b4de34e336cd5c5e5f5b # v4.4.0
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
