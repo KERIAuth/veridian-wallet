@@ -40,3 +40,5 @@ services/credential-server/data/brans.json
 android/app/release/output-metadata.json
 
 .env*
+
+/temp
