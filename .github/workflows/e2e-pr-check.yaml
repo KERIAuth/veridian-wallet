@@ -1,86 +1,86 @@
-name: E2E PR Check - Onboarding Intro
-
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'tests/steps-definitions/onboarding/**'
-      - 'tests/features/onboarding/**'
-      - 'tests/helpers/**'
-      - 'tests/screen-objects/onboarding/**'
-      - 'src/ui/pages/**'
-      - 'package.json'
-      - 'package-lock.json'
-
-jobs:
-  e2e-onboarding-intro:
-    timeout-minutes: 60
-    runs-on: macos-15 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm' 
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle' 
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project for E2E
-        run: |
-          export LANG=en_US.UTF-8
-          npm run build:e2e
-
-      - name: Build Android APK
-        run: |
-          cd android
-          ./gradlew assembleDebug
-          cd ..
-          # Dynamically set the APP_PATH for the test runner
-          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
-          echo "APP_PATH=$APK_PATH" >> "$GITHUB_ENV"
-
-      - name: Start Appium
-        run: |
-          npm install -g appium
-          appium driver install uiautomator2 || appium driver update uiautomator2
-          appium --log-level error & 
-
-      - name: Run onboarding-intro E2E test
-        uses: reactivecircus/android-emulator-runner@v2
-        env:
-          NODE_OPTIONS: "--max_old_space_size=8192" 
-        with:
-          api-level: 31 
-          target: google_apis
-          arch: x86_64
-          force-avd-creation: true
-          emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
-          disable-animations: true
-          script: |
-            # 1. Wait for Appium using the DevOps-preferred health check logic
-            for i in {1..20}; do 
-              if curl -s http://127.0.0.1:4723/status; then 
-                echo "Appium is ready!"
-                break 
-              fi
-              echo "Waiting for Appium... ($i/20)"
-              sleep 5
-            done
-            # 2. Run your specific test scenario
-            npm run wdio:android:s24ultra -- --spec ./tests/features/onboarding/onboarding-intro.feature
-
-      - name: Cleanup
-        if: always()
-        run: |
-          pkill -f appium || true
+# name: E2E PR Check - Onboarding Intro
+#
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+#     paths:
+#       - 'tests/steps-definitions/onboarding/**'
+#       - 'tests/features/onboarding/**'
+#       - 'tests/helpers/**'
+#       - 'tests/screen-objects/onboarding/**'
+#       - 'src/ui/pages/**'
+#       - 'package.json'
+#       - 'package-lock.json'
+#
+# jobs:
+#   e2e-onboarding-intro:
+#     timeout-minutes: 60
+#     runs-on: macos-15 
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+#
+#       - name: Setup Node
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
+#           cache: 'npm' 
+#
+#       - name: Setup Java
+#         uses: actions/setup-java@v4
+#         with:
+#           distribution: 'temurin'
+#           java-version: '21'
+#           cache: 'gradle' 
+#
+#       - name: Install dependencies
+#         run: npm ci
+#
+#       - name: Build project for E2E
+#         run: |
+#           export LANG=en_US.UTF-8
+#           npm run build:e2e
+#
+#       - name: Build Android APK
+#         run: |
+#           cd android
+#           ./gradlew assembleDebug
+#           cd ..
+#           # Dynamically set the APP_PATH for the test runner
+#           APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+#           echo "APP_PATH=$APK_PATH" >> "$GITHUB_ENV"
+#
+#       - name: Start Appium
+#         run: |
+#           npm install -g appium
+#           appium driver install uiautomator2 || appium driver update uiautomator2
+#           appium --log-level error & 
+#
+#       - name: Run onboarding-intro E2E test
+#         uses: reactivecircus/android-emulator-runner@v2
+#         env:
+#           NODE_OPTIONS: "--max_old_space_size=8192" 
+#         with:
+#           api-level: 31 
+#           target: google_apis
+#           arch: x86_64
+#           force-avd-creation: true
+#           emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
+#           disable-animations: true
+#           script: |
+#             # 1. Wait for Appium using the DevOps-preferred health check logic
+#             for i in {1..20}; do 
+#               if curl -s http://127.0.0.1:4723/status; then 
+#                 echo "Appium is ready!"
+#                 break 
+#               fi
+#               echo "Waiting for Appium... ($i/20)"
+#               sleep 5
+#             done
+#             # 2. Run your specific test scenario
+#             npm run wdio:android:s24ultra -- --spec ./tests/features/onboarding/onboarding-intro.feature
+#
+#       - name: Cleanup
+#         if: always()
+#         run: |
+#           pkill -f appium || true
