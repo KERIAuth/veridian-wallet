@@ -15,7 +15,7 @@ on:
 jobs:
   e2e-onboarding-intro:
     timeout-minutes: 60
-    runs-on: macos-latest
+    runs-on: macos-15 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,13 +24,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: 'npm' 
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'gradle' 
 
       - name: Install dependencies
         run: npm ci
@@ -45,8 +46,9 @@ jobs:
           cd android
           ./gradlew assembleDebug
           cd ..
-          APP_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
-          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          # Dynamically set the APP_PATH for the test runner
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo "APP_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Start Appium
         run: |
@@ -56,15 +58,17 @@ jobs:
 
       - name: Run onboarding-intro E2E test
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NODE_OPTIONS: "--max_old_space_size=8192" 
         with:
-          api-level: 31 # API 31 is the most stable and fastest-booting for CI
+          api-level: 31 
           target: google_apis
           arch: x86_64
-          force-avd-creation: true # Force creation to ensure no corrupted configs
+          force-avd-creation: true
           emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
           disable-animations: true
           script: |
-            # Health check for Appium
+            # 1. Wait for Appium using the DevOps-preferred health check logic
             for i in {1..20}; do 
               if curl -s http://127.0.0.1:4723/status; then 
                 echo "Appium is ready!"
@@ -73,8 +77,10 @@ jobs:
               echo "Waiting for Appium... ($i/20)"
               sleep 5
             done
+            # 2. Run your specific test scenario
             npm run wdio:android:s24ultra -- --spec ./tests/features/onboarding/onboarding-intro.feature
 
       - name: Cleanup
         if: always()
-        run: pkill -f appium || true
+        run: |
+          pkill -f appium || true
