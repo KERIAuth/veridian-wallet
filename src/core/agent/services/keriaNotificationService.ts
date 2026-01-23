@@ -35,6 +35,7 @@ import {
   EventTypes,
   OperationCompleteEvent,
   OperationAddedEvent,
+  OperationRemovedEvent,
   NotificationRemovedEvent,
   ConnectionStateChangedEvent,
   ConnectionInvalidEvent,
@@ -137,6 +138,17 @@ class KeriaNotificationService extends AgentService {
       EventTypes.OperationAdded,
       (event) => {
         this.pendingOperations.push(event.payload.operation);
+      }
+    );
+    this.props.eventEmitter.on<OperationRemovedEvent>(
+      EventTypes.OperationRemoved,
+      (event) => {
+        const index = this.pendingOperations.findIndex(
+          (op) => op.id === event.payload.operationId
+        );
+        if (index !== -1) {
+          this.pendingOperations.splice(index, 1);
+        }
       }
     );
   }

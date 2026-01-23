@@ -1,7 +1,7 @@
 import { ready, Serder } from "signify-ts";
 import { PeerConnection } from "../../cardano/walletConnect/peerConnection";
 import { Agent } from "../agent";
-import { ConnectionStatus, MiscRecordId, CreationStatus } from "../agent.types";
+import { MiscRecordId, CreationStatus } from "../agent.types";
 import { IdentifierMetadataRecord } from "../records/identifierMetadataRecord";
 import { CoreEventEmitter } from "../event";
 import { IdentifierService } from "./identifierService";
@@ -34,6 +34,7 @@ const exchangeGetMock = jest.fn();
 const interactMock = jest.fn();
 const sendFromEventsMock = jest.fn();
 const createExchangeMessageMock = jest.fn();
+const deleteByIdMock = jest.fn();
 
 const mockSigner = {
   _code: "A",
@@ -108,6 +109,7 @@ const identifierStorage = jest.mocked({
 const operationPendingStorage = jest.mocked({
   save: saveOperationPendingMock,
   findById: findOperationMock,
+  deleteById: deleteByIdMock,
 });
 
 const eventEmitter = new CoreEventEmitter();
@@ -1779,6 +1781,14 @@ describe("Identifier Deletion Logic", () => {
         "dApp-address",
         true
       );
+      const operationId = `witness.${identifierMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
     });
 
     // Success flow (Group Member)
@@ -1817,6 +1827,14 @@ describe("Identifier Deletion Logic", () => {
       expect(eventEmitter.emit).toBeCalledWith({
         type: EventTypes.NotificationRemoved,
         payload: { id: findNotificationsResult[1].id },
+      });
+      const operationId = `witness.${groupMemberMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
       });
     });
 
@@ -1880,6 +1898,14 @@ describe("Identifier Deletion Logic", () => {
         type: EventTypes.NotificationRemoved,
         payload: { id: findNotificationsResult[1].id },
       });
+      const operationId = `group.${groupMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
     });
 
     // Notification cleanup verification
@@ -1933,6 +1959,14 @@ describe("Identifier Deletion Logic", () => {
         NotificationRoute.ExnIpexGrant,
         operationPendingStorage
       );
+      const operationId = `witness.${identifierMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
 
       mockDeleteNotificationRecordById.mockRestore();
     });
@@ -2012,6 +2046,14 @@ describe("Identifier Deletion Logic", () => {
         "dApp-address",
         true
       );
+      const operationId = `witness.${identifierMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
     });
 
     test("should wipe identifier from queued pending identifier if still processing (group member)", async () => {
@@ -2087,6 +2129,14 @@ describe("Identifier Deletion Logic", () => {
         "dApp-address",
         true
       );
+      const operationId = `witness.${groupMemberMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
     });
 
     test("should wipe group identifier from queued pending groups if still processing and corresponding group member from pending identifiers", async () => {
@@ -2196,6 +2246,49 @@ describe("Identifier Deletion Logic", () => {
         type: EventTypes.NotificationRemoved,
         payload: { id: findNotificationsResult[1].id },
       });
+      const operationId = `group.${groupMetadataRecord.id}`;
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).toBeCalledWith({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
+    });
+  });
+
+  describe("Private: cleanupPendingOperationsForIdentifier", () => {
+    test("should silently ignore when pending operation does not exist", async () => {
+      const identifierId = "test-identifier";
+      const operationType = "witness";
+      const operationId = `${operationType}.${identifierId}`;
+
+      const notFoundError = new Error(
+        `${StorageMessage.RECORD_DOES_NOT_EXIST_ERROR_MSG}: ${operationId}`
+      );
+      operationPendingStorage.deleteById.mockRejectedValueOnce(notFoundError);
+
+      await (identifierService as any).cleanupPendingOperationsForIdentifier(identifierId, operationType);
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).not.toBeCalled();
+    });
+
+    test("should rethrow unknown errors when cleanup fails", async () => {
+      const identifierId = "test-identifier";
+      const operationType = "witness";
+      const operationId = `${operationType}.${identifierId}`;
+
+      const unknownError = new Error("database connection lost");
+      operationPendingStorage.deleteById.mockRejectedValueOnce(unknownError);
+
+      await expect(
+        (identifierService as any).cleanupPendingOperationsForIdentifier(
+          identifierId,
+          operationType
+        )
+      ).rejects.toThrow(unknownError);
+      expect(operationPendingStorage.deleteById).toBeCalledWith(operationId);
+      expect(eventEmitter.emit).not.toBeCalled();
     });
   });
 
