@@ -25,6 +25,10 @@ When(/^user selects Individual profile option$/, async function () {
   await ProfileSetupScreen.selectIndividualProfile();
 });
 
+When(/^user selects Group profile option$/, async function () {
+  await ProfileSetupScreen.selectGroupProfile();
+});
+
 When(/^user taps Confirm button on Profile type screen$/, async function () {
   await expect(ProfileSetupScreen.confirmButton).toBeDisplayed();
   await ProfileSetupScreen.confirmButton.click();
@@ -53,6 +57,10 @@ Then(/^user can see Profile setup screen$/, async function () {
   await ProfileSetupScreen.waitForProfileSetupScreen();
 });
 
+Then(/^user can see Group setup screen$/, async function () {
+  await ProfileSetupScreen.waitForGroupSetupScreen();
+});
+
 Then(/^user can see "Set up your individual profile" description$/, async function () {
   await expect(ProfileSetupScreen.profileSetupDescription).toBeDisplayed();
   const descriptionText = await ProfileSetupScreen.profileSetupDescription.getText();
@@ -74,6 +82,12 @@ Given(/^user is on Profile setup screen with Individual profile selected$/, asyn
 
 When(/^user enters username "(.*)"$/, async function (username: string) {
   await ProfileSetupScreen.enterUsername(username);
+  // Wait for React state to update and validation to trigger
+  await browser.pause(1000);
+});
+
+When(/^user enters group name "(.*)"$/, async function (groupName: string) {
+  await ProfileSetupScreen.enterGroupName(groupName);
   // Wait for React state to update and validation to trigger
   await browser.pause(1000);
 });
@@ -102,6 +116,13 @@ When(/^user taps Confirm button on Profile setup screen$/, async function () {
   await expect(ProfileSetupScreen.confirmButton).toBeDisplayed();
   await ProfileSetupScreen.confirmButton.click();
   await ProfileSetupScreen.waitForWelcomeScreen();
+});
+
+When(/^user taps Confirm button on Group setup screen$/, async function () {
+  await expect(ProfileSetupScreen.confirmButton).toBeDisplayed();
+  await ProfileSetupScreen.confirmButton.click();
+  // After confirming group name, navigate to profile setup screen (username entry)
+  await ProfileSetupScreen.waitForProfileSetupScreen();
 });
 
 Then(/^user can see Welcome screen with username "(.*)"$/, async function (username: string) {
@@ -162,5 +183,18 @@ Then(/^user can see Homepage$/, async function () {
   // Check for common homepage elements
   const homeTab = await $("[data-testid='tab-button-home']").isExisting().catch(() => false);
   expect(homeTab).toBe(true);
+});
+
+Then(/^user can see Group profile setup screen$/, async function () {
+  await browser.waitUntil(
+    async () => {
+      const url = await browser.getUrl();
+      return url.includes("group-profile-setup");
+    },
+    {
+      timeout: 15000,
+      timeoutMsg: "Did not navigate to Group profile setup screen",
+    }
+  );
 });
 

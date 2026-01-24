@@ -36,6 +36,9 @@ export const config = {
         "appium:noReset": false,
         "appium:fullReset": false, // Don't uninstall app, but ensure clean state
         "appium:app": process.env.APP_PATH,
+        "appium:appPackage": "org.cardanofoundation.idw", // MUST match your app ID
+        "appium:webviewDevtoolsPort": 9222,
+        "appium:enableWebviewDetailsCollection": false, // CRITICAL: Prevents CDP collection for all webviews (eliminates 2000ms timeouts)
         "appium:newCommandTimeout": 260,
         "appium:chromedriverConnectTimeout": 80 * 1000, // 80 seconds - correct W3C format
         "appium:autoGrantPermissions": true, // Automatically grant permissions (notifications, etc.)

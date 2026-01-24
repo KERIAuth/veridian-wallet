@@ -525,7 +525,23 @@ export class CreatePasswordScreen {
       }
     );
     await this.createPasswordButton.waitForDisplayed({ timeout: 5000 });
-    await this.createPasswordButton.click();
+    
+    // Use JavaScript-native click for Ionic button Shadow DOM compatibility
+    await browser.execute((selector) => {
+      const element = document.querySelector(selector) as HTMLElement | null;
+      if (!element) {
+        throw new Error(`Button not found: ${selector}`);
+      }
+      
+      // Handle Ionic button shadow DOM
+      const clickableElement = (element as any).shadowRoot?.querySelector('button') || element;
+      
+      // Force native JavaScript click
+      clickableElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      (clickableElement as any).click();
+    }, "[data-testid='primary-button-create-password'], [data-testid='primary-button']");
+    
+    await browser.pause(500); // Allow navigation/state update to start
   }
 }
 

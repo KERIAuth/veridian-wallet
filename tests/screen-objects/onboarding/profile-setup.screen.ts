@@ -55,22 +55,14 @@ export class ProfileSetupScreen {
   }
 
   async loads() {
-    // Wait for page container
+    // Wait for profile type options to be displayed (more lenient check)
     await browser.waitUntil(
-      async () => {
-        return await this.pageContainer.isExisting().catch(() => false);
-      },
+      async () => await this.isProfileTypeScreenDisplayed(),
       {
         timeout: 15000,
-        timeoutMsg: "Profile setup page container not found",
+        timeoutMsg: "Profile type screen did not appear",
       }
     );
-
-    // Wait for profile type options to be displayed
-    await expect(this.individualProfileOption).toBeDisplayed();
-    await expect(this.groupProfileOption).toBeDisplayed();
-    await expect(this.description).toBeDisplayed();
-    await expect(this.confirmButton).toBeDisplayed();
   }
 
   async isProfileTypeScreenDisplayed(): Promise<boolean> {

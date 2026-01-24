@@ -1,60 +1,42 @@
 /**
- * Webview context switching utility with retry mechanism
- * Handles CDP timeout issues by polling and retrying context switching
+ * Optimized Direct Context Switch
+ * "Ask for forgiveness, not permission" - tries direct switch first to bypass getContexts() greedy scan
  */
-
 import { driver, browser } from "@wdio/globals";
 
-/**
- * Switches to the app's webview context with retry mechanism
- * Polls driver.getContexts() with retries to handle CDP timeout issues
- */
-export async function switchToAppWebview(
-  timeoutMs: number = 30000,
-  retryIntervalMs: number = 1000
-): Promise<void> {
-  const startTime = Date.now();
+export async function switchToAppWebview(): Promise<void> {
   const appPackage = "org.cardanofoundation.idw";
-  const expectedWebview = `WEBVIEW_${appPackage}`;
+  const targetContext = `WEBVIEW_${appPackage}`;
 
-  console.log(`[Webview Helper] Switching to webview context: ${expectedWebview}`);
-
-  // Add pause before attempting to collect CDP data to allow Chrome driver to attach properly
-  await browser.pause(1000);
-
-  while (Date.now() - startTime < timeoutMs) {
+  console.log(`[Webview] Attempting direct switch to ${targetContext}`);
+  
+  try {
+    // Direct switch avoids the "Greedy Scan" of getContexts()
+    await driver.switchContext(targetContext);
+    console.log(`[Webview] Direct switch successful`);
+  } catch (e) {
+    console.warn(`[Webview] Direct switch failed, falling back to filtered list...`);
+    // Fallback only if direct switch fails
     try {
-      const contexts = await driver.getContexts();
-      const webviewContext = contexts.find((ctx) => {
-        const ctxStr = typeof ctx === 'string' ? ctx : ctx.id || String(ctx);
-        return ctxStr.includes('WEBVIEW') && ctxStr.includes(appPackage);
+      const contextsPromise = driver.getContexts();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('getContexts timeout')), 5000)
+      );
+      const contexts = await Promise.race([contextsPromise, timeoutPromise]) as any[];
+      const found = contexts.find(c => {
+        const s = String(c);
+        return s.includes('WEBVIEW') && s.includes(appPackage);
       });
-
-      if (webviewContext) {
-        try {
-          const ctxToSwitch = typeof webviewContext === 'string' ? webviewContext : webviewContext.id || String(webviewContext);
-          await driver.switchContext(ctxToSwitch);
-          console.log(`[Webview Helper] Successfully switched to: ${ctxToSwitch}`);
-          return;
-        } catch (switchError) {
-          console.log(`[Webview Helper] Found webview but switch failed, retrying...`);
-        }
+      if (found) {
+        const ctxId = typeof found === 'string' ? found : found.id || String(found);
+        await driver.switchContext(ctxId);
+        const url = await browser.getUrl();
+        console.log(`[Webview] Fallback switch successful, attached to ${appPackage} at ${url}`);
       } else {
-        const contextsStr = contexts.map(ctx => typeof ctx === 'string' ? ctx : ctx.id || String(ctx)).join(', ');
-        console.log(`[Webview Helper] Webview not found yet. Available contexts: ${contextsStr}`);
+        throw new Error(`Could not find webview for ${appPackage}`);
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes('CDP') || errorMsg.includes('timeout')) {
-        console.log(`[Webview Helper] CDP timeout, retrying in ${retryIntervalMs}ms...`);
-      }
+    } catch (fallbackError) {
+      throw new Error(`Failed to switch to webview for ${appPackage}: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
     }
-
-    await browser.pause(retryIntervalMs);
   }
-
-  throw new Error(
-    `Failed to switch to webview context ${expectedWebview} within ${timeoutMs}ms. ` +
-    `This may indicate CDP connection issues or the webview not being ready.`
-  );
 }
