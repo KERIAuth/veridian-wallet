@@ -19,9 +19,13 @@ Given(/^the app is launched$/, async function () {
     } catch (e) {
       // If webview not ready yet, try manual switch
       const contexts = await driver.getContexts();
-      const webviewContext = contexts.find((ctx: string) => ctx.includes('WEBVIEW'));
+      const webviewContext = contexts.find((ctx) => {
+        const ctxStr = typeof ctx === 'string' ? ctx : ctx.id || String(ctx);
+        return ctxStr.includes('WEBVIEW');
+      });
       if (webviewContext) {
-        await driver.switchContext(webviewContext);
+        const ctxStr = typeof webviewContext === 'string' ? webviewContext : webviewContext.id || String(webviewContext);
+        await driver.switchContext(ctxStr);
         await browser.pause(1000);
       }
     }
@@ -63,23 +67,33 @@ async function dismissNotificationPermissionDialog(): Promise<void> {
     
     // Get all available contexts
     const contexts = await driver.getContexts();
-    const nativeContext = contexts.find(ctx => !ctx.includes('WEBVIEW'));
+    const nativeContext = contexts.find((ctx) => {
+      const ctxStr = typeof ctx === 'string' ? ctx : ctx.id || String(ctx);
+      return !ctxStr.includes('WEBVIEW');
+    });
     
     if (nativeContext) {
       // Switch to native context to interact with system dialogs
-      await driver.switchContext(nativeContext);
+      const nativeCtxStr = typeof nativeContext === 'string' ? nativeContext : nativeContext.id || String(nativeContext);
+      await driver.switchContext(nativeCtxStr);
       
       try {
         // Look for notification permission dialog buttons
         // Common button texts: "Allow", "Don't allow", "Not now", "Deny"
-        const allowButton = await $('//android.widget.Button[@text="Allow" or @text="ALLOW"]').catch(() => null);
-        const dontAllowButton = await $('//android.widget.Button[@text="Don\'t allow" or @text="DON\'T ALLOW" or @text="Not now" or @text="Deny" or @text="DENY"]').catch(() => null);
+        let allowButton = null;
+        let dontAllowButton = null;
+        try {
+          allowButton = await $('//android.widget.Button[@text="Allow" or @text="ALLOW"]');
+        } catch (e) {}
+        try {
+          dontAllowButton = await $('//android.widget.Button[@text="Don\'t allow" or @text="DON\'T ALLOW" or @text="Not now" or @text="Deny" or @text="DENY"]');
+        } catch (e) {}
         
         // Try to find and click "Don't allow" first (to deny notifications)
-        if (await dontAllowButton?.isDisplayed().catch(() => false)) {
+        if (dontAllowButton && await dontAllowButton.isExisting().catch(() => false) && await dontAllowButton.isDisplayed().catch(() => false)) {
           await dontAllowButton.click();
           await browser.pause(500);
-        } else if (await allowButton?.isDisplayed().catch(() => false)) {
+        } else if (allowButton && await allowButton.isExisting().catch(() => false) && await allowButton.isDisplayed().catch(() => false)) {
           // If only "Allow" is visible, we can click it or press back
           // For tests, we'll deny by pressing back button
           await driver.pressKeyCode(4); // Back button
@@ -89,9 +103,13 @@ async function dismissNotificationPermissionDialog(): Promise<void> {
         // Dialog might not be present or already dismissed
       } finally {
         // Switch back to webview context
-        const webviewContext = contexts.find(ctx => ctx.includes('WEBVIEW'));
+        const webviewContext = contexts.find((ctx) => {
+          const ctxStr = typeof ctx === 'string' ? ctx : ctx.id || String(ctx);
+          return ctxStr.includes('WEBVIEW');
+        });
         if (webviewContext) {
-          await driver.switchContext(webviewContext);
+          const webviewCtxStr = typeof webviewContext === 'string' ? webviewContext : webviewContext.id || String(webviewContext);
+          await driver.switchContext(webviewCtxStr);
         }
       }
     }
