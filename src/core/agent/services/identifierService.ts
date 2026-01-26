@@ -1,5 +1,9 @@
 import { HabState, Operation, Signer } from "signify-ts";
-import { parseHabName } from "../../utils/habName";
+import {
+  parseHabName,
+  formatToV1_2_0_2,
+  DELETED_IDENTIFIER_THEME,
+} from "../../utils/habName";
 import {
   CreateIdentifierResult,
   IdentifierDetails,
@@ -47,7 +51,6 @@ import {
 } from "../event.types";
 import { StorageMessage } from "../../storage/storage.types";
 import { OobiQueryParams } from "./connectionService.types";
-import { LATEST_IDENTIFIER_VERSION } from "../../storage/sqliteStorage/cloudMigrations";
 
 const UI_THEMES = [
   0, 1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33, 40, 41, 42, 43,
@@ -76,7 +79,6 @@ class IdentifierService extends AgentService {
   // @TODO - foconnor: When we refactor this, only member identifiers will have groupMetadata
   static readonly INVALID_GROUP_IDENTIFIER =
     "Identifier is not a valid group or group member identifier (missing groupMetadata)";
-  static readonly DELETED_IDENTIFIER_THEME = "XX";
 
   protected readonly identifierStorage: IdentifierStorage;
   protected readonly operationPendingStorage: OperationPendingStorage;
@@ -368,14 +370,14 @@ class IdentifierService extends AgentService {
     deletedVariant = false
   ) {
     const theme = deletedVariant
-      ? `${IdentifierService.DELETED_IDENTIFIER_THEME}-${randomSalt()}`
-      : metadata.theme;
-    if (metadata.groupMetadata) {
-      const initiatorFlag = metadata.groupMetadata.groupInitiator ? "1" : "0";
-      const proposedUsernamePart = metadata.groupMetadata.proposedUsername;
-      return `${LATEST_IDENTIFIER_VERSION}:${theme}:${initiatorFlag}:${metadata.groupMetadata.groupId}:${proposedUsernamePart}:${metadata.displayName}`;
-    }
-    return `${LATEST_IDENTIFIER_VERSION}:${theme}:${metadata.displayName}`;
+      ? `${DELETED_IDENTIFIER_THEME}-${randomSalt()}`
+      : String(metadata.theme);
+
+    return formatToV1_2_0_2({
+      theme,
+      displayName: metadata.displayName,
+      groupMetadata: metadata.groupMetadata,
+    });
   }
 
   private async propagateUpdatesForIdentifier(
@@ -792,9 +794,7 @@ class IdentifierService extends AgentService {
       }
 
       const parsed = parseHabName(identifier.name);
-      const theme = parsed.theme.startsWith(
-        IdentifierService.DELETED_IDENTIFIER_THEME
-      )
+      const theme = parsed.theme.startsWith(DELETED_IDENTIFIER_THEME)
         ? 0
         : parseInt(parsed.theme, 10);
 
@@ -814,9 +814,7 @@ class IdentifierService extends AgentService {
           creationStatus,
           createdAt: new Date(identifierDetail.icp_dt),
           sxlt: identifierDetail.salty?.sxlt,
-          isDeleted: parsed.theme.startsWith(
-            IdentifierService.DELETED_IDENTIFIER_THEME
-          ),
+          isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
         });
         continue;
       }
@@ -828,9 +826,7 @@ class IdentifierService extends AgentService {
         creationStatus,
         createdAt: new Date(identifierDetail.icp_dt),
         sxlt: identifierDetail.salty?.sxlt,
-        isDeleted: parsed.theme.startsWith(
-          IdentifierService.DELETED_IDENTIFIER_THEME
-        ),
+        isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
       });
     }
 
@@ -840,9 +836,7 @@ class IdentifierService extends AgentService {
         .get(identifier.prefix);
 
       const parsed = parseHabName(identifier.name);
-      const theme = parsed.theme.startsWith(
-        IdentifierService.DELETED_IDENTIFIER_THEME
-      )
+      const theme = parsed.theme.startsWith(DELETED_IDENTIFIER_THEME)
         ? 0
         : parseInt(parsed.theme, 10);
 
@@ -885,9 +879,7 @@ class IdentifierService extends AgentService {
         groupUsername: mhabParsed.groupMetadata.proposedUsername,
         creationStatus,
         createdAt: new Date(identifierDetail.icp_dt),
-        isDeleted: parsed.theme.startsWith(
-          IdentifierService.DELETED_IDENTIFIER_THEME
-        ),
+        isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
       });
     }
   }
