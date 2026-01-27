@@ -1516,7 +1516,6 @@
     "credentialsrestored": "Credentials restored successfully",
     "connectiondeleted": "Connection deleted successfully",
     "qrsuccess": "QR code scanned successfully",
-    "qrerror": "QR code not recognised",
     "connectionerror": "Something went wrong. Please try again.",
     "connectionrequestincoming": "New Connection Request",
     "connectionrequestpending": "Connection request pending",
@@ -1556,6 +1555,7 @@
     "editidentifiererror": "Unable to update profile",
     "failedupdateconnectionerror": "Failed to update connection",
     "duplicateconnectionerror": "Connection already established",
+    "scanselfconnectionerror": "You can't add yourself as a connection",
     "groupidnotmatcherror": "Connection not part of this group",
     "unknownerror": "Something went wrong, try again",
     "urlerror": "Enter a valid URL",
@@ -1578,7 +1578,8 @@
     "invalidremovedconnectionurlerror": "Invalid connection removed",
     "networkerror": "Unable to reach the cloud",
     "createidentifiererror": "Unable to create profile",
-    "invalidconnectionurlerror": "Invalid connection URL"
+    "invalidconnectionurlerror": "Invalid connection URL",
+    "profilenotexisterror": "This profile no longer exists"
   },
   "request": {
     "sign": {
@@ -1644,6 +1645,9 @@
     "confirmyes": "Yes",
     "biometricunavailable": "Biometrics is unavailable at this time. You can set this up later via the settings page.",
     "biometricunavailableconfirm": "Ok",
+    "lockoutheader": "Biometrics are temporarily disabled. Please try again in {{seconds}} seconds.",
+    "lockoutconfirm": "Got it",
+    "permanentlockoutheader": "For your security, biometrics are turned off. Lock and unlock your device to turn them back on.",
     "errors": {
       "notAvailable": "Biometry is not available on this device.",
       "strongBiometricsRequired": "Only strong biometrics (FaceID, Fingerprint) are allowed.",

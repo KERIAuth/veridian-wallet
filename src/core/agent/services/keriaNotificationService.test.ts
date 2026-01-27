@@ -48,7 +48,7 @@ import {
   getMultisigIdentifierResponse,
   getRequestMultisigIcp,
 } from "../../__fixtures__/agent/multiSigFixtures";
-import { IdentifierService } from "./identifierService";
+import { DELETED_IDENTIFIER_THEME } from "../../utils/habName";
 import { CredentialService } from "./credentialService";
 import { MultiSigRoute } from "./multiSig.types";
 import { remoteSignReqExn } from "../../__fixtures__/agent/identifierFixtures";
@@ -1821,7 +1821,7 @@ describe("Signify notification service of agent", () => {
       );
     identifiersGetMock.mockResolvedValue({
       ...getMultisigIdentifierResponse,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deleted`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deleted`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2059,7 +2059,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2083,7 +2083,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2107,7 +2107,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -3227,12 +3227,14 @@ describe("Long running operation tracker", () => {
         creationStatus: CreationStatus.PENDING,
         identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
         pendingDeletion: false,
+        alias: "CF Credential Issuance",
       },
       {
         contactId: "idB",
         creationStatus: CreationStatus.PENDING,
         identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
         pendingDeletion: false,
+        alias: "CF Credential Issuance",
       },
     ]);
     contactStorage.findExpectedById.mockResolvedValue({
@@ -3315,6 +3317,8 @@ describe("Long running operation tracker", () => {
       alias: "CF Credential Issuance",
       "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:createdAt":
         firstUpdateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:alias":
+        "CF Credential Issuance",
       oobi: "http://oobi.com/",
     });
     expect(contactsUpdateMock).toBeCalledWith("id", {
@@ -3322,6 +3326,8 @@ describe("Long running operation tracker", () => {
       alias: "CF Credential Issuance",
       "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt":
         secondUpdateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:alias":
+        "CF Credential Issuance",
       oobi: "http://oobi.com/",
     });
     expect(contactsUpdateMock).toBeCalledTimes(2);
@@ -3373,12 +3379,14 @@ describe("Long running operation tracker", () => {
         creationStatus: CreationStatus.COMPLETE,
         identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
         pendingDeletion: false,
+        alias: "CF Credential Issuance",
       },
       {
         contactId: "idB",
         creationStatus: CreationStatus.PENDING,
         identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
         pendingDeletion: false,
+        alias: "CF Credential Issuance",
       },
     ]);
     const operationRecord = {
@@ -3438,6 +3446,8 @@ describe("Long running operation tracker", () => {
       alias: "CF Credential Issuance",
       "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt":
         updateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:alias":
+        "CF Credential Issuance",
       oobi: "http://oobi.com/",
     });
     expect(contactsUpdateMock).toBeCalledTimes(1);
@@ -4425,10 +4435,12 @@ describe("Long running operation tracker", () => {
       },
     };
     operationsGetMock.mockResolvedValue(operationMock);
-    connectionPairStorage.findByContactId = jest.fn().mockResolvedValue([
-      { identifier: "my-identifier-1" },
-      { identifier: "my-identifier-2" },
-    ]);
+    connectionPairStorage.findByContactId = jest
+      .fn()
+      .mockResolvedValue([
+        { identifier: "my-identifier-1" },
+        { identifier: "my-identifier-2" },
+      ]);
 
     const operationRecord = {
       type: "OperationPendingRecord",
@@ -4438,17 +4450,15 @@ describe("Long running operation tracker", () => {
 
     await keriaNotificationService.processOperation(operationRecord);
 
-    expect(connectionService.markConnectionPendingDelete).toHaveBeenCalledTimes(2);
-    expect(connectionService.markConnectionPendingDelete).toHaveBeenNthCalledWith(
-      1,
-      contactId,
-      "my-identifier-1"
+    expect(connectionService.markConnectionPendingDelete).toHaveBeenCalledTimes(
+      2
     );
-    expect(connectionService.markConnectionPendingDelete).toHaveBeenNthCalledWith(
-      2,
-      contactId,
-      "my-identifier-2"
-    );
+    expect(
+      connectionService.markConnectionPendingDelete
+    ).toHaveBeenNthCalledWith(1, contactId, "my-identifier-1");
+    expect(
+      connectionService.markConnectionPendingDelete
+    ).toHaveBeenNthCalledWith(2, contactId, "my-identifier-2");
     expect(eventEmitter.emit).toHaveBeenCalledWith({
       type: EventTypes.ConnectionInvalid,
       payload: {

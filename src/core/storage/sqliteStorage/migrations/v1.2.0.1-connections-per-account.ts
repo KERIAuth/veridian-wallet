@@ -1,9 +1,33 @@
-import { IdentifierMetadataRecordProps } from "../../../agent/records/identifierMetadataRecord";
 import { MigrationType, TsMigration } from "./migrations.types";
 import {
   createInsertItemTagsStatements,
   createInsertItemStatement,
 } from "./migrationUtils";
+
+enum CreationStatus_V1_1_0 {
+  PENDING = "PENDING",
+  COMPLETE = "COMPLETE",
+  FAILED = "FAILED",
+}
+
+interface GroupMetadata_V1_1_0 {
+  groupId: string;
+  groupInitiator: boolean;
+  groupCreated: boolean;
+}
+
+interface IdentifierMetadataRecordProps_V1_1_0 {
+  id: string;
+  displayName: string;
+  creationStatus?: CreationStatus_V1_1_0;
+  createdAt?: Date;
+  isDeleted?: boolean;
+  theme: number;
+  groupMemberPre?: string;
+  groupMetadata?: GroupMetadata_V1_1_0;
+  pendingDeletion?: boolean;
+  sxlt?: string;
+}
 
 export const DATA_V1201: TsMigration = {
   type: MigrationType.TS,
@@ -17,11 +41,11 @@ export const DATA_V1201: TsMigration = {
     let identifiers = identifierResult.values;
     identifiers = identifiers
       ?.map(
-        (row: { value: string }): IdentifierMetadataRecordProps =>
-          JSON.parse(row.value) as IdentifierMetadataRecordProps
+        (row: { value: string }): IdentifierMetadataRecordProps_V1_1_0 =>
+          JSON.parse(row.value) as IdentifierMetadataRecordProps_V1_1_0
       )
       .filter(
-        (identifier: IdentifierMetadataRecordProps) =>
+        (identifier: IdentifierMetadataRecordProps_V1_1_0) =>
           !identifier.isDeleted && !identifier.pendingDeletion
       );
 
@@ -70,6 +94,7 @@ export const DATA_V1201: TsMigration = {
         contactId: string;
         createdAt: string;
         identifier: string;
+        alias: string;
         creationStatus: string;
         pendingDeletion: boolean;
         type: string;
@@ -87,28 +112,26 @@ export const DATA_V1201: TsMigration = {
 
       if (!connectionData.sharedIdentifier) {
         if (!connectionData.groupId) {
-          console.log("No groupId found for connection, skipping migration");
-          continue;
-        }
-
-        // No sharedIdentifier: create pair for every non-deleted identifier
-        for (const identifier of identifiers) {
-          const pairId = `${identifier.id}:${connectionData.id}`;
-          connectionPairsToInsert.push({
-            id: pairId,
-            contactId: contactRecord.id,
-            createdAt: connectionData.createdAt,
-            identifier: identifier.id,
-            creationStatus: connectionData.creationStatus,
-            pendingDeletion: connectionData.pendingDeletion,
-            type: "ConnectionPairRecord",
-          });
-          connectionPairTags[pairId] = {
-            identifier: identifier.id,
-            contactId: contactRecord.id,
-            creationStatus: connectionData.creationStatus,
-            pendingDeletion: connectionData.pendingDeletion,
-          };
+          // No sharedIdentifier: create pair for every non-deleted identifier (unless this is a group connection)
+          for (const identifier of identifiers) {
+            const pairId = `${identifier.id}:${connectionData.id}`;
+            connectionPairsToInsert.push({
+              id: pairId,
+              contactId: contactRecord.id,
+              createdAt: connectionData.createdAt,
+              identifier: identifier.id,
+              alias: connectionData.alias,
+              creationStatus: connectionData.creationStatus,
+              pendingDeletion: connectionData.pendingDeletion,
+              type: "ConnectionPairRecord",
+            });
+            connectionPairTags[pairId] = {
+              identifier: identifier.id,
+              contactId: contactRecord.id,
+              creationStatus: connectionData.creationStatus,
+              pendingDeletion: connectionData.pendingDeletion,
+            };
+          }
         }
       } else {
         // Has sharedIdentifier: only create pair if identifier exists and is not deleted/pending
@@ -122,6 +145,7 @@ export const DATA_V1201: TsMigration = {
             contactId: contactRecord.id,
             identifier: identifier.id,
             createdAt: connectionData.createdAt,
+            alias: connectionData.alias,
             creationStatus: connectionData.creationStatus,
             pendingDeletion: connectionData.pendingDeletion,
             type: "ConnectionPairRecord",
