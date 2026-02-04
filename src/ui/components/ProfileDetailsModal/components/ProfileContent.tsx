@@ -5,8 +5,8 @@ import {
   keyOutline,
   pencilOutline,
   personCircleOutline,
-  shareOutline,
   refreshOutline,
+  shareOutline,
 } from "ionicons/icons";
 import { useCallback, useState } from "react";
 import { i18n } from "../../../../i18n";
@@ -18,6 +18,7 @@ import {
   getPeerConnections,
   getProfiles,
 } from "../../../../store/reducers/profileCache";
+import { useGetOobi } from "../../../hooks/useGetOobi";
 import {
   formatShortDate,
   formatTimeToSec,
@@ -33,7 +34,7 @@ import { ListItem } from "../../ListCard/ListItem";
 import { ListHeader } from "../../ListHeader";
 import { MemberList } from "../../MemberList";
 import { Member, MemberAcceptStatus } from "../../MemberList/MemberList.type";
-import { ShareConnection } from "../../ShareConnection";
+import { ShareProfile } from "../../ShareProfile";
 import { IdentifierAttributeDetailModal } from "./IdentifierAttributeDetailModal/IdentifierAttributeDetailModal";
 import { DetailView } from "./IdentifierAttributeDetailModal/IdentifierAttributeDetailModal.types";
 import {
@@ -54,9 +55,9 @@ const ProfileInformation = ({ value, text }: ProfileInformationProps) => {
 
 const ProfileContent = ({
   cardData,
-  oobi,
   setCardData,
   onRotateKey,
+  onAfterScan,
 }: ProfileContentProps) => {
   const profiles = useAppSelector(getProfiles);
   const multisignConnectionsCache = useAppSelector(getMultisigConnectionsCache);
@@ -72,6 +73,7 @@ const ProfileContent = ({
   const [shareIsOpen, setShareIsOpen] = useState(false);
   const [editorOptionsIsOpen, setEditorIsOpen] = useState(false);
   const [editUserName, setEditUserName] = useState(false);
+  const oobi = useGetOobi(cardData.id, cardData.displayName);
 
   const openShareModal = () => {
     if (!cardData) return;
@@ -367,9 +369,14 @@ const ProfileContent = ({
         data={cardData}
         openEdit={openEditUserName}
       />
-      <ShareConnection
+      <ShareProfile
         isOpen={shareIsOpen}
-        setIsOpen={setShareIsOpen}
+        setIsOpen={(value, closeModals) => {
+          setShareIsOpen(value);
+          if (closeModals) {
+            onAfterScan();
+          }
+        }}
         oobi={oobi}
       />
       <EditProfile
