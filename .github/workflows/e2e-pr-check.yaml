@@ -75,6 +75,10 @@ jobs:
           appium driver install uiautomator2 || appium driver update uiautomator2
           appium --log-level error & 
 
+      - name: Wait for Appium to be ready
+        run: |
+          npx wait-on --timeout 120s http-get://127.0.0.1:4723/status
+
       - name: Run onboarding-intro E2E test
         uses: reactivecircus/android-emulator-runner@b530d96654c385303d652368551fb075bc2f0b6b # v2.35.0
         env:
@@ -86,17 +90,9 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
           disable-animations: true
+          disk-size: 6000M
+          heap-size: 600M
           script: |
-            # 1. Wait for Appium using the DevOps-preferred health check logic
-            for i in {1..20}; do 
-              if curl -s http://127.0.0.1:4723/status; then 
-                echo "Appium is ready!"
-                break 
-              fi
-              echo "Waiting for Appium... ($i/20)"
-              sleep 5
-            done
-            # 2. Run your specific test scenario
             npm run wdio:android:s24ultra -- --spec ./tests/features/onboarding/onboarding-intro.feature
 
       - name: Cleanup
