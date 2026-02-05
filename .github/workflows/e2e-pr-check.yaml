@@ -6,7 +6,7 @@ on:
 jobs:
   e2e-onboarding-intro:
     timeout-minutes: 60
-    runs-on: macos-15 
+    runs-on: ubuntu-lastest
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
