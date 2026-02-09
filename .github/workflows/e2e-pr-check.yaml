@@ -1,4 +1,4 @@
-name: E2E PR Check - Onboarding Intro
+name: e2e-pr-check
 
 on:
   workflow_dispatch:
