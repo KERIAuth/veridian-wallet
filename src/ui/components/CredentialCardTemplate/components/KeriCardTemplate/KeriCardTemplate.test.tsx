@@ -7,6 +7,7 @@ import { shortCredsFix } from "../../../../__fixtures__/shortCredsFix";
 import { TabsRoutePath } from "../../../navigation/TabsMenu";
 import { KeriCardTemplate } from "./KeriCardTemplate";
 import { makeTestStore } from "../../../../utils/makeTestStore";
+import ENG_trans from "../../../../../locales/en/en.json";
 import { CredentialStatus } from "../../../../../core/agent/services/credentialService.types";
 import { formatShortDate } from "../../../../utils/formatters";
 
@@ -148,6 +149,25 @@ describe("KeriCardTemplate", () => {
     expect(card.classList.contains("active")).toBe(false);
     expect(getByTestId("card-issued-date").innerHTML).toBe(
       formatShortDate(shortCredsFix[4].issuanceDate)
+    );
+  });
+
+  it("Display unknown when cred connection is missing", async () => {
+    const handleShowCardDetails = jest.fn();
+    const { getByTestId } = render(
+      <Provider store={store}>
+        <KeriCardTemplate
+          name="name"
+          index={0}
+          cardData={shortCredsFix[1]}
+          isActive={false}
+          onHandleShowCardDetails={() => handleShowCardDetails(0)}
+        />
+      </Provider>
+    );
+
+    expect(getByTestId("card-connection").innerHTML).toBe(
+      ENG_trans.tabs.connections.unknown
     );
   });
 });
