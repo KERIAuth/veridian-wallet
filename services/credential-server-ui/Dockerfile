@@ -1,6 +1,7 @@
 FROM node:lts-alpine as build
 
 WORKDIR /app
+RUN apk add --no-cache git
 COPY package*.json ./
 COPY scripts/ ./scripts/
 RUN npm ci
