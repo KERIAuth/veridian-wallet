@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "postinstall": "node scripts/build-polaris-web.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "prettier": "npx prettier . --write",
@@ -32,7 +33,7 @@
     "react-i18next": "^15.4.0",
     "react-redux": "^9.2.0",
     "react-router": "^7.1.5",
-    "signify-polaris-web": "file:../libs/polaris-web"
+    "signify-polaris-web": "github:WebOfTrust/polaris-web#7d7dd1344f435ea6bc09c63fe013dda0afe84ada"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

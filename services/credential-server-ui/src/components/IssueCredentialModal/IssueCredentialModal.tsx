@@ -6,7 +6,6 @@ import { IGNORE_ATTRIBUTES } from "../../const";
 import { useSchemaDetail } from "../../hooks/SchemaDetail";
 import { i18n } from "../../i18n";
 import { CredentialService } from "../../services";
-import { keriAuthService } from "../../services/keriAuthService";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchContactCredentials } from "../../store/reducers/connectionsSlice";
 import { triggerToast } from "../../utils/toast";
@@ -176,50 +175,33 @@ const IssueCredentialModal = ({
         attributes: attribute,
       });
 
-      // If extension is installed and authorized, sign the credential first
+      // If extension is installed and authorized, request user approval for signing this specific credential
       if (isExtensionInstalled && isAuthorized) {
-        console.log('[IssueCredential] Signing credential with KERIAuth extension...');
-        setLoadingMessage('Signing in wallet...');
+        console.log('[IssueCredential] Requesting approval to sign credential...');
+        setLoadingMessage('Requesting approval in wallet...');
         
         try {
-          // Create credential data for signing
-          const credData = {
-            i: selectedConnection, // holder AID
-            ...attribute,
-          };
-
-          console.log('[IssueCredential] Sending to extension for preview and signing:', {
-            credData,
-            schemaSaid,
-          });
-
-          // This will open the extension UI for preview and signing
-          const signedCredential = await keriAuthService.createDataAttestationCredential({
-            credData,
-            schemaSaid,
-          });
-
-          console.log('[IssueCredential] Credential signed successfully:', signedCredential);
-
-          // TODO: Send signed credential to backend
-          // For now, we'll continue with the original flow
-          // In the future, modify the backend to accept signed credentials
+          // Use authorize endpoint to get user approval for this specific credential
+          // TODO: Replace with /signify/credential/create/data-attestation when available
+          await authorize(`Do you approve signing and issuance of this ${schema?.title || 'credential'}?`);
+          
+          console.log('[IssueCredential] User approved credential signing');
           
           triggerToast(
-            'Credential signed successfully! Now issuing...',
+            'Credential approved! Now issuing...',
             "success"
           );
         } catch (signError: any) {
-          console.error('[IssueCredential] Signing failed:', signError);
+          console.error('[IssueCredential] User rejected credential signing:', signError);
           triggerToast(
-            `Signing failed: ${signError.message || 'Unknown error'}`,
+            signError.message || 'Credential signing rejected. Credential not issued.',
             "error"
           );
           return;
         }
       }
 
-      // Issue credential (with or without signature)
+      // Issue credential
       setLoadingMessage('Issuing credential...');
       let objAttributes = {};
       if (Object.keys(attribute).length) {
