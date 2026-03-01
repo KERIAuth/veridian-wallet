@@ -2,11 +2,13 @@ import {
   ArrowBack,
   CheckCircleOutlined,
   ContentCopy,
+  Extension as ExtensionIcon,
   ExpandMore,
   MoreVert,
   PhotoCamera,
   QrCodeRounded,
   RefreshOutlined,
+  SmartphoneOutlined,
   WarningAmber,
 } from "@mui/icons-material";
 import {
@@ -25,13 +27,18 @@ import { QRCodeSVG } from "qrcode.react";
 import React, { useEffect, useRef, useState } from "react";
 import { Trans } from "react-i18next";
 import { AppInput } from "../../../../components/AppInput";
+import { useKERIAuth } from "../../../../components/AuthContext";
 import { PopupModal } from "../../../../components/PopupModal";
 import { config } from "../../../../config";
 import { i18n } from "../../../../i18n";
+import { keriAuthService } from "../../../../services/keriAuthService";
 import { resolveOobi } from "../../../../services/resolve-oobi";
 import { isValidConnectionUrl } from "../../../../utils/urlChecker";
 import "./AddConnectionModal.scss";
 import { AddConnectionModalProps } from "./AddConnectionModal.types";
+
+type ModalView = "method" | "qr" | "scan" | "extension-connect";
+type ExtStatus = "waiting" | "resolving" | "error";
 
 enum ContentType {
   SCANNER = "scanner",
@@ -39,12 +46,19 @@ enum ContentType {
   RESOLVED = "resolved",
 }
 
+const viewClassMap: Record<ModalView, string> = {
+  method: "stage-method",
+  qr: "stage-1",
+  scan: "stage-2",
+  "extension-connect": "stage-extension",
+};
+
 const AddConnectionModal = ({
   openModal,
   setOpenModal,
   handleGetContacts,
 }: AddConnectionModalProps) => {
-  const [currentStage, setCurrentStage] = useState(1);
+  const [view, setView] = useState<ModalView>("qr");
   const [showQR, setShowQR] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -59,8 +73,11 @@ const AddConnectionModal = ({
   );
   const [canReset, setCanReset] = useState(false);
   const [showInput, setShowInput] = useState(false);
+  const [extStatus, setExtStatus] = useState<ExtStatus>("waiting");
+  const [extError, setExtError] = useState("");
   const RESET_TIMEOUT = 1000;
   const { enqueueSnackbar } = useSnackbar();
+  const { isExtensionInstalled } = useKERIAuth();
 
   const triggerToast = (message: string, variant: VariantType) => {
     enqueueSnackbar(message, {
@@ -69,18 +86,32 @@ const AddConnectionModal = ({
     });
   };
 
+  // Pre-fetch the server OOBI as soon as the component mounts
   useEffect(() => {
     handleShowQr();
   }, []);
 
+  // When the modal opens, pick the correct starting view
   useEffect(() => {
-    setCopied(false);
-    setShowInput(false);
-    setInputValue("");
-    setIsInputValid(false);
-    setTouched(false);
-    handleReset();
-  }, [currentStage]);
+    if (!openModal) return;
+    setView(isExtensionInstalled ? "method" : "qr");
+    setExtStatus("waiting");
+    setExtError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openModal]);
+
+  // Reset scan-related state whenever entering the scan view
+  useEffect(() => {
+    if (view === "scan") {
+      setCopied(false);
+      setShowInput(false);
+      setInputValue("");
+      setIsInputValid(false);
+      setTouched(false);
+      handleReset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const isCameraRendered = useRef<boolean>(false);
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -91,16 +122,9 @@ const AddConnectionModal = ({
       isCameraRendered.current = true;
       const scanner = new Html5QrcodeScanner(
         "qr-reader",
-        {
-          qrbox: {
-            width: 1024,
-            height: 1024,
-          },
-          fps: 5,
-        },
+        { qrbox: { width: 1024, height: 1024 }, fps: 5 },
         false
       );
-
       scannerRef.current = scanner;
 
       const success = (result: string) => {
@@ -115,23 +139,19 @@ const AddConnectionModal = ({
           restartScanner();
         }
       };
-
-      const error = (_: unknown) => {};
-      scanner.render(success, error);
+      scanner.render(success, (_: unknown) => {});
     }
   }, [restartCamera, elementRef.current, showInput]);
 
   const restartScanner = async () => {
     isCameraRendered.current = false;
     setShowInput(false);
-    setRestartCamera(!restartCamera);
+    setRestartCamera((r) => !r);
     setContentType(ContentType.SCANNER);
   };
 
-  const handleResolveOobi = async (oobi: string) => {
-    const isValidOobi = oobi && oobi.includes("oobi");
-
-    if (!isValidOobi) {
+  const handleResolveOobi = async (oobiUrl: string) => {
+    if (!oobiUrl || !oobiUrl.includes("oobi")) {
       triggerToast(
         i18n.t("pages.connections.addConnection.modal.toast.error"),
         "error"
@@ -141,12 +161,12 @@ const AddConnectionModal = ({
 
     setContentType(ContentType.RESOLVING);
     try {
-      const fixedOobi =
+      const fixed =
         process.env.NODE_ENV === "development"
-          ? oobi.replace("http://keria:", "http://localhost:")
-          : oobi;
+          ? oobiUrl.replace("http://keria:", "http://localhost:")
+          : oobiUrl;
 
-      await resolveOobi(fixedOobi);
+      await resolveOobi(fixed);
       setContentType(ContentType.RESOLVED);
       setCanReset(true);
       triggerToast(
@@ -165,31 +185,14 @@ const AddConnectionModal = ({
     }
   };
 
-  const renderContent = () => {
+  const renderScanContent = () => {
     switch (contentType) {
       case ContentType.SCANNER:
-        return {
-          component: (
-            <div
-              ref={elementRef}
-              id="qr-reader"
-            />
-          ),
-          title: "Scan your wallet QR Code",
-        };
-      case ContentType.RESOLVING:
-        return {
-          component: <></>,
-          title: "Resolving wallet connection",
-        };
-      case ContentType.RESOLVED:
-        return {
-          component: <></>,
-          title: "Connected successfully",
-        };
+        return <div ref={elementRef} id="qr-reader" />;
+      default:
+        return <></>;
     }
   };
-  const content = renderContent();
 
   const handleReset = () => {
     setCanReset(false);
@@ -197,27 +200,19 @@ const AddConnectionModal = ({
   };
 
   const handleShowQr = async () => {
-    const url = `${config.endpoint}${config.path.keriOobi}`;
+    setShowQR(false);
+    setLoading(true);
+    setErrorOnRequest(false);
+    setOobi("");
     try {
-      setShowQR(false);
-      setLoading(true);
-      setErrorOnRequest(false);
-      setOobi("");
-
-      try {
-        const response = await axios(url);
-        setOobi(response.data.data);
-        setLoading(false);
-        setShowQR(true);
-      } catch (e) {
-        console.error(e);
-        setLoading(false);
-        setErrorOnRequest(true);
-      }
-    } catch (error) {
-      console.error("Error while trying to connect to the server.", error);
-      setLoading(false);
+      const response = await axios(`${config.endpoint}${config.path.keriOobi}`);
+      setOobi(response.data.data);
+      setShowQR(true);
+    } catch (e) {
+      console.error(e);
       setErrorOnRequest(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -228,18 +223,59 @@ const AddConnectionModal = ({
     }
   };
 
+  const handleExtensionConnect = async () => {
+    if (!oobi) return;
+    setView("extension-connect");
+    setExtStatus("waiting");
+    setExtError("");
+
+    try {
+      const extensionOobi = await keriAuthService.connectWithExtension(oobi);
+      setExtStatus("resolving");
+
+      const fixed =
+        process.env.NODE_ENV === "development"
+          ? extensionOobi.replace("http://keria:", "http://localhost:")
+          : extensionOobi;
+
+      await resolveOobi(fixed);
+      await keriAuthService.confirmExtensionConnection(oobi);
+
+      triggerToast(
+        i18n.t("pages.connections.addConnection.modal.toast.success"),
+        "success"
+      );
+      await handleGetContacts();
+      resetModal();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : i18n.t("pages.connections.addConnection.modal.toast.error");
+      setExtStatus("error");
+      setExtError(message);
+      triggerToast(
+        i18n.t("pages.connections.addConnection.modal.toast.error"),
+        "error"
+      );
+    }
+  };
+
   const resetModal = () => {
     setOpenModal(false);
     if (scannerRef.current) {
-      scannerRef.current.clear().catch((error) => {
-        console.error("Failed to clear html5QrcodeScanner. ", error);
+      scannerRef.current.clear().catch((err) => {
+        console.error("Failed to clear html5QrcodeScanner.", err);
       });
     }
     setTimeout(() => {
-      setCurrentStage(1);
+      setView("qr");
       setErrorOnRequest(false);
       setCopied(false);
-      setShowInput(false); // Ensure scanner is unmounted
+      setShowInput(false);
+      setExtStatus("waiting");
+      setExtError("");
+      setCanReset(false);
     }, RESET_TIMEOUT);
   };
 
@@ -247,37 +283,70 @@ const AddConnectionModal = ({
     const value = event.target.value;
     setInputValue(value);
     setTouched(true);
-    const isValid = isValidConnectionUrl(value);
-    setIsInputValid(isValid);
+    setIsInputValid(isValidConnectionUrl(value));
   };
+
+  const goBack = () => {
+    if (view === "scan") {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+      }
+      setView(isExtensionInstalled ? "method" : "qr");
+    } else if (view === "qr" && isExtensionInstalled) {
+      setView("method");
+    } else if (view === "extension-connect") {
+      setView(isExtensionInstalled ? "method" : "qr");
+    }
+  };
+
+  const t = (key: string) => i18n.t(key);
+  const base = "pages.connections.addConnection.modal";
 
   return (
     <PopupModal
       open={openModal}
       onClose={resetModal}
-      title={i18n.t("pages.connections.addConnection.modal.title")}
-      customClass={`add-connection-modal stage-${currentStage}`}
+      title={t(`${base}.title`)}
+      customClass={`add-connection-modal ${viewClassMap[view]}`}
       description={
-        <Trans
-          i18nKey={
-            currentStage === 1
-              ? "pages.connections.addConnection.modal.descriptionStepOne"
-              : "pages.connections.addConnection.modal.descriptionStepTwo"
-          }
-          components={{ bold: <strong /> }}
-        />
+        view === "method" ? (
+          <>{t(`${base}.method.description`)}</>
+        ) : view === "qr" ? (
+          <Trans
+            i18nKey={`${base}.descriptionStepOne`}
+            components={{ bold: <strong /> }}
+          />
+        ) : view === "scan" ? (
+          <Trans
+            i18nKey={`${base}.descriptionStepTwo`}
+            components={{ bold: <strong /> }}
+          />
+        ) : undefined
       }
       footer={
         <>
-          {currentStage === 1 && (
+          {/* Method picker — no footer buttons, cards are the CTA */}
+
+          {/* QR view footer */}
+          {view === "qr" && (
             <>
+              {isExtensionInstalled && (
+                <Button
+                  variant="contained"
+                  className="neutral-button back-button"
+                  onClick={goBack}
+                >
+                  <ArrowBack />
+                  {t(`${base}.button.back`)}
+                </Button>
+              )}
               {errorOnRequest ? (
                 <Button
                   variant="contained"
                   className="secondary-button"
                   onClick={handleShowQr}
                 >
-                  {i18n.t("pages.connections.addConnection.modal.button.retry")}
+                  {t(`${base}.button.retry`)}
                   <RefreshOutlined />
                 </Button>
               ) : (
@@ -287,10 +356,10 @@ const AddConnectionModal = ({
                   disabled={!oobi || copied}
                   onClick={handleCopyLink}
                 >
-                  {i18n.t(
+                  {t(
                     copied
-                      ? "pages.connections.addConnection.modal.button.copied"
-                      : "pages.connections.addConnection.modal.button.copyConnectionId"
+                      ? `${base}.button.copied`
+                      : `${base}.button.copyConnectionId`
                   )}
                   {copied ? <CheckCircleOutlined /> : <ContentCopy />}
                 </Button>
@@ -299,37 +368,23 @@ const AddConnectionModal = ({
                 variant="contained"
                 className="primary-button"
                 disabled={!oobi || errorOnRequest}
-                onClick={() => {
-                  setCurrentStage(2);
-                  if (scannerRef.current) {
-                    scannerRef.current.pause();
-                  }
-                }}
+                onClick={() => setView("scan")}
               >
-                {i18n.t("pages.connections.addConnection.modal.button.next")}
+                {t(`${base}.button.next`)}
               </Button>
             </>
           )}
-          {currentStage === 2 && (
+
+          {/* Scan view footer */}
+          {view === "scan" && (
             <>
               <Button
                 variant="contained"
                 className="neutral-button back-button"
-                onClick={() => {
-                  setCurrentStage(1);
-                  handleReset();
-                  if (scannerRef.current) {
-                    scannerRef.current.clear().catch((error) => {
-                      console.error(
-                        "Failed to clear html5QrcodeScanner. ",
-                        error
-                      );
-                    });
-                  }
-                }}
+                onClick={goBack}
               >
                 <ArrowBack />
-                {i18n.t("pages.connections.addConnection.modal.button.back")}
+                {t(`${base}.button.back`)}
               </Button>
               <Button
                 variant="contained"
@@ -337,8 +392,36 @@ const AddConnectionModal = ({
                 onClick={() => handleResolveOobi(inputValue || oobi)}
                 disabled={!(isInputValid && oobi && oobi.includes("oobi"))}
               >
-                {i18n.t(
-                  "pages.connections.addConnection.modal.button.complete"
+                {t(`${base}.button.complete`)}
+              </Button>
+            </>
+          )}
+
+          {/* Extension connect footer */}
+          {view === "extension-connect" && (
+            <>
+              {extStatus === "error" && (
+                <Button
+                  variant="contained"
+                  className="secondary-button"
+                  onClick={handleExtensionConnect}
+                >
+                  {t(`${base}.extension.tryAgain`)}
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                className={extStatus === "error" ? "neutral-button" : "secondary-button"}
+                onClick={goBack}
+                disabled={extStatus === "resolving"}
+              >
+                {extStatus === "error" ? (
+                  <>
+                    <ArrowBack />
+                    {t(`${base}.button.back`)}
+                  </>
+                ) : (
+                  t(`${base}.extension.cancel`)
                 )}
               </Button>
             </>
@@ -346,7 +429,56 @@ const AddConnectionModal = ({
         </>
       }
     >
-      {currentStage === 1 && (
+      {/* ── METHOD PICKER ── */}
+      {view === "method" && (
+        <div className="method-picker">
+          <Box
+            className="method-card method-card-extension"
+            role="button"
+            tabIndex={0}
+            onClick={handleExtensionConnect}
+            onKeyDown={(e) => e.key === "Enter" && handleExtensionConnect()}
+            aria-disabled={!oobi || loading}
+          >
+            <Box className="method-card-icon method-card-icon-extension">
+              <ExtensionIcon />
+            </Box>
+            <Typography className="method-card-title">
+              {t(`${base}.method.extension.title`)}
+            </Typography>
+            <Typography className="method-card-description">
+              {t(`${base}.method.extension.description`)}
+            </Typography>
+            {loading && (
+              <CircularProgress
+                size={14}
+                className="method-card-loading"
+              />
+            )}
+          </Box>
+
+          <Box
+            className="method-card method-card-manual"
+            role="button"
+            tabIndex={0}
+            onClick={() => setView("qr")}
+            onKeyDown={(e) => e.key === "Enter" && setView("qr")}
+          >
+            <Box className="method-card-icon method-card-icon-manual">
+              <SmartphoneOutlined />
+            </Box>
+            <Typography className="method-card-title">
+              {t(`${base}.method.manual.title`)}
+            </Typography>
+            <Typography className="method-card-description">
+              {t(`${base}.method.manual.description`)}
+            </Typography>
+          </Box>
+        </div>
+      )}
+
+      {/* ── QR CODE VIEW ── */}
+      {view === "qr" && (
         <div className="connection-qr">
           {loading && (
             <div className="connection-loading">
@@ -357,40 +489,34 @@ const AddConnectionModal = ({
           {showQR && (
             <QRCodeSVG
               value={oobi}
-              size={280}
+              size={240}
             />
           )}
           {errorOnRequest && (
             <div className="error-on-request">
               <WarningAmber />
-              <Typography>
-                {i18n.t("pages.connections.addConnection.modal.errorOnRequest")}
-              </Typography>
+              <Typography>{t(`${base}.errorOnRequest`)}</Typography>
             </div>
           )}
         </div>
       )}
-      {currentStage === 2 && (
+
+      {/* ── SCAN / PASTE VIEW ── */}
+      {view === "scan" && (
         <>
           <Accordion>
             <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography
-                component="span"
-                className="accordion-collapsed"
-              >
-                {i18n.t("pages.connections.addConnection.modal.learnMore")}
+              <Typography component="span" className="accordion-collapsed">
+                {t(`${base}.learnMore`)}
               </Typography>
-              <Typography
-                component="span"
-                className="accordion-expanded"
-              >
-                {i18n.t("pages.connections.addConnection.modal.showLess")}
+              <Typography component="span" className="accordion-expanded">
+                {t(`${base}.showLess`)}
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Typography>
                 <Trans
-                  i18nKey="pages.connections.addConnection.modal.descriptionLearnMore"
+                  i18nKey={`${base}.descriptionLearnMore`}
                   components={{ moreVertIcon: <MoreVert /> }}
                 />
               </Typography>
@@ -399,7 +525,7 @@ const AddConnectionModal = ({
           {!canReset && (
             <>
               {showInput ? (
-                content?.component
+                renderScanContent()
               ) : (
                 <Box className="camera-button-container">
                   <Button
@@ -409,26 +535,69 @@ const AddConnectionModal = ({
                     <PhotoCamera />
                   </Button>
                   <Typography onClick={() => setShowInput(true)}>
-                    {i18n.t(
-                      "pages.connections.addConnection.modal.button.openCamera"
-                    )}
+                    {t(`${base}.button.openCamera`)}
                   </Typography>
                 </Box>
               )}
               <AppInput
-                label={i18n.t("pages.connections.addConnection.modal.pasteUrl")}
+                label={t(`${base}.pasteUrl`)}
                 id="connection-url-input"
                 value={inputValue}
                 onChange={handleInputChange}
                 error={!isInputValid && touched}
                 className="connection-url-form"
-                errorMessage={i18n.t(
-                  "pages.connections.addConnection.modal.button.errorMessage"
-                )}
+                errorMessage={t(`${base}.button.errorMessage`)}
               />
             </>
           )}
         </>
+      )}
+
+      {/* ── EXTENSION CONNECT VIEW ── */}
+      {view === "extension-connect" && (
+        <div className="extension-flow">
+          <Box className="extension-flow-icon-wrapper">
+            <ExtensionIcon className="extension-flow-icon" />
+          </Box>
+
+          {extStatus === "waiting" && (
+            <>
+              <Typography className="extension-flow-title">
+                {t(`${base}.extension.waitingTitle`)}
+              </Typography>
+              <Box className="extension-flow-progress">
+                <CircularProgress size={36} />
+              </Box>
+              <Typography className="extension-flow-hint">
+                {t(`${base}.extension.waitingHint`)}
+              </Typography>
+            </>
+          )}
+
+          {extStatus === "resolving" && (
+            <>
+              <Typography className="extension-flow-title">
+                {t(`${base}.extension.resolvingTitle`)}
+              </Typography>
+              <Box className="extension-flow-progress">
+                <CircularProgress size={36} />
+              </Box>
+            </>
+          )}
+
+          {extStatus === "error" && (
+            <>
+              <Typography className="extension-flow-title extension-flow-title-error">
+                {t(`${base}.extension.errorTitle`)}
+              </Typography>
+              <WarningAmber className="extension-flow-warning" />
+              <Typography className="extension-flow-error-message">
+                {extError ||
+                  t(`${base}.toast.error`)}
+              </Typography>
+            </>
+          )}
+        </div>
       )}
     </PopupModal>
   );

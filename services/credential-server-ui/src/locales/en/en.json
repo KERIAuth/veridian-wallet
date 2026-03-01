@@ -42,13 +42,32 @@
         "title": "Add Connection",
         "modal": {
           "title": "Add a Connection",
-          "descriptionStepOne": "<bold>Step 1 - Establish a connection from an individual ID to the issuer's ID.</bold> Scan the below QR code using the wallet you wish to establish a connection with or copy and send the Connection URL.",
-          "descriptionStepTwo": "<bold>Step 2 - Complete by connecting the issuer’s ID with the individual ID.</bold> Scan the QR code of the individual ID you want to establish the connection with or paste their Connection URL in the input field.",
+          "method": {
+            "description": "Choose how you'd like to connect",
+            "extension": {
+              "title": "KERIAuth Extension",
+              "description": "One click — no scanning needed"
+            },
+            "manual": {
+              "title": "Mobile Wallet",
+              "description": "Scan QR code or paste a URL"
+            }
+          },
+          "descriptionStepOne": "<bold>Step 1 — Share your QR code.</bold> Scan the QR code below using the wallet you want to connect with, or copy and send the Connection URL.",
+          "descriptionStepTwo": "<bold>Step 2 — Scan or paste.</bold> Scan the QR code from the wallet, or paste its Connection URL below.",
           "errorOnRequest": "Unable to fetch a connection ID. Please try again later.",
           "learnMore": "Learn more",
           "showLess": "Show less",
-          "descriptionLearnMore": "This information can be found within the identifier’s information by selecting the <moreVertIcon /> icon and clicking on “Share Connection”.",
+          "descriptionLearnMore": "This information can be found within the identifier's information by selecting the <moreVertIcon /> icon and clicking on \u201cShare Connection\u201d.",
           "pasteUrl": "Paste Connection URL",
+          "extension": {
+            "waitingTitle": "Approve in KERIAuth Extension",
+            "waitingHint": "A connection request has appeared in the extension — approve it to continue.",
+            "resolvingTitle": "Establishing connection\u2026",
+            "errorTitle": "Connection failed",
+            "tryAgain": "Try again",
+            "cancel": "Cancel"
+          },
           "button": {
             "copyConnectionId": "Copy Connection ID",
             "retry": "Retry",

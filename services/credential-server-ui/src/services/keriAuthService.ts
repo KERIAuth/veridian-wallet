@@ -150,6 +150,54 @@ class KERIAuthService {
   }
 
   /**
+   * Send the server's OOBI to the KERIAuth extension to initiate a mutual OOBI connection.
+   * The extension will prompt the user to approve, then return its own reciprocal OOBI.
+   * @param serverOobi The credential server's own OOBI URL
+   * @returns The extension's reciprocal OOBI URL
+   */
+  async connectWithExtension(serverOobi: string): Promise<string> {
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
+    }
+
+    const result = await Promise.race([
+      this.client.sendMessage<{ payload: { oobi: string } }, { oobi: string }>(
+        '/KeriAuth/connection/invite',
+        { payload: { oobi: serverOobi } }
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Extension did not respond. Ensure the KERIAuth extension is active on this page.'
+              )
+            ),
+          90000
+        )
+      ),
+    ]);
+
+    return result.oobi;
+  }
+
+  /**
+   * Notify the KERIAuth extension that the server has successfully resolved its OOBI,
+   * completing the mutual connection handshake.
+   * @param serverOobi The credential server's own OOBI URL (used as correlation key)
+   */
+  async confirmExtensionConnection(serverOobi: string): Promise<void> {
+    if (!this.client) {
+      throw new Error('Client not initialized.');
+    }
+
+    await this.client.sendMessage<{ payload: { oobi: string } }, { ok: boolean }>(
+      '/KeriAuth/connection/confirm',
+      { payload: { oobi: serverOobi } }
+    );
+  }
+
+  /**
    * Reset authorization state
    */
   reset(): void {
