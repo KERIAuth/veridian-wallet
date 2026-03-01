@@ -150,34 +150,61 @@ class KERIAuthService {
   }
 
   /**
+   * Send a typed message to the KERIAuth extension via window.postMessage,
+   * using the same protocol the polaris-web client uses internally.
+   * This avoids depending on the internal sendMessage API of ExtensionClient.
+   */
+  private sendExtensionMessage<TResponse>(
+    type: string,
+    payload: Record<string, unknown>,
+    timeoutMs = 90000
+  ): Promise<TResponse> {
+    return new Promise<TResponse>((resolve, reject) => {
+      const requestId = crypto.randomUUID();
+
+      const timer = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(
+          new Error(
+            'Extension did not respond. Ensure the KERIAuth extension is active on this page.'
+          )
+        );
+      }, timeoutMs);
+
+      const handler = (event: MessageEvent) => {
+        if (event.source !== window) return;
+        const data = event.data as Record<string, unknown> | null;
+        if (!data || typeof data !== 'object') return;
+        if (data['type'] !== '/signify/reply' || data['requestId'] !== requestId) return;
+
+        clearTimeout(timer);
+        window.removeEventListener('message', handler);
+
+        if (data['error']) {
+          reject(new Error(typeof data['error'] === 'string' ? data['error'] : 'Extension error'));
+        } else if (!data['payload'] || typeof data['payload'] !== 'object') {
+          reject(new Error('No payload received from extension'));
+        } else {
+          resolve(data['payload'] as TResponse);
+        }
+      };
+
+      window.addEventListener('message', handler);
+      window.postMessage({ requestId, type, ...payload }, window.location.origin);
+    });
+  }
+
+  /**
    * Send the server's OOBI to the KERIAuth extension to initiate a mutual OOBI connection.
    * The extension will prompt the user to approve, then return its own reciprocal OOBI.
    * @param serverOobi The credential server's own OOBI URL
    * @returns The extension's reciprocal OOBI URL
    */
   async connectWithExtension(serverOobi: string): Promise<string> {
-    if (!this.client) {
-      throw new Error('Client not initialized. Call initialize() first.');
-    }
-
-    const result = await Promise.race([
-      this.client.sendMessage<{ payload: { oobi: string } }, { oobi: string }>(
-        '/KeriAuth/connection/invite',
-        { payload: { oobi: serverOobi } }
-      ),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                'Extension did not respond. Ensure the KERIAuth extension is active on this page.'
-              )
-            ),
-          90000
-        )
-      ),
-    ]);
-
+    const result = await this.sendExtensionMessage<{ oobi: string }>(
+      '/KeriAuth/connection/invite',
+      { payload: { oobi: serverOobi } }
+    );
     return result.oobi;
   }
 
@@ -187,11 +214,7 @@ class KERIAuthService {
    * @param serverOobi The credential server's own OOBI URL (used as correlation key)
    */
   async confirmExtensionConnection(serverOobi: string): Promise<void> {
-    if (!this.client) {
-      throw new Error('Client not initialized.');
-    }
-
-    await this.client.sendMessage<{ payload: { oobi: string } }, { ok: boolean }>(
+    await this.sendExtensionMessage<{ ok: boolean }>(
       '/KeriAuth/connection/confirm',
       { payload: { oobi: serverOobi } }
     );
