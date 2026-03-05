@@ -763,8 +763,9 @@
         "done": "Done",
         "connectbtn": "Connect",
         "disconnectbtn": "Disconnect",
-        "connectingbtn": "Connecting...",
-        "pending": "Pending"
+        "connectingbtn": "Connecting",
+        "pending": "Pending",
+        "copyid": "Copy ID"
       }
     },
     "request": {
@@ -1557,9 +1558,9 @@
   "request": {
     "sign": {
       "title": "Sign",
-      "identifier": "Identifier",
+      "identifier": "Related profile",
       "transaction": {
-        "data": "Data"
+        "data": "Signature"
       }
     },
     "button": {
