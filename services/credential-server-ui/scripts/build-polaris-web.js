@@ -1,24 +1,19 @@
 /**
- * Build script for signify-polaris-web from GitHub source
+ * Build script for signify-polaris-web
  *
- * This script automatically builds the polaris-web library during npm install.
+ * npm installs only the dist files for the GitHub dependency (per its "files"
+ * field), so the source is not available to build in-place. This script clones
+ * the source, compiles it with the TypeScript already present in this project,
+ * and copies the output into node_modules — no separate npm install is needed
+ * inside the cloned repo.
  *
  * Usage:
- *   - Default: Uses the commit hash defined below (for stability)
- *   - Latest: Run with POLARIS_COMMIT='' npm install
- *   - Custom: Run with POLARIS_COMMIT='commit-hash' npm install
- *
- * The script will:
- *   1. Check if already built (skip if dist exists)
- *   2. Clone the repository from GitHub
- *   3. Checkout specific commit (or use latest)
- *   4. Install dependencies and build
- *   5. Copy build output to node_modules
- *   6. Clean up temporary files
+ *   Runs automatically via postinstall.
+ *   Set POLARIS_REBUILD=1 to force a rebuild even if dist already exists.
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -27,75 +22,55 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 const polarisDir = join(rootDir, 'node_modules', 'signify-polaris-web');
 const polarisDistDir = join(polarisDir, 'dist');
+const tempDir = join(rootDir, '.temp-polaris-build');
+const tscBin = join(rootDir, 'node_modules', 'typescript', 'bin', 'tsc');
 
-// Pinned to the same commit used in services/libs/polaris-web
 const POLARIS_COMMIT = process.env.POLARIS_COMMIT !== undefined
   ? process.env.POLARIS_COMMIT
-  : '7d7dd1344f435ea6bc09c63fe013dda0afe84ada';
+  : '3bb72199760ce6b9f6187058dc99bf4bd0a8e74e';
 
-console.log('Checking signify-polaris-web build status...');
-if (POLARIS_COMMIT) {
-  console.log(`Target commit: ${POLARIS_COMMIT}`);
-} else {
-  console.log('Target: latest from main branch');
-}
-
-if (existsSync(polarisDistDir)) {
+if (existsSync(polarisDistDir) && !process.env.POLARIS_REBUILD) {
   console.log('✓ signify-polaris-web already built');
   process.exit(0);
 }
 
-console.log('Building signify-polaris-web from GitHub source...');
+console.log(`Building signify-polaris-web @ ${POLARIS_COMMIT || 'latest'}...`);
 
 try {
-  const tempDir = join(rootDir, '.temp-polaris-build');
+  if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
 
   if (POLARIS_COMMIT) {
-    console.log('Cloning repository...');
-    execSync('git clone https://github.com/WebOfTrust/polaris-web.git .temp-polaris-build', {
-      cwd: rootDir,
-      stdio: 'inherit'
-    });
-
-    console.log(`Checking out commit ${POLARIS_COMMIT}...`);
-    execSync(`git checkout ${POLARIS_COMMIT}`, {
-      cwd: tempDir,
-      stdio: 'inherit'
-    });
+    execSync(
+      'git clone --filter=blob:none https://github.com/WebOfTrust/polaris-web.git .temp-polaris-build',
+      { cwd: rootDir, stdio: 'inherit' }
+    );
+    execSync(`git checkout ${POLARIS_COMMIT}`, { cwd: tempDir, stdio: 'inherit' });
   } else {
-    console.log('Cloning repository (latest from main)...');
-    execSync('git clone --depth 1 --branch main https://github.com/WebOfTrust/polaris-web.git .temp-polaris-build', {
-      cwd: rootDir,
-      stdio: 'inherit'
-    });
+    execSync(
+      'git clone --depth 1 --branch main https://github.com/WebOfTrust/polaris-web.git .temp-polaris-build',
+      { cwd: rootDir, stdio: 'inherit' }
+    );
   }
 
-  console.log('Installing dependencies...');
-  execSync('npm install', {
-    cwd: tempDir,
-    stdio: 'inherit'
-  });
+  console.log('Patching tsconfig for build...');
+  const tsconfigBuildPath = join(tempDir, 'tsconfig.build.json');
+  const tsconfig = JSON.parse(readFileSync(tsconfigBuildPath, 'utf8'));
+  if (!tsconfig.compilerOptions) tsconfig.compilerOptions = {};
+  tsconfig.compilerOptions.skipLibCheck = true;
+  // Use this project's @types — no npm install needed inside the clone.
+  tsconfig.compilerOptions.typeRoots = [join(rootDir, 'node_modules', '@types')];
+  writeFileSync(tsconfigBuildPath, JSON.stringify(tsconfig, null, 2));
 
   console.log('Building...');
-  execSync('npm run build', {
-    cwd: tempDir,
-    stdio: 'inherit'
-  });
+  execSync(`node "${tscBin}" -p tsconfig.build.json`, { cwd: tempDir, stdio: 'inherit' });
 
-  console.log('Copying build output and package files...');
-
-  if (!existsSync(polarisDistDir)) {
-    mkdirSync(polarisDistDir, { recursive: true });
-  }
-
-  execSync(`cp -r ${join(tempDir, 'dist')}/* ${polarisDistDir}/`, { stdio: 'inherit' });
-  execSync(`cp ${join(tempDir, 'package.json')} ${polarisDir}/`, { stdio: 'inherit' });
-  execSync(`cp ${join(tempDir, 'README.md')} ${polarisDir}/ 2>/dev/null || true`, { stdio: 'inherit' });
-  execSync(`cp ${join(tempDir, 'LICENSE')} ${polarisDir}/ 2>/dev/null || true`, { stdio: 'inherit' });
-  execSync(`cp -r ${join(tempDir, 'src')} ${polarisDir}/`, { stdio: 'inherit' });
+  console.log('Copying dist...');
+  mkdirSync(polarisDistDir, { recursive: true });
+  execSync(`cp -r ${join(tempDir, 'dist')}/* ${polarisDistDir}/`);
+  execSync(`cp ${join(tempDir, 'package.json')} ${polarisDir}/`);
 
   console.log('Cleaning up...');
-  execSync(`rm -rf ${tempDir}`, { stdio: 'inherit' });
+  rmSync(tempDir, { recursive: true, force: true });
 
   console.log('✓ signify-polaris-web built successfully');
 } catch (error) {

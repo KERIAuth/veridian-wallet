@@ -2,6 +2,7 @@ FROM node:lts-alpine as build
 
 WORKDIR /app
 RUN apk add --no-cache git
+ENV HUSKY=0
 COPY package*.json ./
 COPY scripts/ ./scripts/
 RUN npm ci

@@ -1,4 +1,13 @@
 declare module 'signify-polaris-web' {
+  export interface SessionArgs {
+    oneTime?: boolean;
+  }
+
+  export interface AuthorizeArgs {
+    message?: string;
+    session?: SessionArgs;
+  }
+
   export interface AuthorizeResultCredential {
     raw: unknown;
     cesr: string;
@@ -14,8 +23,38 @@ declare module 'signify-polaris-web' {
     headers?: Record<string, string>;
   }
 
+  export interface SignDataArgs {
+    message?: string;
+    items: string[];
+  }
+
+  export interface SignDataResultItem {
+    data: string;
+    signature: string;
+  }
+
+  export interface SignDataResult {
+    aid: string;
+    items: SignDataResultItem[];
+  }
+
+  export interface SignRequestArgs {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+  }
+
   export interface SignRequestResult {
     headers: Record<string, string>;
+  }
+
+  export interface CredentialResult {
+    credential: any;
+  }
+
+  export interface CreateCredentialArgs {
+    credData: any;
+    schemaSaid: string;
   }
 
   export interface CreateCredentialResult {
@@ -25,33 +64,28 @@ declare module 'signify-polaris-web' {
     op: Record<string, any>;
   }
 
-  export interface GetCredentialResult {
-    credential?: string;
-    [key: string]: any;
+  export interface ConfigureVendorArgs {
+    url: string;
+  }
+
+  export interface ExtensionClientOptions {
+    targetOrigin?: string;
   }
 
   export interface ExtensionClient {
     isExtensionInstalled(timeout?: number): Promise<string | false>;
-    
-    authorize(params?: { message?: string }): Promise<AuthorizeResult>;
-    
-    signRequest(params: { 
-      url: string; 
-      method?: string;
-      headers?: Record<string, string>;
-    }): Promise<SignRequestResult>;
-    
-    createDataAttestationCredential(params: {
-      credData: any;
-      schemaSaid: string;
-    }): Promise<CreateCredentialResult>;
-    
-    getCredential(
-      credentialSAID: string, 
-      includeCESR?: boolean
-    ): Promise<GetCredentialResult>;
+    signRequest(payload: SignRequestArgs): Promise<SignRequestResult>;
+    signData(payload: SignDataArgs): Promise<SignDataResult>;
+    authorize(payload?: AuthorizeArgs): Promise<AuthorizeResult>;
+    authorizeAid(payload?: AuthorizeArgs): Promise<AuthorizeResult>;
+    authorizeCred(payload?: AuthorizeArgs): Promise<AuthorizeResult>;
+    getSessionInfo(payload?: AuthorizeArgs): Promise<AuthorizeResult>;
+    clearSession(payload?: AuthorizeArgs): Promise<AuthorizeResult>;
+    createDataAttestationCredential(payload: CreateCredentialArgs): Promise<CreateCredentialResult>;
+    getCredential(said: string, includeCESR?: boolean): Promise<CredentialResult>;
+    configureVendor(payload?: ConfigureVendorArgs): Promise<void>;
+    sendMessage<TRequest, TResponse>(type: string, payload?: TRequest): Promise<TResponse>;
   }
 
-  export function createClient(options?: { targetOrigin?: string }): ExtensionClient;
+  export function createClient(options?: ExtensionClientOptions): ExtensionClient;
 }
-
