@@ -140,7 +140,7 @@ const IssueCredentialModal = ({
       setLoadingMessage('Preparing...');
       console.log('[IssueCredential] Starting credential issuance flow...');
 
-      // If KERIAuth extension is installed and user not authorized, request authorization
+      // If the extension is installed and user not yet authorized, request authorization
       if (isExtensionInstalled && !isAuthorized) {
         console.log('[IssueCredential] Requesting authorization...');
         setLoadingMessage('Authorizing...');

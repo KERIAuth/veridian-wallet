@@ -45,7 +45,7 @@
           "method": {
             "description": "Choose how you'd like to connect",
             "extension": {
-              "title": "KERIAuth Extension",
+              "title": "{{extensionName}}",
               "description": "One click — no scanning needed"
             },
             "manual": {
@@ -61,7 +61,7 @@
           "descriptionLearnMore": "This information can be found within the identifier's information by selecting the <moreVertIcon /> icon and clicking on \u201cShare Connection\u201d.",
           "pasteUrl": "Paste Connection URL",
           "extension": {
-            "waitingTitle": "Approve in KERIAuth Extension",
+            "waitingTitle": "Approve in {{extensionName}}",
             "waitingHint": "A connection request has appeared in the extension — approve it to continue.",
             "resolvingTitle": "Establishing connection\u2026",
             "errorTitle": "Connection failed",

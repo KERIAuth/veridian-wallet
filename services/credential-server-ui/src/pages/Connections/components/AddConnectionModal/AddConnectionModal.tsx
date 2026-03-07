@@ -77,7 +77,7 @@ const AddConnectionModal = ({
   const [extError, setExtError] = useState("");
   const RESET_TIMEOUT = 1000;
   const { enqueueSnackbar } = useSnackbar();
-  const { isExtensionInstalled } = useKERIAuth();
+  const { isExtensionInstalled, extensionName } = useKERIAuth();
 
   const triggerToast = (message: string, variant: VariantType) => {
     enqueueSnackbar(message, {
@@ -299,7 +299,8 @@ const AddConnectionModal = ({
     }
   };
 
-  const t = (key: string) => i18n.t(key);
+  const t = (key: string, opts?: Record<string, unknown>) =>
+    i18n.t(key, { extensionName, ...opts });
   const base = "pages.connections.addConnection.modal";
 
   return (

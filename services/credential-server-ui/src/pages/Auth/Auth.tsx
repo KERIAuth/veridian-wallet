@@ -7,7 +7,7 @@ import "./Auth.scss";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { isExtensionInstalled, isAuthorized, aid, authorize, loading, error } = useKERIAuth();
+  const { isExtensionInstalled, isAuthorized, aid, authorize, loading, error, extensionName } = useKERIAuth();
 
   // Redirect if already authorized
   useEffect(() => {
@@ -22,7 +22,7 @@ const Auth = () => {
 
   const handleAuthorize = async () => {
     try {
-      await authorize("Authorize access to Veridian Credential Server");
+      await authorize("Authorize access to Credential Issuance");
       // After successful authorization, the useEffect will handle navigation
     } catch (err) {
       // Error is already handled in context
@@ -42,7 +42,7 @@ const Auth = () => {
                 Connect Your Wallet
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                Sign in with KERIAuth to continue
+                Sign in with {extensionName} to continue
               </Typography>
             </Box>
 
@@ -68,7 +68,7 @@ const Auth = () => {
 
               {!isExtensionInstalled && (
                 <Typography variant="caption" color="error" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
-                  KERIAuth extension required
+                  {extensionName} extension required
                 </Typography>
               )}
             </Box>

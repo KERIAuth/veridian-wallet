@@ -195,7 +195,25 @@ class KERIAuthService {
   }
 
   /**
-   * Send the server's OOBI to the KERIAuth extension to initiate a mutual OOBI connection.
+   * Query the extension for its display name.
+   * Sends a /KeriAuth/getInfo message and expects { name: string } in the reply payload.
+   * Falls back to "DIGN" if the extension does not support this message type or times out.
+   */
+  async getExtensionName(timeoutMs = 1500): Promise<string> {
+    try {
+      const result = await this.sendExtensionMessage<{ name: string }>(
+        '/KeriAuth/getInfo',
+        { payload: {} },
+        timeoutMs
+      );
+      return result?.name || 'DIGN';
+    } catch {
+      return 'DIGN';
+    }
+  }
+
+  /**
+   * Send the server's OOBI to the extension to initiate a mutual OOBI connection.
    * The extension will prompt the user to approve, then return its own reciprocal OOBI.
    * @param serverOobi The credential server's own OOBI URL
    * @returns The extension's reciprocal OOBI URL

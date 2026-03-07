@@ -135,9 +135,10 @@ const NavBar = ({ window }: Props) => {
             >
               <img
                 className="header-logo"
-                alt="veridian-logo"
+                alt="logo"
                 src={Logo}
               />
+              <Typography className="logo-wordmark">Credential Issuance</Typography>
             </Button>
           </Box>
           <Box
@@ -179,9 +180,10 @@ const NavBar = ({ window }: Props) => {
             >
               <img
                 className="header-logo"
-                alt="veridian-logo"
+                alt="logo"
                 src={Logo}
               />
+              <Typography className="logo-wordmark">Credential Issuance</Typography>
             </Button>
             {displayMenuItems.map((item) => {
               const isActive = isActivePath(item.path, location.pathname);
@@ -207,7 +209,6 @@ const NavBar = ({ window }: Props) => {
             className="nav-right"
             sx={{ display: { xs: "none", sm: "flex" }, alignItems: "center", gap: 1 }}
           >
-            {/* KERIAuth Status */}
             {isAuthorized && aid && (
               <Tooltip title={`Authorized AID: ${aid}`}>
                 <Chip

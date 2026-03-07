@@ -46,7 +46,7 @@ const headers: AppTableHeader<CredentialTemplateRow>[] = [
 ];
 
 export const Credentials = () => {
-  const { isAuthorized, isExtensionInstalled, authorize, loading, error } = useKERIAuth();
+  const { isAuthorized, isExtensionInstalled, authorize, loading, error, extensionName } = useKERIAuth();
   const roleViewIndex = useAppSelector(getRoleView) as RoleIndex;
   const schemaCaches = useAppSelector((state) => state.schemasCache.schemas);
   const tableRows: CredentialTemplateRow[] = schemaCaches.map((row) => ({
@@ -86,7 +86,7 @@ export const Credentials = () => {
 
   const handleAuthorize = async () => {
     try {
-      await authorize("Veridian Credential Issuance - Authorize access");
+      await authorize("Credential Issuance - Authorize access");
       // After successful authorization, the state updates and component re-renders
       // No need to navigate - just let the component show the credentials
     } catch (err) {
@@ -135,7 +135,7 @@ export const Credentials = () => {
             
             {!isExtensionInstalled && (
               <Typography variant="caption" color="error" sx={{ mt: 2, display: "block" }}>
-                KERIAuth extension required - Please install and activate it
+                {extensionName} extension required — please install and activate it
               </Typography>
             )}
           </CardContent>

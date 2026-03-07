@@ -5,6 +5,7 @@ interface KERIAuthContextType {
   isAuthorized: boolean;
   aid: string | null;
   extensionId: string | false | null;
+  extensionName: string;
   isExtensionInstalled: boolean;
   loading: boolean;
   error: string | null;
@@ -18,15 +19,20 @@ export function KERIAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [aid, setAid] = useState<string | null>(null);
   const [extensionId, setExtensionId] = useState<string | false | null>(null);
+  const [extensionName, setExtensionName] = useState<string>('DIGN');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize extension check on mount
+  // Initialize extension check on mount; also try to read the extension's display name
   useEffect(() => {
     keriAuthService.initialize()
-      .then((id) => {
+      .then(async (id) => {
         console.log('[AuthContext] Extension ID:', id);
         setExtensionId(id);
+        if (id) {
+          const name = await keriAuthService.getExtensionName();
+          setExtensionName(name);
+        }
       })
       .catch(err => {
         console.error('[AuthContext] Init error:', err.message);
@@ -68,7 +74,8 @@ export function KERIAuthProvider({ children }: { children: ReactNode }) {
       value={{ 
         isAuthorized, 
         aid, 
-        extensionId, 
+        extensionId,
+        extensionName,
         isExtensionInstalled,
         loading, 
         error, 
