@@ -6,6 +6,7 @@ import { IGNORE_ATTRIBUTES } from "../../const";
 import { useSchemaDetail } from "../../hooks/SchemaDetail";
 import { i18n } from "../../i18n";
 import { CredentialService } from "../../services";
+import { keriAuthService } from "../../services/keriAuthService";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchContactCredentials } from "../../store/reducers/connectionsSlice";
 import { triggerToast } from "../../utils/toast";
@@ -127,101 +128,68 @@ const IssueCredentialModal = ({
   ]);
 
   const issueCred = async () => {
-    if (!selectedCredTemplate || !selectedConnection) {
-      console.error('[IssueCredential] Missing required fields:', { 
-        selectedCredTemplate, 
-        selectedConnection 
-      });
-      return;
-    }
+    if (!selectedCredTemplate || !selectedConnection) return;
 
     try {
       setLoading(true);
-      setLoadingMessage('Preparing...');
-      console.log('[IssueCredential] Starting credential issuance flow...');
 
-      // If the extension is installed and user not yet authorized, request authorization
+      // Step 1: Establish identity if the extension is installed but not yet authorized.
+      // The Credentials page already enforces auth, so this is a safety net.
       if (isExtensionInstalled && !isAuthorized) {
-        console.log('[IssueCredential] Requesting authorization...');
         setLoadingMessage('Authorizing...');
-        try {
-          await authorize('Do you approve issuance of this credential?');
-          console.log('[IssueCredential] Authorization successful');
-        } catch (authError: any) {
-          // User rejected authorization
-          console.error('[IssueCredential] Authorization rejected:', authError);
-          triggerToast(
-            authError.message || 'Authorization rejected. Credential not issued.',
-            "error"
-          );
-          return;
-        }
+        await authorize('Do you approve issuance of this credential?');
       }
 
-      // Prepare credential attributes
+      // Build the attribute map (drop blank values)
       const schemaSaid = selectedCredTemplate;
       const attribute = Object.fromEntries(
         Object.entries(attributes).filter(
-          ([_, v]) =>
-            v !== undefined &&
-            v !== null &&
-            !(typeof v === "string" && v.trim() === "")
+          ([_, v]) => v !== undefined && v !== null && !(typeof v === "string" && v.trim() === "")
         )
       );
 
-      console.log('[IssueCredential] Credential data prepared:', {
+      // Step 2: Show the exact credential fields inside the extension so the issuer
+      // can review and approve before the server issues the credential.
+      // Uses /signify/sign-data which opens the extension's review UI with each field
+      // displayed individually. The server still performs the actual KERIA issuance
+      // (the credential server has its own KERIA agent), so this step is an approval
+      // gate — the issuer must explicitly confirm what they are about to issue.
+      if (isExtensionInstalled) {
+        setLoadingMessage('Waiting for approval in wallet...');
+
+        const connection = connections.find((c) => c.id === selectedConnection);
+        const recipientLabel = connection
+          ? `${connection.alias} (${selectedConnection.slice(0, 8)}...)`
+          : selectedConnection;
+
+        const items = [
+          `Schema: ${schema?.title ?? schemaSaid}`,
+          `Schema SAID: ${schemaSaid}`,
+          `Recipient: ${recipientLabel}`,
+          ...Object.entries(attribute).map(([k, v]) => `${k}: ${String(v)}`),
+        ];
+
+        await keriAuthService.signData({
+          message: JSON.stringify({
+            requestTitleText: "Authorize Credential Issuance",
+            requestText:
+              "Review the credential fields below. The credential will be issued once you approve.",
+            itemsLabel: "Credential fields",
+            buttonText: "Approve & Issue",
+          }),
+          items,
+        });
+      }
+
+      // Step 3: Credential server issues the credential via its own KERIA agent.
+      setLoadingMessage('Issuing credential...');
+      const issueData = {
         schemaSaid,
         aid: selectedConnection,
-        attributes: attribute,
-      });
-
-      // If extension is installed and authorized, request user approval for signing this specific credential
-      if (isExtensionInstalled && isAuthorized) {
-        console.log('[IssueCredential] Requesting approval to sign credential...');
-        setLoadingMessage('Requesting approval in wallet...');
-        
-        try {
-          // Use authorize endpoint to get user approval for this specific credential
-          // TODO: Replace with /signify/credential/create/data-attestation when available
-          await authorize(`Do you approve signing and issuance of this ${schema?.title || 'credential'}?`);
-          
-          console.log('[IssueCredential] User approved credential signing');
-          
-          triggerToast(
-            'Credential approved! Now issuing...',
-            "success"
-          );
-        } catch (signError: any) {
-          console.error('[IssueCredential] User rejected credential signing:', signError);
-          triggerToast(
-            signError.message || 'Credential signing rejected. Credential not issued.',
-            "error"
-          );
-          return;
-        }
-      }
-
-      // Issue credential
-      setLoadingMessage('Issuing credential...');
-      let objAttributes = {};
-      if (Object.keys(attribute).length) {
-        objAttributes = {
-          attribute,
-        };
-      }
-
-      const issueData = {
-        schemaSaid: schemaSaid,
-        aid: selectedConnection,
-        ...objAttributes,
+        ...(Object.keys(attribute).length ? { attribute } : {}),
       };
-
-      console.log('[IssueCredential] Issuing credential to backend:', issueData);
-      
       await CredentialService.issue(issueData);
-      
-      console.log('[IssueCredential] Credential issued successfully');
-      
+
       triggerToast(
         i18n.t("pages.credentialDetails.issueCredential.messages.success"),
         "success"
@@ -229,7 +197,6 @@ const IssueCredentialModal = ({
       dispatch(fetchContactCredentials(selectedConnection));
       resetModal();
     } catch (e: any) {
-      console.error('[IssueCredential] Error during issuance:', e);
       triggerToast(
         e.message || i18n.t("pages.credentialDetails.issueCredential.messages.error"),
         "error"

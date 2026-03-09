@@ -19,20 +19,21 @@ export function KERIAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [aid, setAid] = useState<string | null>(null);
   const [extensionId, setExtensionId] = useState<string | false | null>(null);
-  const [extensionName, setExtensionName] = useState<string>('DIGN');
+  const [extensionName, setExtensionName] = useState<string>('KERI');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize extension check on mount; also try to read the extension's display name
+  // Initialize extension check on mount; resolve the display name before committing
+  // state so extensionId and extensionName are always set together in one render.
   useEffect(() => {
     keriAuthService.initialize()
       .then(async (id) => {
         console.log('[AuthContext] Extension ID:', id);
-        setExtensionId(id);
         if (id) {
           const name = await keriAuthService.getExtensionName();
           setExtensionName(name);
         }
+        setExtensionId(id);
       })
       .catch(err => {
         console.error('[AuthContext] Init error:', err.message);

@@ -6,11 +6,16 @@ export const RARE_EVO_DEMO_SCHEMA_SAID =
 export const LE_SCHEMA_SAID = "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY";
 export const F_EMPLOYEE_DEMO_SCHEMA_SAID =
   "EL9oOWU_7zQn_rD--Xsgi3giCWnFDaNvFMUGTOZx1ARO";
+// Run scripts/compute-sedi-said.ts to obtain the real SAID and replace this placeholder.
+export const SEDI_SCHEMA_SAID =
+  "EHpD0f1XjVCMDnL6JXaeFqnOkBSmlzDAyuJcZiNBHDos";
+
 export const ACDC_SCHEMAS_ID = [
   QVI_SCHEMA_SAID,
   LE_SCHEMA_SAID,
   RARE_EVO_DEMO_SCHEMA_SAID,
   F_EMPLOYEE_DEMO_SCHEMA_SAID,
+  SEDI_SCHEMA_SAID,
 ];
 
 export const ACDC_SCHEMAS = [
@@ -29,5 +34,9 @@ export const ACDC_SCHEMAS = [
   {
     id: LE_SCHEMA_SAID,
     name: "Legal Entity vLEI Credential",
+  },
+  {
+    id: SEDI_SCHEMA_SAID,
+    name: "Utah State-Endorsed Digital Identity",
   },
 ];

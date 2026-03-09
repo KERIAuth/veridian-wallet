@@ -10,6 +10,12 @@ import { keriOobiApi } from "./apis/invitation.api";
 import { resolveOobi } from "./apis/oobi.api";
 import { ping } from "./apis/ping.api";
 import { schemaApi } from "./apis/schema.api";
+import {
+  sediApply,
+  sediApplicationsList,
+  sediIssue,
+  sediCredential,
+} from "./apis/sedi.api";
 import { config } from "./config";
 
 export const router: Router = express.Router();
@@ -23,3 +29,8 @@ router.get(config.path.schemas, schemaApi);
 router.post(config.path.requestDisclosure, requestDisclosure);
 router.post(config.path.revokeCredential, revokeCredential);
 router.delete(config.path.deleteContact, deleteContact);
+// SEDI endpoints
+router.post(config.path.sediApply, sediApply);
+router.get(config.path.sediApplications, sediApplicationsList);
+router.post(config.path.sediApplicationIssue, sediIssue);
+router.get(config.path.sediCredential, sediCredential);

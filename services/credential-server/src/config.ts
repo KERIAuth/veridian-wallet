@@ -23,5 +23,10 @@ export const config = {
     revokeCredential: "/revokeCredential",
     deleteContact: "/deleteContact",
     schemas: "/schemas",
+    // SEDI endpoints
+    sediApply: "/sedi/apply",
+    sediApplications: "/sedi/applications",
+    sediApplicationIssue: "/sedi/applications/:id/issue",
+    sediCredential: "/sedi/credential",
   },
 };

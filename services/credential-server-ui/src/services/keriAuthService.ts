@@ -48,6 +48,20 @@ class KERIAuthService {
   }
 
   /**
+   * Open the extension's sign-data review UI, showing each item string to the user.
+   * The `message` field accepts a JSON string to customise the UI labels
+   * (requestTitleText, requestText, itemsLabel, buttonText).
+   * Returns the AID that signed and per-item signatures.
+   * Throws if the user cancels or the extension is not active.
+   */
+  async signData(payload: { message?: string; items: string[] }): Promise<{ aid: string; items: { data: string; signature: string }[] }> {
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
+    }
+    return await this.client.signData(payload);
+  }
+
+  /**
    * Generate signed headers for HTTP request
    * @param url Target URL to sign
    * @param method HTTP method (default: GET)
@@ -195,21 +209,40 @@ class KERIAuthService {
   }
 
   /**
-   * Query the extension for its display name.
-   * Sends a /KeriAuth/getInfo message and expects { name: string } in the reply payload.
-   * Falls back to "DIGN" if the extension does not support this message type or times out.
+   * Query the installed extension for its display name.
+   *
+   * Strategy (in order):
+   *  1. `signify-extension` — the standard detection message that all polaris-web
+   *     compatible extensions handle; returns { extensionId, name }.
+   *  2. `/KeriAuth/getInfo` — a KeriAuth-specific endpoint (forward compatibility
+   *     for extensions that may implement it in the future).
+   *  3. Generic fallback `'KERI'` — never names a specific extension product.
    */
-  async getExtensionName(timeoutMs = 1500): Promise<string> {
+  async getExtensionName(): Promise<string> {
+    if (!this.client) return 'KERI';
+
+    try {
+      const result = await this.client.sendMessage<
+        Record<string, never>,
+        { extensionId: string; name: string }
+      >('signify-extension');
+      if (result?.name) return result.name;
+    } catch {
+      // fall through to secondary method
+    }
+
     try {
       const result = await this.sendExtensionMessage<{ name: string }>(
         '/KeriAuth/getInfo',
         { payload: {} },
-        timeoutMs
+        1500
       );
-      return result?.name || 'DIGN';
+      if (result?.name) return result.name;
     } catch {
-      return 'DIGN';
+      // fall through to generic fallback
     }
+
+    return 'KERI';
   }
 
   /**
