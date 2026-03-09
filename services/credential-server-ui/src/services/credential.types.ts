@@ -1,7 +1,7 @@
 interface CredentialIssueRequest {
   schemaSaid: string;
   aid: string;
-  [key: string]: string;
+  attribute?: Record<string, string>;
 }
 
 interface CredentialRequest {
