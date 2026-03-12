@@ -8,7 +8,7 @@ export const F_EMPLOYEE_DEMO_SCHEMA_SAID =
   "EL9oOWU_7zQn_rD--Xsgi3giCWnFDaNvFMUGTOZx1ARO";
 // Run scripts/compute-sedi-said.ts to obtain the real SAID and replace this placeholder.
 export const SEDI_SCHEMA_SAID =
-  "EHpD0f1XjVCMDnL6JXaeFqnOkBSmlzDAyuJcZiNBHDos";
+  "ECZlGbia89N0xAo-R-aqSlZo3xTK5aTlpInj-dE4zXEc";
 
 export const ACDC_SCHEMAS_ID = [
   QVI_SCHEMA_SAID,
