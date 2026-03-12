@@ -30,8 +30,7 @@ export function KERIAuthProvider({ children }: { children: ReactNode }) {
       .then(async (id) => {
         console.log('[AuthContext] Extension ID:', id);
         if (id) {
-          const name = await keriAuthService.getExtensionName();
-          setExtensionName(name);
+          setExtensionName(keriAuthService.getExtensionName());
         }
         setExtensionId(id);
       })

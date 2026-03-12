@@ -8,23 +8,45 @@ import type { ExtensionClient, AuthorizeResult } from 'signify-polaris-web';
 class KERIAuthService {
   private client: ExtensionClient | null = null;
   private authorizeResult: AuthorizeResult | null = null;
+  private _extensionName: string = 'DIGN';
 
   /**
-   * Initialize the KERI Auth extension client
+   * Initialize the KERI Auth extension client.
+   * Also captures the extension display name from the discovery response
+   * so callers can read it via getExtensionName() without sending a second message.
    * @returns Extension ID if installed, false otherwise
    */
   async initialize(): Promise<string | false> {
     console.log('[KERIAuth] Initializing...');
-    
+
+    // Listen for the signify-extension discovery reply BEFORE createClient()
+    // fires the ping, so we don't miss it. polaris-web resolves the name in
+    // event.data.data.name inside the same response it uses for extensionId.
+    const nameCapture = new Promise<void>((resolve) => {
+      const handler = (event: MessageEvent) => {
+        if (event.source !== window) return;
+        const name = event.data?.data?.name ?? event.data?.name;
+        if (event.data?.type === 'signify-extension' && name) {
+          this._extensionName = name;
+          window.removeEventListener('message', handler);
+          resolve();
+        }
+      };
+      window.addEventListener('message', handler);
+      // Give up after 4 s — keeps _extensionName at default 'DIGN'
+      setTimeout(() => { window.removeEventListener('message', handler); resolve(); }, 4000);
+    });
+
     this.client = createClient();
     const extensionId = await this.client.isExtensionInstalled();
-    
+    await nameCapture;
+
     if (extensionId) {
-      console.log('[KERIAuth] Extension detected:', extensionId);
+      console.log('[KERIAuth] Extension detected:', extensionId, '— name:', this._extensionName);
     } else {
       console.log('[KERIAuth] Extension not detected');
     }
-    
+
     return extensionId;
   }
 
@@ -209,40 +231,12 @@ class KERIAuthService {
   }
 
   /**
-   * Query the installed extension for its display name.
-   *
-   * Strategy (in order):
-   *  1. `signify-extension` — the standard detection message that all polaris-web
-   *     compatible extensions handle; returns { extensionId, name }.
-   *  2. `/KeriAuth/getInfo` — a KeriAuth-specific endpoint (forward compatibility
-   *     for extensions that may implement it in the future).
-   *  3. Generic fallback `'KERI'` — never names a specific extension product.
+   * Return the extension display name captured during initialize().
+   * Never sends a second message to the extension — that would cause DIGN to
+   * respond with a mismatched format and break the polaris-web event handler.
    */
-  async getExtensionName(): Promise<string> {
-    if (!this.client) return 'KERI';
-
-    try {
-      const result = await this.client.sendMessage<
-        Record<string, never>,
-        { extensionId: string; name: string }
-      >('signify-extension');
-      if (result?.name) return result.name;
-    } catch {
-      // fall through to secondary method
-    }
-
-    try {
-      const result = await this.sendExtensionMessage<{ name: string }>(
-        '/KeriAuth/getInfo',
-        { payload: {} },
-        1500
-      );
-      if (result?.name) return result.name;
-    } catch {
-      // fall through to generic fallback
-    }
-
-    return 'KERI';
+  getExtensionName(): string {
+    return this._extensionName;
   }
 
   /**
