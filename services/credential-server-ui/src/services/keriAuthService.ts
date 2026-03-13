@@ -17,7 +17,7 @@ class KERIAuthService {
    * @returns Extension ID if installed, false otherwise
    */
   async initialize(): Promise<string | false> {
-    console.log('[KERIAuth] Initializing...');
+    console.log('[KERIAuth] Initializing... [build:debug-1]');
 
     // Listen for the signify-extension discovery reply BEFORE createClient()
     // fires the ping, so we don't miss it. polaris-web resolves the name in
@@ -26,7 +26,9 @@ class KERIAuthService {
       const handler = (event: MessageEvent) => {
         if (event.source !== window) return;
         const name = event.data?.data?.name ?? event.data?.name;
+        console.log('[KERIAuth] nameCapture msg:', event.data?.type, '| data:', JSON.stringify(event.data?.data));
         if (event.data?.type === 'signify-extension' && name) {
+          console.log('[KERIAuth] nameCapture: captured name:', name);
           this._extensionName = name;
           window.removeEventListener('message', handler);
           resolve();
@@ -34,7 +36,11 @@ class KERIAuthService {
       };
       window.addEventListener('message', handler);
       // Give up after 4 s — keeps _extensionName at default 'DIGN'
-      setTimeout(() => { window.removeEventListener('message', handler); resolve(); }, 4000);
+      setTimeout(() => {
+        console.log('[KERIAuth] nameCapture: timed out, using default:', this._extensionName);
+        window.removeEventListener('message', handler);
+        resolve();
+      }, 4000);
     });
 
     this.client = createClient();
@@ -236,6 +242,7 @@ class KERIAuthService {
    * respond with a mismatched format and break the polaris-web event handler.
    */
   getExtensionName(): string {
+    console.log('[KERIAuth] getExtensionName() called, returning:', this._extensionName);
     return this._extensionName;
   }
 
