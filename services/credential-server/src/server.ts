@@ -34,11 +34,20 @@ async function getSignifyClient(bran: string): Promise<SignifyClient> {
     await client.connect();
   }
 
-  await Promise.allSettled(
+  const schemaResults = await Promise.allSettled(
     ACDC_SCHEMAS_ID.map((schemaId) =>
       resolveOobi(client, `${config.oobiEndpoint}/oobi/${schemaId}`)
     )
   );
+  schemaResults.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(
+        `[server] ❌ Schema OOBI resolution FAILED for ${ACDC_SCHEMAS_ID[i]}: ${result.reason}`
+      );
+    } else {
+      console.log(`[server] ✓ Schema OOBI resolved: ${ACDC_SCHEMAS_ID[i]}`);
+    }
+  });
 
   return client;
 }
