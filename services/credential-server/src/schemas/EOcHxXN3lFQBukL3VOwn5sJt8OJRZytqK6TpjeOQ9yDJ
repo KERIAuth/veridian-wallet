@@ -1,5 +1,5 @@
 {
-  "$id": "ECZlGbia89N0xAo-R-aqSlZo3xTK5aTlpInj-dE4zXEc",
+  "$id": "EOcHxXN3lFQBukL3VOwn5sJt8OJRZytqK6TpjeOQ9yDJ",
   "title": "Utah State-Endorsed Digital Identity",
   "credentialType": "UtahSEDICredential",
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -33,6 +33,7 @@
           "required": [
             "d"
           ],
+          "additionalProperties": false,
           "properties": {
             "d": {
               "type": "string"
