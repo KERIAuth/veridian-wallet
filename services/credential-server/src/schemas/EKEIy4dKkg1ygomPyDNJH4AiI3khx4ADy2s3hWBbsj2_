@@ -1,7 +1,7 @@
 {
-  "$id": "EOcHxXN3lFQBukL3VOwn5sJt8OJRZytqK6TpjeOQ9yDJ",
-  "title": "Utah State-Endorsed Digital Identity",
-  "credentialType": "UtahSEDICredential",
+  "$id": "EKEIy4dKkg1ygomPyDNJH4AiI3khx4ADy2s3hWBbsj2_",
+  "title": "State-Endorsed Digital Identity",
+  "credentialType": "SEDICredential",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
@@ -49,8 +49,7 @@
             "firstName",
             "lastName",
             "dateOfBirth",
-            "address",
-            "utahId"
+            "address"
           ],
           "additionalProperties": false,
           "properties": {
@@ -84,8 +83,8 @@
               "description": "Residential address",
               "type": "string"
             },
-            "utahId": {
-              "description": "Utah-assigned state ID number",
+            "driversLicense": {
+              "description": "Driver's license number",
               "type": "string"
             }
           }

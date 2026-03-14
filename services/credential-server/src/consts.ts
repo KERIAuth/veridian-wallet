@@ -8,7 +8,7 @@ export const F_EMPLOYEE_DEMO_SCHEMA_SAID =
   "EL9oOWU_7zQn_rD--Xsgi3giCWnFDaNvFMUGTOZx1ARO";
 // Run scripts/compute-sedi-said.ts to obtain the real SAID and replace this placeholder.
 export const SEDI_SCHEMA_SAID =
-  "EOcHxXN3lFQBukL3VOwn5sJt8OJRZytqK6TpjeOQ9yDJ";
+  "EKEIy4dKkg1ygomPyDNJH4AiI3khx4ADy2s3hWBbsj2_";
 
 export const ACDC_SCHEMAS_ID = [
   QVI_SCHEMA_SAID,
@@ -37,6 +37,6 @@ export const ACDC_SCHEMAS = [
   },
   {
     id: SEDI_SCHEMA_SAID,
-    name: "Utah State-Endorsed Digital Identity",
+    name: "State-Endorsed Digital Identity",
   },
 ];

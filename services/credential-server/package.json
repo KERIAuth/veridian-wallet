@@ -7,7 +7,7 @@
     "test": "test",
     "start": "node build/server.js",
     "dev": "npx nodemon",
-    "build": "rimraf ./build && tsc && copyfiles -u 1 src/schemas/* build"
+    "build": "rimraf ./build && tsc --noEmitOnError false && copyfiles -u 1 src/schemas/* build"
   },
   "author": "",
   "license": "ISC",

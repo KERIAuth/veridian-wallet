@@ -12,7 +12,7 @@ export interface SediApplication {
   lastName: string;
   dateOfBirth: string;
   address: string;
-  utahId: string;
+  driversLicense?: string;
   documentFileName?: string;
   signature: string[];
   submittedAt: string;
@@ -30,10 +30,10 @@ export async function sediApply(
   res: Response,
   _next: NextFunction
 ): Promise<void> {
-  const { aid, firstName, lastName, dateOfBirth, address, utahId, documentFileName, signature } =
+  const { aid, firstName, lastName, dateOfBirth, address, driversLicense, documentFileName, signature } =
     req.body;
 
-  if (!aid || !firstName || !lastName || !dateOfBirth || !address || !utahId) {
+  if (!aid || !firstName || !lastName || !dateOfBirth || !address) {
     res.status(400).json({ success: false, error: "Missing required fields" });
     return;
   }
@@ -46,7 +46,7 @@ export async function sediApply(
     lastName,
     dateOfBirth,
     address,
-    utahId,
+    driversLicense,
     documentFileName,
     signature: signature || [],
     submittedAt: new Date().toISOString(),
@@ -106,7 +106,7 @@ export async function sediIssue(
         lastName: application.lastName,
         dateOfBirth: application.dateOfBirth,
         address: application.address,
-        utahId: application.utahId,
+        ...(application.driversLicense ? { driversLicense: application.driversLicense } : {}),
       },
     };
 
@@ -188,7 +188,7 @@ export async function sediCredential(
         lastName: attrs.lastName,
         dateOfBirth: attrs.dateOfBirth,
         address: attrs.address,
-        utahId: attrs.utahId,
+        driversLicense: attrs.driversLicense,
         issuedDate: attrs.dt,
         status: cred.status?.et === "iss" ? "active" : "revoked",
       },
