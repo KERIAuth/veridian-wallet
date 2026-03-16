@@ -13,7 +13,7 @@ export async function keriOobiApi(
   const url = `${await getOobi(
     client,
     ISSUER_NAME
-  )}?name=CF%20Credential%20Issuance`;
+  )}?name=SEDI%20Credential%20Issuer`;
   res.status(200).send({
     success: true,
     data: url,
