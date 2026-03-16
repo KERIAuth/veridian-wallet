@@ -32,7 +32,7 @@ export class PollingService {
             recipient: msg.exn.i,
             offerSaid: msg.exn.d,
           });
-          await this.client.ipex().submitAgree(ISSUER_NAME, agree, sigs, end, [msg.exn.i]);
+          await this.client.ipex().submitAgree(ISSUER_NAME, agree, sigs, [msg.exn.i]);
           break;
         }
 
