@@ -15,6 +15,9 @@ import {
   sediApplicationsList,
   sediIssue,
   sediCredential,
+  sediIssuerAid,
+  sediOffer,
+  sediGrant,
 } from "./apis/sedi.api";
 import { config } from "./config";
 
@@ -34,3 +37,6 @@ router.post(config.path.sediApply, sediApply);
 router.get(config.path.sediApplications, sediApplicationsList);
 router.post(config.path.sediApplicationIssue, sediIssue);
 router.get(config.path.sediCredential, sediCredential);
+router.get(config.path.sediIssuerAid, sediIssuerAid);
+router.get(config.path.sediOffer, sediOffer);
+router.get(config.path.sediGrant, sediGrant);

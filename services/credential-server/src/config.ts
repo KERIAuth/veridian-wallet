@@ -28,5 +28,8 @@ export const config = {
     sediApplications: "/sedi/applications",
     sediApplicationIssue: "/sedi/applications/:id/issue",
     sediCredential: "/sedi/credential",
+    sediIssuerAid: "/sedi/issuerAid",
+    sediOffer: "/sedi/offer",
+    sediGrant: "/sedi/grant",
   },
 };

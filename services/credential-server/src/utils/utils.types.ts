@@ -6,7 +6,10 @@ export type BranFileContent = {
 };
 
 export enum NotificationRoute {
-  ExnIpexOffer = "/exn/ipex/offer",
+  ExnIpexApply = "/exn/ipex/apply",
+  ExnIpexOffer  = "/exn/ipex/offer",
+  ExnIpexAgree  = "/exn/ipex/agree",
+  ExnIpexGrant  = "/exn/ipex/grant",
 }
 
 export type Credential = {
@@ -16,6 +19,7 @@ export type Credential = {
   sad: Dict<any>;
   anc: Dict<any>;
   iss: Dict<any>;
+  ancatc?: string[];
 };
 
 export type QviCredential = {
@@ -31,7 +35,10 @@ export type LeCredential = {
 
 export type ExchangeMsg = {
   exn: {
-    d: string;
-    i: string;
+    d: string;   // SAID of this exn
+    i: string;   // sender AID
+    r?: string;  // route  e.g. /ipex/agree
+    p?: string;  // prior SAID — the message this exn is responding to
+    a?: Dict<any>;
   };
 };
