@@ -554,7 +554,8 @@ class IpexCommunicationService extends AgentService {
     }
 
     const schemaUrlBase =
-      message.exn.r === ExchangeRoute.IpexGrant
+      message.exn.r === ExchangeRoute.IpexGrant ||
+      message.exn.r === ExchangeRoute.IpexApply
         ? this.getInlineSchemaOobiBase(message) ??
           (await this.getSchemaUrl(
             connection.serviceEndpoints[0],
@@ -1260,7 +1261,7 @@ class IpexCommunicationService extends AgentService {
   }
 
   private getInlineSchemaOobiBase(message: ExnMessage): string | undefined {
-    const rawUrl = message.exn.a?.oobiUrl;
+    const rawUrl = message.exn.a?.a?.oobiUrl;
     if (typeof rawUrl !== "string") {
       return undefined;
     }
