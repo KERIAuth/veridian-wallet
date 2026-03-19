@@ -408,16 +408,6 @@ class IpexCommunicationService extends AgentService {
     const filter = {
       "-s": { $eq: schemaSaid },
       "-a-i": exchange.exn.rp,
-      ...(Object.keys(attributes).length > 0
-        ? {
-            ...Object.fromEntries(
-              Object.entries(attributes).map(([key, value]) => [
-                "-a-" + key,
-                value,
-              ])
-            ),
-          }
-        : {}),
     };
 
     const filtered = await this.props.signifyClient.credentials().list({
