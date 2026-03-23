@@ -5,7 +5,6 @@ import {
   StorageService,
   BaseRecordConstructor,
   StorageMessage,
-  Tags,
 } from "../storage.types";
 import { deserializeRecord } from "../utils";
 import { BasicRecord } from "../../agent/records";
@@ -115,7 +114,7 @@ class IonicStorage<T extends BaseRecord> implements StorageService<T> {
   }
 
   private checkRecordIsValidWithQuery(
-    record: unknown,
+    record: any,
     query: Query<BasicRecord>
   ): boolean {
     for (const [queryKey, queryVal] of Object.entries(query)) {
@@ -142,21 +141,15 @@ class IonicStorage<T extends BaseRecord> implements StorageService<T> {
       } else {
         if (Array.isArray(queryVal) && queryVal.length > 0) {
           // compare them item by item
-          const tags = (record as { tags: Tags }).tags;
-          const check = queryVal.every(
-            (element) =>
-              Array.isArray(tags?.[queryKey]) &&
-              tags[queryKey]?.includes(element)
+          const check = queryVal.every((element) =>
+            record.tags?.[queryKey]?.includes(element)
           );
           if (!check) {
             return false;
           }
-        } else {
-          const tags = (record as { tags: Tags }).tags;
-          if (tags[queryKey] !== queryVal) {
-            // If you query for an unknown tag `m` that is not a part of the record with `{ m: undefined }` all items will match this query. This behaves differently in SQLite storage - this risk is accepted since we will only query for known tags and Ionic Storage is only used in development.
-            return false;
-          }
+        } else if (record.tags[queryKey] !== queryVal) {
+          // If you query for an unknown tag `m` that is not a part of the record with `{ m: undefined }` all items will match this query. This behaves differently in SQLite storage - this risk is accepted since we will only query for known tags and Ionic Storage is only used in development.
+          return false;
         }
       }
     }

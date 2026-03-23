@@ -3,15 +3,15 @@ import { hourglassOutline } from "ionicons/icons";
 import { useState } from "react";
 import { CredentialStatus } from "../../../../../core/agent/services/credentialService.types";
 import { i18n } from "../../../../../i18n";
-import { useAppSelector } from "../../../../../store/hooks";
-import { getConnectionsCache } from "../../../../../store/reducers/profileCache";
 import ACDCLogo from "../../../../../ui/assets/images/keri-acdc.svg";
-import { ellipsisText, formatShortDate } from "../../../../utils/formatters";
+import { formatShortDate } from "../../../../utils/formatters";
 import { Alert } from "../../../Alert";
-import { CardTheme } from "../../../CardTheme";
+import { useCardOffsetTop } from "../../../IdentifierCardTemplate";
 import { CredentialCardTemplateProps } from "../../CredentialCardTemplate.types";
-import { useCardOffsetTop } from "../../hook/cardOffsetTopHook";
 import "./KeriCardTemplate.scss";
+import { CardTheme } from "../../../CardTheme";
+import { useAppSelector } from "../../../../../store/hooks";
+import { getConnectionsCache } from "../../../../../store/reducers/connectionsCache";
 
 const KeriCardTemplate = ({
   name = "default",
@@ -41,11 +41,7 @@ const KeriCardTemplate = ({
     }
   };
 
-  const connection = connections.find((c) => c.id === cardData.connectionId);
-  const cartType =
-    cardData.credentialType.length <= 32
-      ? cardData.credentialType
-      : ellipsisText(cardData.credentialType, 29);
+  const connection = connections[cardData.connectionId];
 
   return (
     <div
@@ -80,7 +76,9 @@ const KeriCardTemplate = ({
               <span>{CredentialStatus.PENDING}</span>
             </IonChip>
           ) : (
-            <span className="credential-type card-text">{cartType}</span>
+            <span className="credential-type card-text">
+              {cardData.credentialType}
+            </span>
           )}
         </div>
         <div className="card-footer">
@@ -88,24 +86,16 @@ const KeriCardTemplate = ({
             <span className="card-footer-column-label card-text">
               {i18n.t("tabs.credentials.layout.issuer")}
             </span>
-            <span
-              data-testid="card-connection"
-              className="card-footer-column-value card-text"
-            >
-              {connection?.label || i18n.t("tabs.connections.unknown")}
+            <span className="card-footer-column-value card-text">
+              {connection?.label}
             </span>
           </div>
           <div className="card-footer-column">
             <span className="card-footer-column-label card-text">
               {i18n.t("tabs.credentials.layout.issued")}
             </span>
-            <span
-              data-testid="card-issued-date"
-              className="card-footer-column-value card-text issued"
-            >
-              {[CredentialStatus.CONFIRMED, CredentialStatus.REVOKED].includes(
-                cardData.status
-              ) ? (
+            <span className="card-footer-column-value card-text issued">
+              {cardData.status === CredentialStatus.CONFIRMED ? (
                 formatShortDate(cardData.issuanceDate)
               ) : (
                 <>&nbsp;</>

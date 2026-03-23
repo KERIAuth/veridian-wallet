@@ -1,10 +1,9 @@
-import { CreationStatus, ExnMessage } from "../agent.types";
+import { ExnMessage } from "../agent.types";
 
-enum KeriaContactKeyElement {
+enum KeriaContactKeyPrefix {
   CONNECTION_NOTE = "note:",
   HISTORY_IPEX = "history:ipex:",
   HISTORY_REVOKE = "history:revoke:",
-  CONNECTION_ALIAS = "alias",
 }
 
 interface ConnectionHistoryItem {
@@ -15,23 +14,12 @@ interface ConnectionHistoryItem {
   connectionId: string;
 }
 
-interface ContactDetailsRecord {
-  id: string;
-  alias: string;
-  createdAt: Date;
-  oobi: string;
-  groupId?: string;
-  creationStatus?: CreationStatus;
-  pendingDeletion?: boolean;
-  identifier?: string;
-}
-
 enum ConnectionHistoryType {
-  CREDENTIAL_ISSUANCE = "CREDENTIAL_ISSUANCE",
-  CREDENTIAL_REQUEST_PRESENT = "CREDENTIAL_REQUEST_PRESENT",
-  CREDENTIAL_REVOKED = "CREDENTIAL_REVOKED",
-  CREDENTIAL_PRESENTED = "CREDENTIAL_PRESENTED",
-  IPEX_AGREE_COMPLETE = "IPEX_AGREE_COMPLETE",
+  CREDENTIAL_ISSUANCE,
+  CREDENTIAL_REQUEST_PRESENT,
+  CREDENTIAL_REVOKED,
+  CREDENTIAL_PRESENTED,
+  IPEX_AGREE_COMPLETE,
 }
 
 enum RpyRoute {
@@ -41,7 +29,6 @@ enum RpyRoute {
 enum OobiQueryParams {
   NAME = "name",
   GROUP_ID = "groupId",
-  GROUP_NAME = "groupName",
   ROLE = "role",
   EXTERNAL_ID = "externalId",
 }
@@ -60,23 +47,14 @@ interface HumanReadableMessage {
 
 export {
   ConnectionHistoryType,
-  KeriaContactKeyElement,
+  KeriaContactKeyPrefix,
   RpyRoute,
   OobiQueryParams,
 };
 
-interface GetOobiParameters {
-  alias?: string;
-  groupId?: string;
-  groupName?: string;
-  externalId?: string;
-}
-
 export type {
   ConnectionHistoryItem,
-  ContactDetailsRecord,
   ExnMessage,
   ExternalLink,
   HumanReadableMessage,
-  GetOobiParameters,
 };

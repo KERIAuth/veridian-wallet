@@ -6,24 +6,67 @@ import {
 import { useState } from "react";
 import { JSONObject } from "../../../../core/agent/agent.types";
 import { i18n } from "../../../../i18n";
+import { useAppSelector } from "../../../../store/hooks";
+import { getIdentifiersCache } from "../../../../store/reducers/identifiersCache";
 import {
   formatShortDate,
   formatTimeToSec,
   getUTCOffset,
 } from "../../../utils/formatters";
+import { getTheme } from "../../../utils/theme";
 import { Alert } from "../../Alert";
 import {
   CardBlock,
+  CardDetailsBlock,
   CardDetailsExpandAttributes,
   CardDetailsItem,
   FlatBorderType,
 } from "../../CardDetails";
+import { CardTheme } from "../../CardTheme";
 import { FallbackIcon } from "../../FallbackIcon";
+import { IdentifierDetailModal } from "../../IdentifierDetailModule";
 import { ListHeader } from "../../ListHeader";
 import { ReadMore } from "../../ReadMore";
-import { CredentialContentProps, IssuerProps } from "./CredentialContent.types";
+import {
+  CredentialContentProps,
+  IssuedIdentifierProps,
+  IssuerProps,
+} from "./CredentialContent.types";
+import { MultisigMember } from "./MultisigMember";
+import { MemberAcceptStatus } from "./MultisigMember.types";
 
 const IGNORE_KEYS = ["i", "dt", "d", "u"];
+
+const RelatedIdentifier = ({ identifierId }: IssuedIdentifierProps) => {
+  const identifiers = useAppSelector(getIdentifiersCache);
+  const [openIdentifierDetail, setOpenIdentifierDetail] = useState(false);
+  const identifier = identifiers[identifierId];
+
+  return (
+    <>
+      {identifier && (
+        <CardBlock
+          title={i18n.t("tabs.credentials.details.relatedidentifier")}
+          onClick={() => setOpenIdentifierDetail(true)}
+          testId="related-identifier-section"
+        >
+          <CardDetailsItem
+            info={identifier?.displayName || ""}
+            className="related-identifier"
+            testId="related-identifier-name"
+            startSlot={<CardTheme {...getTheme(identifier.theme || 0)} />}
+          />
+        </CardBlock>
+      )}
+      <IdentifierDetailModal
+        isOpen={openIdentifierDetail}
+        setIsOpen={setOpenIdentifierDetail}
+        identifierDetailId={identifierId}
+        pageId="credential-related-identifier"
+      />
+    </>
+  );
+};
 
 const Issuer = ({
   connectionShortDetails,
@@ -52,7 +95,7 @@ const Issuer = ({
           info={
             connectionShortDetails
               ? connectionShortDetails.label
-              : i18n.t("tabs.connections.unknown")
+              : i18n.t("connections.unknown")
           }
           startSlot={<FallbackIcon />}
           className="member"
@@ -76,6 +119,7 @@ const Issuer = ({
 
 const CredentialContent = ({
   cardData,
+  joinedCredRequestMembers,
   connectionShortDetails,
   setOpenConnectionlModal,
 }: CredentialContentProps) => {
@@ -102,6 +146,19 @@ const CredentialContent = ({
       >
         <ReadMore content={cardData.s.description} />
       </CardBlock>
+      {joinedCredRequestMembers && joinedCredRequestMembers.length > 0 && (
+        <CardDetailsBlock
+          title={i18n.t("tabs.credentials.details.joinedmember")}
+        >
+          {joinedCredRequestMembers?.map((member) => (
+            <MultisigMember
+              key={member.aid}
+              name={member.name}
+              status={MemberAcceptStatus.Accepted}
+            />
+          ))}
+        </CardDetailsBlock>
+      )}
       <ListHeader title={i18n.t("tabs.credentials.details.attributes.label")} />
       <CardBlock title={i18n.t("tabs.credentials.details.attributes.title")}>
         <CardDetailsExpandAttributes
@@ -173,6 +230,7 @@ const CredentialContent = ({
           )} (${getUTCOffset(cardData.lastStatus.dt)})`}
         </p>
       </CardBlock>
+      <RelatedIdentifier identifierId={cardData.identifierId} />
     </>
   );
 };

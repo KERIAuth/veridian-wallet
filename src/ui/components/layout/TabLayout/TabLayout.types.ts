@@ -16,7 +16,6 @@ interface TabLayoutProps {
   actionButtonLabel?: string;
   children?: ReactNode;
   placeholder?: ReactNode;
-  headerCustomContent?: ReactNode;
   hardwareBackButtonConfig?: {
     prevent: boolean;
     priority?: BackEventPriorityType;

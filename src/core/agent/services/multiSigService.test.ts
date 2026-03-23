@@ -1,13 +1,8 @@
-/**
- * @jest-environment node
- */
-import { ready, Serder } from "signify-ts";
-import * as utils from "./utils";
+import { Serder } from "signify-ts";
 import { ConnectionStatus, MiscRecordId, CreationStatus } from "../agent.types";
 import { Agent } from "../agent";
 import { CoreEventEmitter } from "../event";
 import { MultiSigService } from "./multiSigService";
-import type { MultisigThresholds } from "./identifier.types";
 import {
   BasicRecord,
   IdentifierMetadataRecord,
@@ -35,7 +30,6 @@ import { OperationPendingRecordType } from "../records/operationPendingRecord.ty
 import { EventTypes } from "../event.types";
 import { MultiSigRoute } from "./multiSig.types";
 import { StorageMessage } from "../../storage/storage.types";
-import { NotificationRoute } from "./keriaNotificationService.types";
 
 const notificationStorage = jest.mocked({
   open: jest.fn(),
@@ -44,10 +38,6 @@ const notificationStorage = jest.mocked({
   deleteById: jest.fn(),
   update: jest.fn(),
   findById: jest.fn(),
-  findExpectedById: jest.fn().mockResolvedValue({
-    id: "test-notification",
-    a: { r: NotificationRoute.MultiSigIcp },
-  }),
   findAllByQuery: jest.fn(),
   getAll: jest.fn(),
 });
@@ -67,7 +57,6 @@ const queryKeyStateGetMock = jest.fn();
 const addEndRoleMock = jest.fn();
 const sendExchangesMock = jest.fn();
 const getExchangesMock = jest.fn();
-const listExchangesMock = jest.fn();
 const markNotificationMock = jest.fn();
 const createExchangeMessageMock = jest.fn();
 const getMemberMock = jest.fn();
@@ -83,7 +72,7 @@ const signifyClient = jest.mocked({
     addEndRole: addEndRoleMock,
     interact: identifiersInteractMock,
     rotate: identifiersRotateMock,
-    members: identifiersMembersMock,
+    members: identifiersMemberMock,
     createInceptionData: identifierCreateIcpDataMock,
     submitInceptionData: identifierSubmitIcpDataMock,
   }),
@@ -123,7 +112,6 @@ const signifyClient = jest.mocked({
     get: getExchangesMock,
     send: sendExchangesMock,
     createExchangeMessage: createExchangeMessageMock,
-    list: listExchangesMock,
   }),
   replies: () => ({
     submitRpy: submitRpyMock,
@@ -147,7 +135,6 @@ const identifierStorage = jest.mocked({
   getAllIdentifiers: jest.fn(),
   updateIdentifierMetadata: jest.fn(),
   createIdentifierMetadataRecord: jest.fn(),
-  getIdentifierMetadataByGroupId: jest.fn(),
 });
 
 const operationPendingStorage = jest.mocked({
@@ -163,24 +150,16 @@ const basicStorage = jest.mocked({
   findExpectedById: jest.fn(),
 });
 
-const contactStorage = jest.mocked({
-  findById: jest.fn(),
-  findExpectedById: jest.fn(),
-  findAllByQuery: jest.fn(),
-});
-
 const eventEmitter = new CoreEventEmitter();
 const agentServicesProps = {
   signifyClient: signifyClient as any,
   eventEmitter,
-  contactStorage: contactStorage as any,
 };
 
 const connections = jest.mocked({
   resolveOobi: jest.fn(),
   getConnectionShortDetailById: jest.fn(),
   getMultisigLinkedContacts: jest.fn(),
-  getOobi: jest.fn(),
 });
 
 const identifiers = jest.mocked({
@@ -188,8 +167,6 @@ const identifiers = jest.mocked({
   rotateIdentifier: jest.fn(),
   getAvailableWitnesses: jest.fn(),
 });
-
-const identifiersMembersMock = jest.fn();
 
 const multiSigService = new MultiSigService(
   agentServicesProps,
@@ -207,13 +184,12 @@ const memberPrefix = "EJpKquuibYTqpwMDqEFAFs0gwq0PASAHZ_iDmSF3I2Vg";
 
 beforeEach(async () => {
   jest.resetAllMocks();
-  jest.spyOn(utils, "randomSalt").mockReturnValue("groupid");
   await new ConfigurationService().start();
 });
 
 describe("Oobi/endrole", () => {
   test("Can add end role authorization", async () => {
-    identifiersMembersMock.mockResolvedValue(getMultisigMembersResponse);
+    identifiersMemberMock.mockResolvedValue(getMultisigMembersResponse);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberIdentifierRecord);
@@ -230,7 +206,7 @@ describe("Oobi/endrole", () => {
   });
 
   test("Can join end role authorization", async () => {
-    identifiersMembersMock.mockResolvedValue(getMultisigMembersResponse);
+    identifiersMemberMock.mockResolvedValue(getMultisigMembersResponse);
     const mockRequestExn = {
       a: {
         gid: "EFPEKHhywRg2Naa-Gx0jiAAXYnQ5y92vDniHAk8beEA_",
@@ -302,7 +278,7 @@ describe("Oobi/endrole", () => {
 
 describe("Usage of multi-sig", () => {
   test("Can get participants with a multi-sig identifier", async () => {
-    identifiersMembersMock.mockResolvedValue(getMultisigMembersResponse);
+    identifiersMemberMock.mockResolvedValue(getMultisigMembersResponse);
 
     identifierStorage.getIdentifierMetadata
       .mockRejectedValueOnce(
@@ -324,7 +300,7 @@ describe("Usage of multi-sig", () => {
   });
 
   test("Can not get participants with a multi-sig identifier if not exist our identifier", async () => {
-    identifiersMembersMock.mockResolvedValue(getMultisigMembersResponse);
+    identifiersMemberMock.mockResolvedValue(getMultisigMembersResponse);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -351,24 +327,23 @@ const expectAllWitnessIntroductions = () => {
     expect(submitRpyMock).toHaveBeenNthCalledWith(
       index + 1,
       linkedContacts[0].id,
-      expect.stringContaining('"t":"rpy"')
+      expect.stringContaining("\"t\":\"rpy\"")
     );
     expect(submitRpyMock).toHaveBeenNthCalledWith(
       index + 1,
       linkedContacts[0].id,
-      expect.stringContaining('"r":"/introduce"')
+      expect.stringContaining("\"r\":\"/introduce\"")
     );
   });
 };
 
 describe("Creation of multi-sig", () => {
-  beforeAll(async () => {
-    await ready();
+  beforeAll(() => {
     eventEmitter.emit = jest.fn();
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can create a multisig identifier", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -382,9 +357,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [
-            { ...queuedIdentifier, name: "1.2.0.2:0:different identifier" },
-          ],
+          queued: [{ ...queuedIdentifier, name: "0:different identifier" }],
         },
       })
     );
@@ -393,16 +366,8 @@ describe("Creation of multi-sig", () => {
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
           queued: [
-            {
-              ...queuedIdentifier,
-              name: "1.2.0.2:0:different identifier",
-              threshold: { signingThreshold: 2, rotationThreshold: 1 },
-            },
-            {
-              ...queuedIdentifier,
-              name: "1.2.0.2:0:Identifier 2",
-              threshold: { signingThreshold: 2, rotationThreshold: 1 },
-            },
+            { ...queuedIdentifier, name: "0:different identifier" },
+            queuedIdentifier,
           ],
         },
       })
@@ -422,40 +387,33 @@ describe("Creation of multi-sig", () => {
     await multiSigService.createGroup(
       memberPrefix,
       linkedContacts,
-
-      createThresholds(linkedContacts.length + 1, linkedContacts.length) // Explicitly pass different thresholds
+      linkedContacts.length + 1
     );
 
     expectAllWitnessIntroductions();
-    expect(identifierCreateIcpDataMock).toBeCalledWith(
-      "1.2.0.2:0:Identifier 2",
-      {
-        algo: "group",
-        mhab: getMemberIdentifierResponse,
-        isith: 2, // Signing threshold
-        nsith: 1, // Different rotation threshold
-        toad: 3,
-        wits: [],
-        states: [
-          getMemberIdentifierResponse.state,
-          resolvedOobiOpResponse.op.response,
-        ],
-        rstates: [
-          getMemberIdentifierResponse.state,
-          resolvedOobiOpResponse.op.response,
-        ],
-      }
-    );
+    expect(identifierCreateIcpDataMock).toBeCalledWith("0:Identifier 2", {
+      algo: "group",
+      mhab: getMemberIdentifierResponse,
+      isith: 2,
+      nsith: 2,
+      toad: 3,
+      wits: [],
+      states: [
+        getMemberIdentifierResponse.state,
+        resolvedOobiOpResponse.op.response,
+      ],
+      rstates: [
+        getMemberIdentifierResponse.state,
+        resolvedOobiOpResponse.op.response,
+      ],
+    });
     expect(basicStorage.createOrUpdateBasicRecord).toBeCalledWith(
       expect.objectContaining({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
           queued: [
-            { ...queuedIdentifier, name: "1.2.0.2:0:different identifier" },
-            {
-              ...queuedIdentifier,
-              name: "1.2.0.2:0:Identifier 2",
-            },
+            { ...queuedIdentifier, name: "0:different identifier" },
+            queuedIdentifier,
           ],
         },
       })
@@ -513,7 +471,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberPrefix,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -525,32 +482,28 @@ describe("Creation of multi-sig", () => {
       expect.objectContaining({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [
-            { ...queuedIdentifier, name: "1.2.0.2:0:different identifier" },
-          ],
+          queued: [{ ...queuedIdentifier, name: "0:different identifier" }],
         },
       })
     );
   });
 
   test("Cannot create a group if the threshold is invalid", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     await expect(
-      multiSigService.createGroup(
-        memberPrefix,
-        linkedContacts,
-        createThresholds(0, 0)
-      )
+      multiSigService.createGroup(memberPrefix, linkedContacts, 0)
     ).rejects.toThrowError(MultiSigService.INVALID_THRESHOLD);
     await expect(
       multiSigService.createGroup(
         memberPrefix,
         linkedContacts,
-        createThresholds(linkedContacts.length + 2, linkedContacts.length + 1) // Different thresholds for testing
+        linkedContacts.length + 2
       )
     ).rejects.toThrowError(MultiSigService.INVALID_THRESHOLD);
   });
 
   test("Cannot create a group with an invalid member identifier", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest.fn().mockResolvedValue(
       new IdentifierMetadataRecord({
         ...memberMetadataRecordProps,
@@ -558,33 +511,25 @@ describe("Creation of multi-sig", () => {
       })
     );
     await expect(
-      multiSigService.createGroup(
-        memberPrefix,
-        linkedContacts,
-        createThresholds(1, 2)
-      )
+      multiSigService.createGroup(memberPrefix, linkedContacts, 1)
     ).rejects.toThrowError(MultiSigService.MISSING_GROUP_METADATA);
     identifierStorage.getIdentifierMetadata = jest.fn().mockResolvedValue(
       new IdentifierMetadataRecord({
         ...memberMetadataRecordProps,
         groupMetadata: {
-          groupId: "groupid",
+          groupId: "group-id",
           groupInitiator: false,
           groupCreated: false,
-          proposedUsername: "",
         },
       })
     );
     await expect(
-      multiSigService.createGroup(
-        memberPrefix,
-        linkedContacts,
-        createThresholds(1, 2)
-      )
+      multiSigService.createGroup(memberPrefix, linkedContacts, 1)
     ).rejects.toThrowError(MultiSigService.ONLY_ALLOW_GROUP_INITIATOR);
   });
 
   test("Cannot create a group with contacts that are not linked to the group", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -598,12 +543,13 @@ describe("Creation of multi-sig", () => {
             groupId: "wrong-group-id",
           },
         ],
-        createThresholds(2, 1)
+        2
       )
     ).rejects.toThrowError(MultiSigService.ONLY_ALLOW_LINKED_CONTACTS);
   });
 
   test("Can re-try creating a multisig identifier", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -617,12 +563,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [
-            {
-              ...queuedIdentifier,
-              name: "1.2.0.2:0:Identifier 2",
-            },
-          ],
+          queued: [queuedIdentifier],
         },
       })
     );
@@ -640,7 +581,7 @@ describe("Creation of multi-sig", () => {
     await multiSigService.createGroup(
       memberPrefix,
       linkedContacts,
-      createThresholds(linkedContacts.length + 1, linkedContacts.length), // Use different thresholds
+      linkedContacts.length + 1,
       true
     );
 
@@ -698,7 +639,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberPrefix,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -718,6 +658,7 @@ describe("Creation of multi-sig", () => {
 
   test("Can retry creating an identifier that was completely created but not removed from queue", async () => {
     // This test should be enough to capture all of the try catches
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -731,12 +672,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [
-            {
-              ...queuedIdentifier,
-              name: "1.2.0.2:0:Identifier 2",
-            },
-          ],
+          queued: [queuedIdentifier],
         },
       })
     );
@@ -762,7 +698,7 @@ describe("Creation of multi-sig", () => {
     await multiSigService.createGroup(
       memberPrefix,
       linkedContacts,
-      createThresholds(linkedContacts.length + 1, linkedContacts.length), // Use different thresholds
+      linkedContacts.length + 1,
       true
     );
 
@@ -820,7 +756,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberPrefix,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -839,6 +774,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Cannot retry creating an identifier if its inception data is not stored", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     identifierStorage.getIdentifierMetadata = jest
       .fn()
       .mockResolvedValue(memberMetadataRecord);
@@ -859,7 +795,7 @@ describe("Creation of multi-sig", () => {
       multiSigService.createGroup(
         memberPrefix,
         linkedContacts,
-        createThresholds(linkedContacts.length + 1, linkedContacts.length), // Use different thresholds
+        linkedContacts.length + 1,
         true
       )
     ).rejects.toThrowError(MultiSigService.QUEUED_GROUP_DATA_MISSING);
@@ -869,6 +805,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Can join a group", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers.mockResolvedValue([memberMetadataRecord]);
     identifiersGetMock
@@ -881,7 +818,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [{ ...queuedJoin, name: "1.2.0.2:0:different identifier" }],
+          queued: [{ ...queuedJoin, name: "0:different identifier" }],
         },
       })
     );
@@ -890,8 +827,8 @@ describe("Creation of multi-sig", () => {
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
           queued: [
-            { ...queuedJoin, name: "1.2.0.2:0:different identifier" },
-            { ...queuedJoin, name: "1.2.0.2:0:Identifier 2" },
+            { ...queuedJoin, name: "0:different identifier" },
+            queuedJoin,
           ],
         },
       })
@@ -912,40 +849,29 @@ describe("Creation of multi-sig", () => {
 
     await multiSigService.joinGroup("id", "d");
 
-    expect(connections.getOobi).toHaveBeenCalledWith(
-      getMemberIdentifierResponse.prefix
-    );
-    expect(submitRpyMock).toHaveBeenCalledWith(
-      "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ",
-      expect.stringContaining('"r":"/introduce"')
-    );
-
-    expect(identifierCreateIcpDataMock).toBeCalledWith(
-      "1.2.0.2:0:Identifier 2",
-      {
-        algo: "group",
-        mhab: getMemberIdentifierResponse,
-        isith: 2, // Signing threshold
-        nsith: 3, // In joinGroup test it uses kt only (line 521 in multiSigService.ts)
-        toad: 4,
-        wits: [
-          "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
-          "BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM",
-          "BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX",
-          "BM35JN8XeJSEfpxopjn5jr7tAHCE5749f0OobhMLCorE",
-          "BIj15u5V11bkbtAxMA7gcNJZcax-7TgaBMLsQnMHpYHP",
-          "BF2rZTW79z4IXocYRQnjjsOuvFUQv-ptCf8Yltd7PfsM",
-        ],
-        states: [
-          resolvedOobiOpResponse.op.response,
-          getMemberIdentifierResponse.state,
-        ],
-        rstates: [
-          resolvedOobiOpResponse.op.response,
-          getMemberIdentifierResponse.state,
-        ],
-      }
-    );
+    expect(identifierCreateIcpDataMock).toBeCalledWith("0:Identifier 2", {
+      algo: "group",
+      mhab: getMemberIdentifierResponse,
+      isith: 2,
+      nsith: 2,
+      toad: 4,
+      wits: [
+        "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
+        "BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM",
+        "BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX",
+        "BM35JN8XeJSEfpxopjn5jr7tAHCE5749f0OobhMLCorE",
+        "BIj15u5V11bkbtAxMA7gcNJZcax-7TgaBMLsQnMHpYHP",
+        "BF2rZTW79z4IXocYRQnjjsOuvFUQv-ptCf8Yltd7PfsM",
+      ],
+      states: [
+        resolvedOobiOpResponse.op.response,
+        getMemberIdentifierResponse.state,
+      ],
+      rstates: [
+        resolvedOobiOpResponse.op.response,
+        getMemberIdentifierResponse.state,
+      ],
+    });
     expect(identifierSubmitIcpDataMock).toBeCalledWith(inceptionDataFix);
     expect(sendExchangesMock).toBeCalledWith(
       memberMetadataRecord.id,
@@ -999,7 +925,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberMetadataRecord.id,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -1013,13 +938,14 @@ describe("Creation of multi-sig", () => {
       expect.objectContaining({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [{ ...queuedJoin, name: "1.2.0.2:0:different identifier" }],
+          queued: [{ ...queuedJoin, name: "0:different identifier" }],
         },
       })
     );
   });
 
   test("Cannot join group by notification if exn message is missing", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockRejectedValue(
       new Error("request - 404 - SignifyClient message")
     );
@@ -1028,92 +954,8 @@ describe("Creation of multi-sig", () => {
     );
   });
 
-  test("Can join a 3-person group and share OOBI with multiple members", async () => {
-    // Create a 3-person group exn message
-    const threePersonGroupExn = {
-      ...getRequestMultisigIcp,
-      exn: {
-        ...getRequestMultisigIcp.exn,
-        a: {
-          ...getRequestMultisigIcp.exn.a,
-          smids: [
-            "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8", // Bob (joiner)
-            "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ", // Alice
-            "ECar0lM9D8n0eF9X8X9kx6YG7RQh9WpG4zY5LwN3bZ8M", // Carol
-          ],
-          rmids: [
-            "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8",
-            "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ",
-            "ECar0lM9D8n0eF9X8X9kx6YG7RQh9WpG4zY5LwN3bZ8M",
-          ],
-        },
-      },
-    };
-
-    groupGetRequestMock.mockResolvedValue([threePersonGroupExn]);
-    identifiers.getIdentifiers.mockResolvedValue([memberMetadataRecord]);
-    identifierStorage.getIdentifierMetadata = jest
-      .fn()
-      .mockResolvedValue(memberMetadataRecord);
-    identifiersGetMock
-      .mockResolvedValueOnce(getMemberIdentifierResponse)
-      .mockResolvedValueOnce(getMultisigIdentifierResponse);
-    queryKeyStateGetMock
-      .mockResolvedValueOnce([resolvedOobiOpResponse.op.response]) // Bob's key state
-      .mockResolvedValueOnce([getMemberIdentifierResponse.state]) // Alice's key state
-      .mockResolvedValueOnce([getMemberIdentifierResponse.state]); // Carol's key state
-    basicStorage.findById.mockResolvedValueOnce(
-      new BasicRecord({
-        id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
-        content: { queued: [] },
-      })
-    );
-    basicStorage.findExpectedById.mockResolvedValueOnce(
-      new BasicRecord({
-        id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
-        content: { queued: [] },
-      })
-    );
-    identifierCreateIcpDataMock.mockResolvedValue(inceptionDataFix);
-    markNotificationMock.mockResolvedValue({ status: "done" });
-    notificationStorage.deleteById = jest.fn();
-
-    identifiers.getAvailableWitnesses.mockResolvedValue(getAvailableWitnesses);
-
-    connections.getOobi.mockResolvedValue(
-      "http://127.0.0.1:3902/oobi/EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8/agent/EF_member"
-    );
-
-    getMemberMock.mockReturnValue({
-      sign: jest
-        .fn()
-        .mockResolvedValue([
-          "AACK3Pk2vKzotWjsUnbhKqs7P68NoeyIN5Ae7aGYl3ALCXDOk72Mby9kCu_vSpezqZzjWP9D2tQzwyvGCY26ovoE",
-        ]),
-    });
-
-    await multiSigService.joinGroup("id", "d");
-
-    // Verify joiner shares their member OOBI before inception
-    expect(connections.getOobi).toHaveBeenCalledWith(
-      getMemberIdentifierResponse.prefix
-    );
-
-    // Verify member introduction is sent to BOTH other members (not to self)
-    expect(submitRpyMock).toHaveBeenCalledWith(
-      "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ", // Alice
-      expect.stringContaining('"r":"/introduce"')
-    );
-    expect(submitRpyMock).toHaveBeenCalledWith(
-      "ECar0lM9D8n0eF9X8X9kx6YG7RQh9WpG4zY5LwN3bZ8M", // Carol
-      expect.stringContaining('"r":"/introduce"')
-    );
-
-    // Joiners only send member intros (2 calls), NOT witness intros
-    expect(submitRpyMock).toHaveBeenCalledTimes(2);
-  });
-
   test("Cannot join group if we do not control any member", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers = jest
       .fn()
@@ -1124,6 +966,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Cannot join group if member identifier is malformed", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers = jest.fn().mockResolvedValue([
       new IdentifierMetadataRecord({
@@ -1137,6 +980,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Can retry joining a group", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers.mockResolvedValue([memberMetadataRecord]);
     identifiersGetMock
@@ -1149,7 +993,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [{ ...queuedJoin, name: "1.2.0.2:0:Identifier 2" }],
+          queued: [queuedJoin],
         },
       })
     );
@@ -1158,10 +1002,6 @@ describe("Creation of multi-sig", () => {
     notificationStorage.deleteById = jest.fn();
 
     await multiSigService.joinGroup("id", "d", true);
-
-    expect(connections.getOobi).toHaveBeenCalledWith(
-      getMemberIdentifierResponse.prefix
-    );
 
     expect(identifierSubmitIcpDataMock).toBeCalledWith(inceptionDataFix);
     expect(sendExchangesMock).toBeCalledWith(
@@ -1216,7 +1056,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberMetadataRecord.id,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -1238,6 +1077,7 @@ describe("Creation of multi-sig", () => {
 
   test("Can retry joining a group that was completely joined but not removed from queue", async () => {
     // This test should be enough to capture all of the try catches
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers.mockResolvedValue([memberMetadataRecord]);
     identifiersGetMock
@@ -1250,7 +1090,7 @@ describe("Creation of multi-sig", () => {
       new BasicRecord({
         id: MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION,
         content: {
-          queued: [{ ...queuedJoin, name: "1.2.0.2:0:Identifier 2" }],
+          queued: [queuedJoin],
         },
       })
     );
@@ -1273,10 +1113,6 @@ describe("Creation of multi-sig", () => {
 
     await multiSigService.joinGroup("id", "d", true);
 
-    expect(connections.getOobi).toHaveBeenCalledWith(
-      getMemberIdentifierResponse.prefix
-    );
-
     expect(identifierSubmitIcpDataMock).toBeCalledWith(inceptionDataFix);
     expect(sendExchangesMock).toBeCalledWith(
       memberMetadataRecord.id,
@@ -1330,7 +1166,6 @@ describe("Creation of multi-sig", () => {
           createdAtUTC: "2024-08-10T07:23:54.839894+00:00",
           groupMemberPre: memberMetadataRecord.id,
           theme: 0,
-          groupUsername: "testUser",
         },
       },
     });
@@ -1351,6 +1186,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Cannot retry creating an identifier if its inception data is not stored", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers.mockResolvedValue([memberMetadataRecord]);
     identifiersGetMock
@@ -1377,15 +1213,8 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Can get multisig icp details of 2 person group", async () => {
-    groupGetRequestMock.mockResolvedValue([
-      {
-        ...getRequestMultisigIcp,
-        exn: {
-          ...getRequestMultisigIcp.exn,
-          e: { icp: { kt: "3", nt: "2" } },
-        },
-      },
-    ]);
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
+    groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers = jest
       .fn()
       .mockResolvedValue([memberMetadataRecord]);
@@ -1394,31 +1223,18 @@ describe("Creation of multi-sig", () => {
       .mockResolvedValue(initiatorConnectionShortDetails);
     connections.getMultisigLinkedContacts = jest.fn().mockResolvedValue([]);
 
-    listExchangesMock.mockResolvedValue([
-      { exn: { i: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8" } },
-    ]);
-
     const result = await multiSigService.getMultisigIcpDetails(
       "ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO"
     );
 
     expect(result.ourIdentifier.id).toBe(memberMetadataRecord.id);
     expect(result.sender.id).toBe(initiatorConnectionShortDetails.id);
-    expect(result.sender.groupId).toBe(
-      "EBHG7UW-48EAF4bMYbaCsPQfSuFk-INidVXLexDMk6pN"
-    );
     expect(result.otherConnections.length).toBe(0);
-    expect(result.signingThreshold).toBe(3);
-    expect(result.rotationThreshold).toBe(2);
-    expect(listExchangesMock).toHaveBeenCalledWith({
-      filter: {
-        "-r": "/multisig/icp",
-        "-a-gid": "EBHG7UW-48EAF4bMYbaCsPQfSuFk-INidVXLexDMk6pN",
-      },
-    });
+    expect(result.threshold).toBe(2);
   });
 
   test("Throw error if the group join request contains unknown identifiers", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([
       {
         ...getRequestMultisigIcp,
@@ -1443,11 +1259,6 @@ describe("Creation of multi-sig", () => {
       .fn()
       .mockResolvedValue(initiatorConnectionShortDetails);
     connections.getMultisigLinkedContacts = jest.fn().mockResolvedValue([]);
-
-    listExchangesMock.mockResolvedValue([
-      { exn: { i: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8" } },
-    ]);
-
     await expect(
       multiSigService.getMultisigIcpDetails(
         "ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO"
@@ -1456,15 +1267,8 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Should not error if we have extra linked contacts", async () => {
-    groupGetRequestMock.mockResolvedValue([
-      {
-        ...getRequestMultisigIcp,
-        exn: {
-          ...getRequestMultisigIcp.exn,
-          e: { icp: { kt: "3", nt: "2" } },
-        },
-      },
-    ]);
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
+    groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers = jest
       .fn()
       .mockResolvedValue([memberMetadataRecord]);
@@ -1488,31 +1292,18 @@ describe("Creation of multi-sig", () => {
       },
     ]);
 
-    listExchangesMock.mockResolvedValue([
-      { exn: { i: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8" } },
-    ]);
-
     const result = await multiSigService.getMultisigIcpDetails(
       "ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO"
     );
 
     expect(result.ourIdentifier.id).toBe(memberMetadataRecord.id);
     expect(result.sender.id).toBe(initiatorConnectionShortDetails.id);
-    expect(result.sender.groupId).toBe(
-      "EBHG7UW-48EAF4bMYbaCsPQfSuFk-INidVXLexDMk6pN"
-    );
     expect(result.otherConnections.length).toBe(0);
-    expect(result.signingThreshold).toBe(3);
-    expect(result.rotationThreshold).toBe(2);
-    expect(listExchangesMock).toHaveBeenCalledWith({
-      filter: {
-        "-r": "/multisig/icp",
-        "-a-gid": "EBHG7UW-48EAF4bMYbaCsPQfSuFk-INidVXLexDMk6pN",
-      },
-    });
+    expect(result.threshold).toBe(2);
   });
 
   test("Can get multisig icp details of 3 person group", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([
       {
         ...getRequestMultisigIcp,
@@ -1526,7 +1317,7 @@ describe("Creation of multi-sig", () => {
               "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ",
             ],
           },
-          e: { icp: { kt: "3", nt: "2" } },
+          e: { icp: { kt: 3 } },
         },
       },
     ]);
@@ -1546,31 +1337,21 @@ describe("Creation of multi-sig", () => {
       },
     ]);
 
-    listExchangesMock.mockResolvedValue([
-      { exn: { i: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8" } },
-      { exn: { i: "EE-gjeEni5eCdpFlBtG7s4wkv7LJ0JmWplCS4DNQwW2G" } },
-    ]);
-
     const result = await multiSigService.getMultisigIcpDetails(
       "ED-gjeEni5eCdpFlBtG7s4wkv7LJ0TmWplCS4DNQwW2P"
     );
 
     expect(result.ourIdentifier.id).toBe(memberMetadataRecord.id);
     expect(result.sender.id).toBe(initiatorConnectionShortDetails.id);
-    expect(result.sender.groupId).toBe(
-      "EBHG7UW-48EAF4bMYbaCsPQfSuFk-INidVXLexDMk6pN"
-    );
     expect(result.otherConnections.length).toBe(1);
     expect(result.otherConnections[0].id).toBe(
       "EE-gjeEni5eCdpFlBtG7s4wkv7LJ0JmWplCS4DNQwW2G"
     );
-    expect(result.otherConnections[0].hasAccepted).toBe(true);
-    expect(result.otherConnections[0].groupId).toBe("groupid");
-    expect(result.signingThreshold).toBe(3);
-    expect(result.rotationThreshold).toBe(2);
+    expect(result.threshold).toBe(3);
   });
 
   test("Cannot get multisig icp details if the exn is missing", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockRejectedValue(
       new Error("request - 404 - not found")
     );
@@ -1584,6 +1365,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Throw error if we do not control any member of the group", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([getRequestMultisigIcp]);
     identifiers.getIdentifiers = jest
       .fn()
@@ -1602,6 +1384,7 @@ describe("Creation of multi-sig", () => {
   });
 
   test("Cannot get multi-sig details from a notification with no matching exn message", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     groupGetRequestMock.mockResolvedValue([]);
 
     await expect(
@@ -1613,38 +1396,8 @@ describe("Creation of multi-sig", () => {
     );
   });
 
-  test("Cannot get multisig icp details if the exn is missing when get group size", async () => {
-    groupGetRequestMock.mockRejectedValue(
-      new Error("request - 404 - not found")
-    );
-    await expect(
-      multiSigService.getGroupSizeFromIcpExn(
-        "ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO"
-      )
-    ).rejects.toThrowError(
-      `${MultiSigService.EXN_MESSAGE_NOT_FOUND} ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO`
-    );
-  });
-
-  test("Can get group size of 2 person group", async () => {
-    groupGetRequestMock.mockResolvedValue([
-      {
-        ...getRequestMultisigIcp,
-        exn: {
-          ...getRequestMultisigIcp.exn,
-          e: { icp: { kt: "3", nt: "2" } },
-        },
-      },
-    ]);
-
-    const result = await multiSigService.getGroupSizeFromIcpExn(
-      "ELLb0OvktIxeHDeeOnRJ2pc9IkYJ38An4PXYigUQ_3AO"
-    );
-
-    expect(result).toBe(2);
-  });
-
   test("Should processs any groups pending creation", async () => {
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     basicStorage.findById.mockResolvedValueOnce(
       new BasicRecord({
         id: MiscRecordId.IDENTIFIERS_PENDING_CREATION,
@@ -1659,9 +1412,9 @@ describe("Creation of multi-sig", () => {
     await multiSigService.processGroupsPendingCreation();
 
     expect(multiSigService.createGroup).toHaveBeenCalledWith(
-      queuedIdentifier.data.group?.mhab.prefix,
+      queuedIdentifier.data.group!.mhab.prefix,
       queuedIdentifier.groupConnections,
-      queuedIdentifier.threshold,
+      2,
       true
     );
     expect(multiSigService.joinGroup).toBeCalledWith(
@@ -1669,192 +1422,5 @@ describe("Creation of multi-sig", () => {
       queuedJoin.notificationSaid,
       true
     );
-  });
-
-  test("should call deleteNotificationRecordById when joining group successfully", async () => {
-    const mockDeleteNotificationRecordById = jest.spyOn(
-      utils,
-      "deleteNotificationRecordById"
-    );
-
-    // Create a mock MultiSigService instance
-    const mockMultiSigService = {
-      identifiers: {
-        getIdentifiers: jest.fn().mockResolvedValue([
-          {
-            id: "test-identifier-id",
-            displayName: "Test Identifier",
-            theme: 0,
-            groupMetadata: {
-              groupId: "test-group-id",
-              groupInitiator: true,
-              groupCreated: false,
-              proposedUsername: "testUser",
-            },
-          },
-        ]),
-      },
-      props: {
-        eventEmitter: { emit: jest.fn() },
-        signifyClient: {
-          identifiers: () => ({
-            get: jest.fn().mockResolvedValue({ id: "test-hab-id" }),
-          }),
-          keyStates: () => ({
-            get: jest
-              .fn()
-              .mockResolvedValue([{ id: "state1" }, { id: "state2" }]),
-          }),
-          notifications: () => ({
-            mark: jest.fn().mockResolvedValue(undefined),
-          }),
-        },
-      },
-      identifierStorage: {
-        createIdentifierMetadataRecord: jest.fn(),
-        updateIdentifierMetadata: jest.fn(),
-      },
-      operationPendingStorage: {
-        save: jest.fn(),
-      },
-      basicStorage: {
-        update: jest.fn(),
-      },
-      notificationStorage: {
-        findExpectedById: jest.fn().mockResolvedValue({
-          id: "test-notification",
-          a: { r: "/multisig/icp" },
-        }),
-        deleteById: jest.fn().mockResolvedValue(undefined),
-      },
-      inceptGroup: jest.fn(),
-      generateAndStoreInceptionData: jest
-        .fn()
-        .mockResolvedValue({ icp: { i: "new-multisig-id" } }),
-    } as any;
-
-    // Mock the necessary dependencies
-    basicStorage.findById.mockResolvedValueOnce(
-      new BasicRecord({
-        id: MiscRecordId.IDENTIFIERS_PENDING_CREATION,
-        content: {
-          queued: [queuedJoin],
-        },
-      })
-    );
-
-    // Mock the joinGroup method to call deleteNotificationRecordById
-    const originalJoinGroup = multiSigService.joinGroup;
-    multiSigService.joinGroup = jest
-      .fn()
-      .mockImplementation(
-        async (
-          notificationId: string,
-          notificationSaid: string,
-          backgroundTask: boolean
-        ) => {
-          // Simulate the call to deleteNotificationRecordById that happens in the real method
-          await (mockDeleteNotificationRecordById as any)(
-            mockMultiSigService.props.signifyClient,
-            mockMultiSigService.notificationStorage,
-            notificationId,
-            NotificationRoute.MultiSigIcp,
-            mockMultiSigService.operationPendingStorage
-          );
-        }
-      );
-
-    await multiSigService.joinGroup(
-      "test-notification-id",
-      "test-notification-said",
-      false
-    );
-
-    // Verify deleteNotificationRecordById was called
-    expect(mockDeleteNotificationRecordById).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      "test-notification-id",
-      NotificationRoute.MultiSigIcp,
-      expect.anything()
-    );
-
-    // Restore original method
-    multiSigService.joinGroup = originalJoinGroup;
-    mockDeleteNotificationRecordById.mockRestore();
-  });
-});
-
-const createThresholds = (
-  signing: number,
-  rotation: number = signing
-): MultisigThresholds => ({
-  signingThreshold: signing,
-  rotationThreshold: rotation,
-});
-
-describe("getInceptionStatus", () => {
-  const MULTISIG_ID = "multisig-123";
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test("should retrieve group information with member acceptance status and thresholds", async () => {
-    identifiersMembersMock.mockResolvedValue({
-      signing: [
-        { aid: "member1" },
-        { aid: "member2" },
-        { aid: "member3" },
-        { aid: "member4" },
-      ],
-    });
-
-    const listResult = [
-      {
-        exn: {
-          i: "member1",
-          r: NotificationRoute.MultiSigIcp,
-          e: {
-            icp: {
-              kt: "4",
-              nt: "4",
-            },
-          },
-          a: {
-            gid: MULTISIG_ID,
-          },
-        },
-      },
-      {
-        exn: {
-          i: "member3",
-          r: NotificationRoute.MultiSigIcp,
-          a: {
-            gid: MULTISIG_ID,
-          },
-        },
-      },
-    ];
-
-    listExchangesMock.mockImplementation(({ skip, limit }) => {
-      return listResult.slice(skip, limit);
-    });
-
-    const result = await multiSigService.getInceptionStatus(MULTISIG_ID);
-
-    expect(identifiersMembersMock).toHaveBeenCalledWith(MULTISIG_ID);
-    expect(result).toEqual({
-      threshold: {
-        signingThreshold: 4,
-        rotationThreshold: 4,
-      },
-      members: [
-        { aid: "member1", hasAccepted: true },
-        { aid: "member2", hasAccepted: false },
-        { aid: "member3", hasAccepted: true },
-        { aid: "member4", hasAccepted: false },
-      ],
-    });
   });
 });

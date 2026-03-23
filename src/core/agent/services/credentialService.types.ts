@@ -8,21 +8,6 @@ enum CredentialStatus {
 
 type CredentialShortDetails = Omit<CredentialMetadataRecordProps, "createdAt">;
 
-interface ACDC {
-  v: string;
-  d: string;
-  i: string;
-  ri: string;
-  s: string;
-  a: {
-    d: string;
-    i: string;
-    dt: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
 interface ACDCDetails
   extends Omit<CredentialShortDetails, "credentialType" | "issuanceDate"> {
   i: string;
@@ -42,22 +27,5 @@ interface ACDCDetails
   };
 }
 
-interface KeriaCredential {
-  sad: {
-    d: string;
-    a: {
-      i: string;
-      dt: string;
-      [key: string]: unknown;
-    };
-    i: string;
-    ri: string;
-  };
-  schema: {
-    title: string;
-    $id: string;
-  };
-}
-
 export { CredentialStatus };
-export type { CredentialShortDetails, ACDCDetails, KeriaCredential, ACDC };
+export type { CredentialShortDetails, ACDCDetails };

@@ -1,15 +1,20 @@
-import { fireEvent, render } from "@testing-library/react";
+import { mockIonicReact } from "@ionic/react-test-utils";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-
-import { CreationStatus } from "../../../../../core/agent/agent.types";
+import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../../../routes/paths";
-import { connectionsFix } from "../../../../__fixtures__/connectionsFix";
+import {
+  connectionsFix,
+  connectionsForNotifications,
+} from "../../../../__fixtures__/connectionsFix";
+import { multisignIdentifierFix } from "../../../../__fixtures__/filteredIdentifierFix";
 import { notificationsFix } from "../../../../__fixtures__/notificationsFix";
-import { profileCacheFixData } from "../../../../__fixtures__/storeDataFix";
-import { makeTestStore } from "../../../../utils/makeTestStore";
 import { ErrorPage } from "./ErrorPage";
+import { CreationStatus } from "../../../../../core/agent/agent.types";
+
+mockIonicReact();
 
 const mockGetMultisigConnection = jest.fn(() =>
   Promise.resolve([connectionsFix[3]])
@@ -33,6 +38,7 @@ jest.mock("../../../../../core/agent/agent", () => ({
   },
 }));
 
+const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialState = {
@@ -49,15 +55,24 @@ const initialState = {
       isPaused: false,
     },
   },
-  profilesCache: {
-    ...profileCacheFixData,
+  connectionsCache: {
+    multisigConnections: connectionsForNotifications,
+  },
+  notificationsCache: {
+    notifications: notificationsFix,
+  },
+  identifiersCache: {
+    identifiers: multisignIdentifierFix,
+  },
+  biometricsCache: {
+    enabled: false,
   },
 };
 
 describe("Multisign error feedback", () => {
   test("Render and scan", async () => {
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
     const { getByText, getByTestId } = render(
@@ -132,6 +147,10 @@ describe("Multisign error feedback", () => {
 
     act(() => {
       fireEvent.click(getByTestId("primary-button-feedback"));
+    });
+
+    await waitFor(() => {
+      expect(getByText(EN_TRANSLATIONS.createidentifier.share.title));
     });
   });
 });

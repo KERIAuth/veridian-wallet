@@ -71,12 +71,11 @@ const SwitchOnboardingModeModal = ({
       );
 
       const nextPath = isCreateMode
-        ? RoutePath.SSI_AGENT
+        ? RoutePath.GENERATE_SEED_PHRASE
         : RoutePath.VERIFY_RECOVERY_SEED_PHRASE;
 
       dispatch(setCurrentRoute({ path: nextPath }));
       ionRouter.push(nextPath);
-      setOpen(false);
     } catch (e) {
       showError("Unable to switch onboarding mode", e, dispatch);
     }

@@ -1,10 +1,10 @@
-import { RegularConnectionDetails } from "../../../../../core/agent/agent.types";
+import { ConnectionShortDetails } from "../../../../../core/agent/agent.types";
 import { MappedConnections } from "../../Connections.types";
 
 interface ConnectionsBodyProps {
   onSearchFocus?: (value: boolean) => void;
   mappedConnections: MappedConnections[];
-  handleShowConnectionDetails: (item: RegularConnectionDetails) => void;
+  handleShowConnectionDetails: (item: ConnectionShortDetails) => void;
   search: string;
   setSearch: (value: string) => void;
 }
@@ -12,18 +12,18 @@ interface ConnectionsBodyProps {
 interface SearchConnectionListProps {
   title: string;
   testId: string;
-  connections: RegularConnectionDetails[];
-  onItemClick: (item: RegularConnectionDetails) => void;
+  connections: ConnectionShortDetails[];
+  onItemClick: (item: ConnectionShortDetails) => void;
 }
 
 interface SearchConnectionContentProps {
   keyword: string;
   mappedConnections: MappedConnections[];
-  onItemClick: (item: RegularConnectionDetails) => void;
+  onItemClick: (item: ConnectionShortDetails) => void;
 }
 
 export type {
   ConnectionsBodyProps,
-  SearchConnectionContentProps,
   SearchConnectionListProps,
+  SearchConnectionContentProps,
 };

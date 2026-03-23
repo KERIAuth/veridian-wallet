@@ -1,18 +1,12 @@
 import { CardListViewType } from "../../../ui/components/SwitchCardView";
 
-interface FavouriteCredential {
-  id: string;
-  time: number;
-}
-
 interface ViewType {
   viewType: CardListViewType | null;
   favouriteIndex: number;
-  favourites: FavouriteCredential[];
 }
 
 interface ViewTypeCacheProps {
+  identifier: ViewType;
   credential: ViewType;
 }
-
-export type { ViewTypeCacheProps, FavouriteCredential };
+export type { ViewTypeCacheProps };

@@ -1,7 +1,6 @@
 import { expect } from "expect-webdriverio";
 import { driver } from "@wdio/globals";
 import { log } from "../../helpers/logger";
-import { delay } from "../base.screen";
 
 export class MenuSettingsSupportScreen {
   get termsOfUseItem() {

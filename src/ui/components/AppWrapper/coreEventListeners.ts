@@ -1,10 +1,4 @@
-import { Agent } from "../../../core/agent/agent";
 import {
-  CreationStatus,
-  isRegularConnectionDetails,
-} from "../../../core/agent/agent.types";
-import {
-  ConnectionInvalidEvent,
   EventTypes,
   GroupCreatedEvent,
   IdentifierAddedEvent,
@@ -12,34 +6,35 @@ import {
   NotificationRemovedEvent,
 } from "../../../core/agent/event.types";
 import { OperationPendingRecordType } from "../../../core/agent/records/operationPendingRecord.type";
+import { CreationStatus } from "../../../core/agent/agent.types";
 import { useAppDispatch } from "../../../store/hooks";
 import {
-  addGroupProfileAsync,
+  updateCreationStatus,
+  updateOrAddIdentifiersCache,
+  addGroupIdentifierCache,
+} from "../../../store/reducers/identifiersCache";
+import {
   addNotification,
-  addOrUpdateProfileIdentity,
   deleteNotificationById,
-  handleNotificationReceived,
-  removeConnectionCache,
-  updateOrAddConnectionCache,
-  updateProfileCreationStatus,
-} from "../../../store/reducers/profileCache";
+} from "../../../store/reducers/notificationsCache";
 import { setToastMsg } from "../../../store/reducers/stateCache";
 import { ToastMsgType } from "../../globals/types";
+import { Agent } from "../../../core/agent/agent";
+import { updateOrAddConnectionCache } from "../../../store/reducers/connectionsCache";
 
 const notificationStateChanged = (
   event: NotificationRemovedEvent | NotificationAddedEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ) => {
   switch (event.type) {
-    case EventTypes.NotificationAdded:
-      dispatch(addNotification(event.payload.note));
-      dispatch(handleNotificationReceived(event.payload.note));
-      break;
-    case EventTypes.NotificationRemoved:
-      dispatch(deleteNotificationById(event.payload.id));
-      break;
-    default:
-      break;
+  case EventTypes.NotificationAdded:
+    dispatch(addNotification(event.payload.note));
+    break;
+  case EventTypes.NotificationRemoved:
+    dispatch(deleteNotificationById(event.payload.id));
+    break;
+  default:
+    break;
   }
 };
 
@@ -48,22 +43,16 @@ const operationCompleteHandler = async (
   dispatch: ReturnType<typeof useAppDispatch>
 ) => {
   switch (opType) {
-    case OperationPendingRecordType.Witness:
-    case OperationPendingRecordType.Group:
-      dispatch(
-        updateProfileCreationStatus({
-          id: oid,
-          creationStatus: CreationStatus.COMPLETE,
-        })
-      );
-      dispatch(
-        setToastMsg(
-          opType === OperationPendingRecordType.Group
-            ? ToastMsgType.GROUP_CREATED
-            : ToastMsgType.IDENTIFIER_UPDATED
-        )
-      );
-      break;
+  case OperationPendingRecordType.Witness:
+  case OperationPendingRecordType.Group:
+    dispatch(
+      updateCreationStatus({
+        id: oid,
+        creationStatus: CreationStatus.COMPLETE,
+      })
+    );
+    dispatch(setToastMsg(ToastMsgType.IDENTIFIER_UPDATED));
+    break;
   }
 };
 
@@ -72,27 +61,22 @@ const operationFailureHandler = async (
   dispatch: ReturnType<typeof useAppDispatch>
 ) => {
   switch (opType) {
-    case OperationPendingRecordType.Witness: {
-      dispatch(
-        updateProfileCreationStatus({
-          id: oid,
-          creationStatus: CreationStatus.FAILED,
-        })
-      );
-      dispatch(setToastMsg(ToastMsgType.CREATE_IDENTIFIER_FAIL));
-      break;
-    }
-    case OperationPendingRecordType.Oobi: {
-      const connectionDetails =
+  case OperationPendingRecordType.Witness: {
+    dispatch(
+      updateCreationStatus({ id: oid, creationStatus: CreationStatus.FAILED })
+    );
+    dispatch(setToastMsg(ToastMsgType.IDENTIFIER_UPDATED));
+    break;
+  }
+  case OperationPendingRecordType.Oobi: {
+    const connectionDetails =
         await Agent.agent.connections.getConnectionShortDetailById(oid);
-      if (isRegularConnectionDetails(connectionDetails)) {
-        dispatch(updateOrAddConnectionCache(connectionDetails));
-      }
-      break;
-    }
-    default: {
-      break;
-    }
+    dispatch(updateOrAddConnectionCache(connectionDetails));
+    break;
+  }
+  default: {
+    break;
+  }
   }
 };
 
@@ -100,29 +84,20 @@ const identifierAddedHandler = async (
   event: IdentifierAddedEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ) => {
-  dispatch(addOrUpdateProfileIdentity(event.payload.identifier));
+  dispatch(updateOrAddIdentifiersCache(event.payload.identifier));
 };
 
 const groupCreatedHandler = async (
   event: GroupCreatedEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ) => {
-  await dispatch(addGroupProfileAsync(event.payload.group));
-};
-
-const removeInvalidConnectionCacheHandler = async (
-  event: ConnectionInvalidEvent,
-  dispatch: ReturnType<typeof useAppDispatch>
-) => {
-  dispatch(removeConnectionCache(event.payload.contactId));
-  dispatch(setToastMsg(ToastMsgType.INVALID_REMOVED_CONNECTION_URL));
+  dispatch(addGroupIdentifierCache(event.payload.group));
 };
 
 export {
-  groupCreatedHandler,
-  identifierAddedHandler,
   notificationStateChanged,
   operationCompleteHandler,
   operationFailureHandler,
-  removeInvalidConnectionCacheHandler,
+  identifierAddedHandler,
+  groupCreatedHandler,
 };

@@ -13,13 +13,17 @@ import {
   TxSignError,
 } from "./peerConnection.types";
 import { CoreEventEmitter } from "../../agent/event";
-import { SeedPhraseVerified } from "../../agent/services/utils";
 
 class IdentityWalletConnect extends CardanoPeerConnect {
   private selectedAid: string;
   private eventEmitter: CoreEventEmitter;
   static readonly MAX_SIGN_TIME = 3600000;
   static readonly TIMEOUT_INTERVAL = 1000;
+  getKeriIdentifier: () => Promise<{ id: string; oobi: string }>;
+  signKeri: (
+    identifier: string,
+    payload: string
+  ) => Promise<string | { error: PeerConnectionError }>;
 
   constructor(
     walletInfo: IWalletInfo,
@@ -37,69 +41,68 @@ class IdentityWalletConnect extends CardanoPeerConnect {
     });
     this.selectedAid = selectedAid;
     this.eventEmitter = eventService;
-  }
 
-  async getKeriIdentifier(): Promise<{
-    id: string;
-    oobi: string;
-  }> {
-    const identifier = await Agent.agent.identifiers.getIdentifier(
-      this.selectedAid
-    );
-    return {
-      id: this.selectedAid,
-      oobi: await Agent.agent.connections.getOobi(identifier.id),
-    };
-  }
-
-  @SeedPhraseVerified
-  async signKeri(
-    identifier: string,
-    payload: string
-  ): Promise<string | { error: PeerConnectionError }> {
-    let approved: boolean | undefined = undefined;
-    // Closure that updates approved variable
-    const approvalCallback = (approvalStatus: boolean) => {
-      approved = approvalStatus;
-    };
-    this.eventEmitter.emit<PeerConnectSigningEvent>({
-      type: PeerConnectionEventTypes.PeerConnectSign,
-      payload: {
-        identifier,
-        payload,
-        approvalCallback,
-      },
-    });
-    const startTime = Date.now();
-    // Wait until approved is true or false
-    while (approved === undefined) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, IdentityWalletConnect.TIMEOUT_INTERVAL)
+    this.getKeriIdentifier = async (): Promise<{
+      id: string;
+      oobi: string;
+    }> => {
+      const identifier = await Agent.agent.identifiers.getIdentifier(
+        this.selectedAid
       );
-      if (Date.now() > startTime + IdentityWalletConnect.MAX_SIGN_TIME) {
-        return { error: TxSignError.TimeOut };
+      return {
+        id: this.selectedAid,
+        oobi: await Agent.agent.connections.getOobi(identifier.id),
+      };
+    };
+
+    this.signKeri = async (
+      identifier: string,
+      payload: string
+    ): Promise<string | { error: PeerConnectionError }> => {
+      let approved: boolean | undefined = undefined;
+      // Closure that updates approved variable
+      const approvalCallback = (approvalStatus: boolean) => {
+        approved = approvalStatus;
+      };
+      this.eventEmitter.emit<PeerConnectSigningEvent>({
+        type: PeerConnectionEventTypes.PeerConnectSign,
+        payload: {
+          identifier,
+          payload,
+          approvalCallback,
+        },
+      });
+      const startTime = Date.now();
+      // Wait until approved is true or false
+      while (approved === undefined) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, IdentityWalletConnect.TIMEOUT_INTERVAL)
+        );
+        if (Date.now() > startTime + IdentityWalletConnect.MAX_SIGN_TIME) {
+          return { error: TxSignError.TimeOut };
+        }
       }
-    }
-    if (approved) {
-      return (await Agent.agent.identifiers.getSigner(identifier)).sign(
-        Buffer.from(payload)
-      ).qb64;
-    } else {
-      return { error: TxSignError.UserDeclined };
-    }
+      if (approved) {
+        return (await Agent.agent.identifiers.getSigner(identifier)).sign(
+          Buffer.from(payload)
+        ).qb64;
+      } else {
+        return { error: TxSignError.UserDeclined };
+      }
+    };
   }
 
   protected getNetworkId(): Promise<number> {
     throw new Error("Method not implemented.");
   }
   protected getUtxos(
-    _amount?: string | undefined,
-    _paginate?: Paginate | undefined
+    amount?: string | undefined,
+    paginate?: Paginate | undefined
   ): Promise<string[] | null> {
     throw new Error("Method not implemented.");
   }
   protected getCollateral(
-    _params?: { amount?: string | undefined } | undefined
+    params?: { amount?: string | undefined } | undefined
   ): Promise<string[] | null> {
     throw new Error("Method not implemented.");
   }
@@ -118,16 +121,16 @@ class IdentityWalletConnect extends CardanoPeerConnect {
   protected async getRewardAddresses(): Promise<string[]> {
     throw new Error("Method not implemented.");
   }
-  protected signTx(_tx: string, _partialSign: boolean): Promise<string> {
+  protected signTx(tx: string, partialSign: boolean): Promise<string> {
     throw new Error("Method not implemented.");
   }
   protected async signData(
-    _addr: string,
-    _payload: string
+    addr: string,
+    payload: string
   ): Promise<Cip30DataSignature> {
     throw new Error("Method not implemented.");
   }
-  protected submitTx(_tx: string): Promise<string> {
+  protected submitTx(tx: string): Promise<string> {
     throw new Error("Method not implemented.");
   }
 }

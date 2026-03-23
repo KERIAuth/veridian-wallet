@@ -1,9 +1,10 @@
-import { t } from "i18next";
+import i18next from "i18next";
 import {
   ConnectionDetails,
   ConnectionHistoryItem,
 } from "../../../../core/agent/agent.types";
 import { ConnectionHistoryType } from "../../../../core/agent/services/connectionService.types";
+import { i18n } from "../../../../i18n";
 import { CardTheme } from "../../../components/CardTheme";
 import { FallbackIcon } from "../../../components/FallbackIcon";
 import {
@@ -30,18 +31,18 @@ const ConnectionHistoryEvent = ({
       <div className="connection-details-logo">
         {historyItem.type ===
         ConnectionHistoryType.CREDENTIAL_REQUEST_PRESENT ? (
-          <FallbackIcon
-            src={connectionDetails?.logo}
-            alt="connection-logo"
-          />
-        ) : (
-          <CardTheme />
-        )}
+            <FallbackIcon
+              src={connectionDetails?.logo}
+              alt="connection-logo"
+            />
+          ) : (
+            <CardTheme />
+          )}
       </div>
       <p className="connection-details-history-event-info">
         <span className="connection-details-history-text">
           {historyItem.type === ConnectionHistoryType.CREDENTIAL_ISSUANCE &&
-            t("tabs.connections.details.issuance", {
+            i18next.t("connections.details.issuance", {
               credential: historyItem.credentialType
                 ?.replace(/([A-Z][a-z])/g, " $1")
                 .replace(/^ /, "")
@@ -50,15 +51,15 @@ const ConnectionHistoryEvent = ({
             })}
           {historyItem.type ===
             ConnectionHistoryType.CREDENTIAL_REQUEST_PRESENT &&
-            t("tabs.connections.details.requestpresent", {
+            i18next.t("connections.details.requestpresent", {
               issuer: connectionDetails?.label,
             })}
           {historyItem.type === ConnectionHistoryType.CREDENTIAL_PRESENTED &&
-            t("tabs.connections.details.presented", {
+            i18n.t("connections.details.presented", {
               credentialType: historyItem.credentialType,
             })}
           {historyItem.type === ConnectionHistoryType.CREDENTIAL_REVOKED &&
-            t("tabs.connections.details.update", {
+            i18next.t("connections.details.update", {
               credential: historyItem.credentialType
                 ?.replace(/([A-Z][a-z])/g, " $1")
                 .replace(/^ /, "")
@@ -89,7 +90,7 @@ const ConnectionHistoryEvent = ({
       </div>
       <p className="connection-details-history-event-info">
         <span className="connection-details-history-text">
-          {t("tabs.connections.details.connectedwith", {
+          {i18next.t("connections.details.connectedwith", {
             issuer: connectionDetails?.label,
           })}
         </span>

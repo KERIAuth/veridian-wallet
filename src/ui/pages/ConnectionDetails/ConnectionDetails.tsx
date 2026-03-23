@@ -13,14 +13,17 @@ import "./ConnectionDetails.scss";
 
 import { Agent } from "../../../core/agent/agent";
 import {
+  ConnectionDetails as ConnectionData,
   ConnectionHistoryItem,
   ConnectionNoteDetails,
-  RegularConnectionDetailsFull,
 } from "../../../core/agent/agent.types";
 import { RoutePath } from "../../../routes";
 import { useAppDispatch } from "../../../store/hooks";
-import { removeConnectionCache } from "../../../store/reducers/profileCache";
-import { setToastMsg } from "../../../store/reducers/stateCache";
+import { removeConnectionCache } from "../../../store/reducers/connectionsCache";
+import {
+  setCurrentOperation,
+  setToastMsg,
+} from "../../../store/reducers/stateCache";
 import { Alert as AlertDeleteConnection } from "../../components/Alert";
 import { CardDetailsBlock } from "../../components/CardDetails";
 import { CloudError } from "../../components/CloudError";
@@ -29,7 +32,7 @@ import { PageFooter } from "../../components/PageFooter";
 import { PageHeader } from "../../components/PageHeader";
 import { Verification } from "../../components/Verification";
 import { ScrollablePageLayout } from "../../components/layout/ScrollablePageLayout";
-import { ToastMsgType } from "../../globals/types";
+import { OperationType, ToastMsgType } from "../../globals/types";
 import { useOnlineStatusEffect } from "../../hooks";
 import { showError } from "../../utils/error";
 import { ConnectionDetailsProps } from "./ConnectionDetails.types";
@@ -45,8 +48,7 @@ const ConnectionDetails = ({
 }: ConnectionDetailsProps) => {
   const pageId = "connection-details";
   const dispatch = useAppDispatch();
-  const [connectionDetails, setConnectionDetails] =
-    useState<RegularConnectionDetailsFull>();
+  const [connectionDetails, setConnectionDetails] = useState<ConnectionData>();
   const [connectionHistory, setConnectionHistory] = useState<
     ConnectionHistoryItem[]
   >([]);
@@ -65,11 +67,10 @@ const ConnectionDetails = ({
 
   const getDetails = useCallback(async () => {
     if (!connectionShortDetails?.id) return;
+
     try {
       const connectionDetails = await Agent.agent.connections.getConnectionById(
-        connectionShortDetails.id,
-        false,
-        connectionShortDetails.identifier
+        connectionShortDetails.id
       );
 
       setConnectionDetails(connectionDetails);
@@ -88,7 +89,6 @@ const ConnectionDetails = ({
     } finally {
       setLoading((value) => ({ ...value, details: false, history: false }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionShortDetails?.id, dispatch]);
 
   const getData = useCallback(() => {
@@ -114,13 +114,11 @@ const ConnectionDetails = ({
       try {
         if (cloudError) {
           await Agent.agent.connections.deleteStaleLocalConnectionById(
-            connectionShortDetails.id,
-            connectionShortDetails.identifier
+            connectionShortDetails.id
           );
         } else {
           await Agent.agent.connections.markConnectionPendingDelete(
-            connectionShortDetails.id,
-            connectionShortDetails.identifier
+            connectionShortDetails.id
           );
         }
         dispatch(setToastMsg(ToastMsgType.CONNECTION_DELETED));
@@ -135,24 +133,25 @@ const ConnectionDetails = ({
           ToastMsgType.DELETE_CONNECTION_FAIL
         );
       }
+      dispatch(setCurrentOperation(OperationType.IDLE));
     }
     deleteConnection();
   };
 
   const connectionDetailsData = [
     {
-      title: i18n.t("tabs.connections.details.label"),
+      title: i18n.t("connections.details.label"),
       value: connectionDetails?.label,
     },
     {
-      title: i18n.t("tabs.connections.details.date"),
+      title: i18n.t("connections.details.date"),
       value: formatShortDate(`${connectionDetails?.createdAtUTC}`),
     },
     {
-      title: i18n.t("tabs.connections.details.endpoints"),
+      title: i18n.t("connections.details.endpoints"),
       value:
         connectionDetails?.serviceEndpoints?.toString() ||
-        i18n.t("tabs.connections.details.notavailable"),
+        i18n.t("connections.details.notavailable"),
     },
   ];
 
@@ -169,6 +168,7 @@ const ConnectionDetails = ({
 
   const deleteButtonAction = () => {
     setAlertDeleteConnectionIsOpen(true);
+    dispatch(setCurrentOperation(OperationType.DELETE_CONNECTION));
   };
 
   const handleAuthentication = () => {
@@ -179,7 +179,8 @@ const ConnectionDetails = ({
     setModalIsOpen(true);
   };
 
-  const cancelDeleteConnection = () => setAlertDeleteConnectionIsOpen(false);
+  const cancelDeleteConnection = () =>
+    dispatch(setCurrentOperation(OperationType.IDLE));
 
   return (
     <>
@@ -190,14 +191,14 @@ const ConnectionDetails = ({
             <PageHeader
               closeButton={true}
               closeButtonAction={handleCloseConnectionModal}
-              closeButtonLabel={`${i18n.t("tabs.connections.details.done")}`}
+              closeButtonLabel={`${i18n.t("connections.details.done")}`}
               currentPath={RoutePath.CONNECTION_DETAILS}
             />
           }
         >
           <PageFooter
             pageId={pageId}
-            deleteButtonText={`${i18n.t("tabs.connections.details.delete")}`}
+            deleteButtonText={`${i18n.t("connections.details.delete")}`}
             deleteButtonAction={() => deleteButtonAction()}
           />
         </CloudError>
@@ -210,7 +211,7 @@ const ConnectionDetails = ({
             <PageHeader
               closeButton={true}
               closeButtonAction={handleCloseConnectionModal}
-              closeButtonLabel={`${i18n.t("tabs.connections.details.done")}`}
+              closeButtonLabel={`${i18n.t("connections.details.done")}`}
               currentPath={RoutePath.CONNECTION_DETAILS}
               actionButton={true}
               actionButtonAction={() => setOptionsIsOpen(true)}
@@ -234,16 +235,14 @@ const ConnectionDetails = ({
                 data-testid="connection-details-segment-button"
               >
                 <IonLabel>{`${i18n.t(
-                  "tabs.connections.details.segment.details"
+                  "connections.details.details"
                 )}`}</IonLabel>
               </IonSegmentButton>
               <IonSegmentButton
                 value="notes"
                 data-testid="connection-notes-segment-button"
               >
-                <IonLabel>{`${i18n.t(
-                  "tabs.connections.details.segment.notes"
-                )}`}</IonLabel>
+                <IonLabel>{`${i18n.t("connections.details.notes")}`}</IonLabel>
               </IonSegmentButton>
             </IonSegment>
             {segmentValue === "details" ? (
@@ -266,7 +265,7 @@ const ConnectionDetails = ({
                 ))}
                 <CardDetailsBlock
                   className="connection-details-history"
-                  title={i18n.t("tabs.connections.details.history")}
+                  title={i18n.t("connections.details.history")}
                 >
                   {connectionHistory?.length > 0 &&
                     connectionHistory
@@ -290,9 +289,7 @@ const ConnectionDetails = ({
                 ) : (
                   <PageFooter
                     pageId={pageId}
-                    deleteButtonText={`${i18n.t(
-                      "tabs.connections.details.delete"
-                    )}`}
+                    deleteButtonText={`${i18n.t("connections.details.delete")}`}
                     deleteButtonAction={() => deleteButtonAction()}
                   />
                 )}
@@ -334,13 +331,13 @@ const ConnectionDetails = ({
         setIsOpen={setAlertDeleteConnectionIsOpen}
         dataTestId="alert-confirm-delete-connection"
         headerText={i18n.t(
-          "tabs.connections.details.options.alert.deleteconnection.title"
+          "connections.details.options.alert.deleteconnection.title"
         )}
         confirmButtonText={`${i18n.t(
-          "tabs.connections.details.options.alert.deleteconnection.confirm"
+          "connections.details.options.alert.deleteconnection.confirm"
         )}`}
         cancelButtonText={`${i18n.t(
-          "tabs.connections.details.options.alert.deleteconnection.cancel"
+          "connections.details.options.alert.deleteconnection.cancel"
         )}`}
         actionConfirm={() => handleAuthentication()}
         actionCancel={cancelDeleteConnection}

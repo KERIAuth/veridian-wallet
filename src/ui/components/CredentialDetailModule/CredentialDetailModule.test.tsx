@@ -1,32 +1,30 @@
 const getConnectionShortDetailByIdMock = jest.fn().mockResolvedValue([]);
 const getConnectionByIdMock = jest.fn();
 
+import { waitForIonicReact } from "@ionic/react-test-utils";
 import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import { initiatorConnectionShortDetails } from "../../../core/__fixtures__/agent/multiSigFixtures";
+import configureStore from "redux-mock-store";
 import { Agent } from "../../../core/agent/agent";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
-import { setToastMsg } from "../../../store/reducers/stateCache";
 import {
   addFavouritesCredsCache,
   removeFavouritesCredsCache,
-} from "../../../store/reducers/viewTypeCache";
-import { connectionsFix } from "../../__fixtures__/connectionsFix";
+} from "../../../store/reducers/credsCache";
+import { setToastMsg } from "../../../store/reducers/stateCache";
+import {
+  connectionsFix,
+  connectionsMapFix,
+} from "../../__fixtures__/connectionsFix";
 import { credsFixAcdc, revokedCredFixs } from "../../__fixtures__/credsFix";
 import { notificationsFix } from "../../__fixtures__/notificationsFix";
 import { ToastMsgType } from "../../globals/types";
-import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
 import { TabsRoutePath } from "../navigation/TabsMenu";
 import { CredentialDetailModule } from "./CredentialDetailModule";
-import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
-import {
-  filteredArchivedCredsFix,
-  revokedCredsFix,
-} from "../../__fixtures__/filteredCredsFix";
-import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix";
+import { initiatorConnectionShortDetails } from "../../../core/__fixtures__/agent/multiSigFixtures";
 
 const path = TabsRoutePath.CREDENTIALS + "/" + credsFixAcdc[0].id;
 
@@ -85,6 +83,7 @@ jest.mock("@ionic/react", () => ({
     isOpen ? <div data-testid={props["data-testid"]}>{children}</div> : null,
 }));
 
+const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialStateNoPasswordCurrent = {
@@ -104,24 +103,19 @@ const initialStateNoPasswordCurrent = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
+  credsCache: { creds: credsFixAcdc, favourites: [] },
+  credsArchivedCache: { creds: credsFixAcdc },
   biometricsCache: {
     enabled: false,
   },
-  profilesCache: {
-    ...profileCacheFixData,
-    profiles: {
-      ...profileCacheFixData.profiles,
-      ...(profileCacheFixData.defaultProfile
-        ? {
-            [profileCacheFixData.defaultProfile as string]: {
-              ...profileCacheFixData.profiles[
-                profileCacheFixData.defaultProfile as string
-              ],
-              connections: connectionsFix,
-            },
-          }
-        : {}),
-    },
+  notificationsCache: {
+    notificationDetailCache: null,
+  },
+  identifiersCache: {
+    identifiers: {},
+  },
+  connectionsCache: {
+    connections: connectionsMapFix,
   },
 };
 
@@ -142,24 +136,19 @@ const initialStateNoPasswordArchived = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
+  credsCache: { creds: [] },
+  credsArchivedCache: { creds: [] },
   biometricsCache: {
     enabled: false,
   },
-  profilesCache: {
-    ...profileCacheFixData,
-    profiles: {
-      ...profileCacheFixData.profiles,
-      ...(profileCacheFixData.defaultProfile
-        ? {
-            [profileCacheFixData.defaultProfile as string]: {
-              ...profileCacheFixData.profiles[
-                profileCacheFixData.defaultProfile as string
-              ],
-              connections: connectionsFix,
-            },
-          }
-        : {}),
-    },
+  notificationsCache: {
+    notificationDetailCache: null,
+  },
+  identifiersCache: {
+    identifiers: {},
+  },
+  connectionsCache: {
+    connections: connectionsMapFix,
   },
 };
 
@@ -171,9 +160,10 @@ describe("Cred Detail Module - current not archived credential", () => {
       .mockImplementation(() => Promise.resolve(credsFixAcdc[0]));
   });
   beforeEach(() => {
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateNoPasswordCurrent),
+      ...mockStore(initialStateNoPasswordCurrent),
       dispatch: dispatchMock,
     };
   });
@@ -290,7 +280,7 @@ describe("Cred Detail Module - current not archived credential", () => {
 
   test("It changes to favourite icon on click disabled favourite button", async () => {
     const storeMocked = {
-      ...makeTestStore(initialStateNoPasswordCurrent),
+      ...mockStore(initialStateNoPasswordCurrent),
       dispatch: dispatchMock,
     };
 
@@ -316,6 +306,8 @@ describe("Cred Detail Module - current not archived credential", () => {
     act(() => {
       fireEvent.click(heartButton);
     });
+
+    await waitForIonicReact();
 
     await waitFor(() => {
       expect(dispatchMock).toBeCalledWith(
@@ -349,31 +341,23 @@ describe("Cred Detail Module - current not archived credential", () => {
           "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
         bran: "bran",
       },
-      viewTypeCache: {
-        credential: {
-          favourites: [
-            {
-              id: credsFixAcdc[0].id,
-              time: mockNow,
-            },
-          ],
-        },
+      credsCache: {
+        creds: credsFixAcdc,
+        favourites: [
+          {
+            id: credsFixAcdc[0].id,
+            time: mockNow,
+          },
+        ],
       },
-      profilesCache: {
-        ...profileCacheFixData,
-        profiles: {
-          ...profileCacheFixData.profiles,
-          ...(profileCacheFixData.defaultProfile
-            ? {
-                [profileCacheFixData.defaultProfile as string]: {
-                  ...profileCacheFixData.profiles[
-                    profileCacheFixData.defaultProfile as string
-                  ],
-                  connections: connectionsFix,
-                },
-              }
-            : {}),
-        },
+      notificationsCache: {
+        notificationDetailCache: null,
+      },
+      identifiersCache: {
+        identifiers: {},
+      },
+      connectionsCache: {
+        connections: connectionsMapFix,
       },
       biometricsCache: {
         enabled: false,
@@ -381,7 +365,7 @@ describe("Cred Detail Module - current not archived credential", () => {
     };
 
     const storeMocked = {
-      ...makeTestStore(initialStateNoPasswordCurrent),
+      ...mockStore(initialStateNoPasswordCurrent),
       dispatch: dispatchMock,
     };
 
@@ -404,6 +388,8 @@ describe("Cred Detail Module - current not archived credential", () => {
     act(() => {
       fireEvent.click(heartButton);
     });
+
+    await waitForIonicReact();
 
     await waitFor(() => {
       expect(dispatchMock).toBeCalledWith(
@@ -432,29 +418,21 @@ describe("Cred Detail Module - current not archived credential", () => {
           "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
         bran: "bran",
       },
-      viewTypeCache: {
-        credential: {
-          favourites: new Array(5).map((_, index) => ({
-            id: index,
-            time: mockNow,
-          })),
-        },
+      credsCache: {
+        creds: credsFixAcdc,
+        favourites: new Array(5).map((_, index) => ({
+          id: index,
+          time: mockNow,
+        })),
       },
-      profilesCache: {
-        ...profileCacheFixData,
-        profiles: {
-          ...profileCacheFixData.profiles,
-          ...(profileCacheFixData.defaultProfile
-            ? {
-                [profileCacheFixData.defaultProfile as string]: {
-                  ...profileCacheFixData.profiles[
-                    profileCacheFixData.defaultProfile as string
-                  ],
-                  connections: connectionsFix,
-                },
-              }
-            : {}),
-        },
+      identifiersCache: {
+        identifiers: {},
+      },
+      notificationsCache: {
+        notificationDetailCache: null,
+      },
+      connectionsCache: {
+        connections: connectionsMapFix,
       },
       biometricsCache: {
         enabled: false,
@@ -462,7 +440,7 @@ describe("Cred Detail Module - current not archived credential", () => {
     };
 
     const storeMocked = {
-      ...makeTestStore(initialStateNoPasswordCurrent),
+      ...mockStore(initialStateNoPasswordCurrent),
       dispatch: dispatchMock,
     };
 
@@ -485,6 +463,8 @@ describe("Cred Detail Module - current not archived credential", () => {
     act(() => {
       fireEvent.click(heartButton);
     });
+
+    await waitForIonicReact();
 
     await waitFor(() => {
       expect(dispatchMock).toBeCalledWith(
@@ -535,7 +515,7 @@ describe("Cred Detail Module - current not archived credential", () => {
     });
 
     unmount();
-  }, 10000);
+  });
 
   test("Can view connection details, and cannot delete the connection from this view", async () => {
     getConnectionShortDetailByIdMock.mockResolvedValue(
@@ -593,16 +573,52 @@ describe("Cred Detail Module - archived", () => {
   beforeAll(() => {
     jest
       .spyOn(Agent.agent.credentials, "getCredentialDetailsById")
-      .mockResolvedValue({
-        ...credsFixAcdc[0],
-        id: filteredArchivedCredsFix[0].id,
-      });
+      .mockResolvedValue(credsFixAcdc[0]);
   });
   beforeEach(() => {
+    const mockStore = configureStore();
     storeMocked = {
-      ...makeTestStore(initialStateNoPasswordArchived),
+      ...mockStore(initialStateNoPasswordArchived),
       dispatch: credDispatchMock,
     };
+  });
+
+  test("It shows the restore alert", async () => {
+    const { queryByText, getByText, queryAllByTestId } = render(
+      <Provider store={storeMocked}>
+        <CredentialDetailModule
+          pageId="credential-card-details"
+          id={credsFixAcdc[0].id}
+          onClose={jest.fn()}
+        />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(
+        queryByText(EN_TRANSLATIONS.tabs.credentials.details.restore)
+      ).toBeVisible();
+    });
+
+    const restoreButton = getByText(
+      EN_TRANSLATIONS.tabs.credentials.details.restore
+    );
+
+    act(() => {
+      fireEvent.click(restoreButton);
+    });
+
+    await waitFor(() => {
+      expect(queryAllByTestId("alert-restore")[0]).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(
+        queryByText(
+          EN_TRANSLATIONS.tabs.credentials.details.alert.restore.title
+        )
+      ).toBeVisible();
+    });
   });
 
   test("Restore func", async () => {
@@ -610,7 +626,7 @@ describe("Cred Detail Module - archived", () => {
       <Provider store={storeMocked}>
         <CredentialDetailModule
           pageId="credential-card-details"
-          id={filteredArchivedCredsFix[0].id}
+          id={credsFixAcdc[0].id}
           onClose={jest.fn()}
         />
       </Provider>
@@ -658,7 +674,7 @@ describe("Cred Detail Module - archived", () => {
       <Provider store={storeMocked}>
         <CredentialDetailModule
           pageId="credential-card-details"
-          id={filteredArchivedCredsFix[0].id}
+          id={credsFixAcdc[0].id}
           onClose={jest.fn()}
         />
       </Provider>
@@ -717,24 +733,23 @@ describe("Cred Detail Module - light mode", () => {
         "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
       bran: "bran",
     },
+    credsCache: { creds: credsFixAcdc },
+    credsArchivedCache: { creds: [] },
     biometricsCache: {
       enabled: false,
     },
-    profilesCache: {
-      ...profileCacheFixData,
-      profiles: {
-        ...profileCacheFixData.profiles,
-        ...(profileCacheFixData.defaultProfile
-          ? {
-              [profileCacheFixData.defaultProfile as string]: {
-                ...profileCacheFixData.profiles[
-                  profileCacheFixData.defaultProfile as string
-                ],
-                connections: connectionsFix,
-              },
-            }
-          : {}),
+    identifiersCache: {
+      identifiers: {},
+    },
+    notificationsCache: {
+      notificationDetailCache: {
+        notificationId: "test-id",
+        viewCred: "test-cred",
+        step: 0,
       },
+    },
+    connectionsCache: {
+      connections: connectionsMapFix,
     },
   };
 
@@ -744,8 +759,9 @@ describe("Cred Detail Module - light mode", () => {
       .mockResolvedValue(credsFixAcdc[0]);
   });
   beforeEach(() => {
+    const mockStore = configureStore();
     storeMocked = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: credDispatchMock,
     };
   });
@@ -791,24 +807,45 @@ describe("Cred detail - revoked", () => {
         "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
       bran: "bran",
     },
-    profilesCache: profileCacheFixData,
+    identifiersCache: {
+      identifiers: {},
+    },
+    credsCache: { creds: credsFixAcdc },
+    credsArchivedCache: { creds: [] },
     biometricsCache: {
       enabled: false,
+    },
+    notificationsCache: {
+      notificationDetailCache: {
+        notificationId: "test-id",
+        viewCred: "test-cred",
+        step: 0,
+      },
+      notifications: [
+        {
+          ...notificationsFix[0],
+          a: {
+            ...notificationsFix[0].a,
+            credentialId: credsFixAcdc[0].id,
+          },
+        },
+      ],
+    },
+    connectionsCache: {
+      connections: connectionsMapFix,
     },
   };
 
   beforeAll(() => {
     jest
       .spyOn(Agent.agent.credentials, "getCredentialDetailsById")
-      .mockResolvedValue({
-        ...revokedCredFixs[0],
-        id: revokedCredsFix[0].id,
-      });
+      .mockResolvedValue(revokedCredFixs[0]);
   });
 
   beforeEach(() => {
+    const mockStore = configureStore();
     storeMocked = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: credDispatchMock,
     };
   });
@@ -818,7 +855,7 @@ describe("Cred detail - revoked", () => {
       <Provider store={storeMocked}>
         <CredentialDetailModule
           pageId="credential-card-details"
-          id={revokedCredsFix[0].id}
+          id={credsFixAcdc[0].id}
           onClose={jest.fn()}
         />
       </Provider>
@@ -839,7 +876,7 @@ describe("Cred detail - revoked", () => {
       <Provider store={storeMocked}>
         <CredentialDetailModule
           pageId="credential-card-details"
-          id={revokedCredsFix[0].id}
+          id={credsFixAcdc[0].id}
           onClose={jest.fn()}
         />
       </Provider>
@@ -902,9 +939,23 @@ describe("Cred detail - view only", () => {
         "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
       bran: "bran",
     },
-    profilesCache: profileCacheFixData,
+    credsCache: { creds: credsFixAcdc },
+    credsArchivedCache: { creds: [] },
     biometricsCache: {
       enabled: false,
+    },
+    identifiersCache: {
+      identifiers: {},
+    },
+    notificationsCache: {
+      notificationDetailCache: {
+        notificationId: "test-id",
+        viewCred: "test-cred",
+        step: 0,
+      },
+    },
+    connectionsCache: {
+      connections: connectionsMapFix,
     },
   };
 
@@ -915,8 +966,9 @@ describe("Cred detail - view only", () => {
   });
 
   beforeEach(() => {
+    const mockStore = configureStore();
     storeMocked = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: credDispatchMock,
     };
   });

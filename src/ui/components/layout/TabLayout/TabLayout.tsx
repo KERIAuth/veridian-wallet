@@ -33,7 +33,6 @@ const TabLayout = ({
   children,
   placeholder,
   hardwareBackButtonConfig,
-  headerCustomContent,
 }: TabLayoutProps) => {
   const [isActive, setIsActive] = useState(false);
 
@@ -86,65 +85,62 @@ const TabLayout = ({
       id={pageId}
     >
       {header && (
-        <div className="header-wrapper">
-          <IonHeader
-            data-testid={`${pageId}-tab-header`}
-            className="ion-no-border tab-header"
+        <IonHeader
+          data-testid={`${pageId}-tab-header`}
+          className="ion-no-border tab-header"
+        >
+          <IonToolbar
+            color="transparent"
+            className={`tab-title ${backButton ? "has-back-button" : ""}`}
           >
-            <IonToolbar
-              color="transparent"
-              className={`tab-title ${backButton ? "has-back-button" : ""}`}
-            >
-              {backButton && backButtonAction && (
-                <IonButtons
-                  slot="start"
-                  className="back-button"
-                  data-testid="tab-back-button"
-                  onClick={backButtonAction}
-                >
-                  <IonIcon
-                    icon={arrowBackOutline}
-                    color="primary"
-                  />
-                </IonButtons>
-              )}
-
-              {doneLabel && doneAction && (
-                <IonTitle
-                  onClick={doneAction}
-                  data-testid="tab-done-button"
-                >
-                  <h4 data-testid="tab-done-label">{doneLabel}</h4>
-                </IonTitle>
-              )}
-
-              {title && (
-                <IonTitle data-testid={`tab-title-${title.toLowerCase()}`}>
-                  <h2>{title}</h2>
-                </IonTitle>
-              )}
-
-              <IonButtons slot="end">
-                {additionalButtons}
-
-                {actionButton && actionButtonLabel && (
-                  <IonButton
-                    className="action-button-label"
-                    onClick={actionButtonAction}
-                    data-testid="action-button"
-                  >
-                    {actionButtonLabel}
-                  </IonButton>
-                )}
+            {backButton && backButtonAction && (
+              <IonButtons
+                slot="start"
+                className="back-button"
+                data-testid="tab-back-button"
+                onClick={backButtonAction}
+              >
+                <IonIcon
+                  icon={arrowBackOutline}
+                  color="primary"
+                />
               </IonButtons>
-            </IonToolbar>
-          </IonHeader>
-          {headerCustomContent}
-        </div>
+            )}
+
+            {doneLabel && doneAction && (
+              <IonTitle
+                onClick={doneAction}
+                data-testid="tab-done-button"
+              >
+                <h4 data-testid="tab-done-label">{doneLabel}</h4>
+              </IonTitle>
+            )}
+
+            {title && (
+              <IonTitle data-testid={`tab-title-${title.toLowerCase()}`}>
+                <h2>{title}</h2>
+              </IonTitle>
+            )}
+
+            <IonButtons slot="end">
+              {additionalButtons}
+
+              {actionButton && actionButtonLabel && (
+                <IonButton
+                  className="action-button-label"
+                  onClick={actionButtonAction}
+                  data-testid="action-button"
+                >
+                  {actionButtonLabel}
+                </IonButton>
+              )}
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
       )}
       {placeholder || (
         <IonContent
-          id={`${pageId}-content`}
+          id={pageId}
           className="tab-content"
           color="transparent"
         >

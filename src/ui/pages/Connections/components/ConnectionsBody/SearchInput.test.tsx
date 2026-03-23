@@ -1,4 +1,5 @@
-import { fireEvent, act, render, waitFor } from "@testing-library/react";
+import { ionFireEvent } from "@ionic/react-test-utils";
+import { act, render, waitFor } from "@testing-library/react";
 import { SearchInput } from "./SearchInput";
 
 describe("Connection search input", () => {
@@ -14,11 +15,11 @@ describe("Connection search input", () => {
     );
 
     act(() => {
-      fireEvent(getByTestId("search-bar"), new CustomEvent("ionFocus"));
+      ionFireEvent.ionCancel(getByTestId("search-bar"));
     });
 
     await waitFor(() => {
-      expect(onFocusChange).toBeCalledWith(true);
+      expect(onFocusChange).toBeCalledWith(false);
     });
   });
 
@@ -34,7 +35,7 @@ describe("Connection search input", () => {
     );
 
     act(() => {
-      fireEvent(getByTestId("search-bar"), new CustomEvent("ionBlur"));
+      ionFireEvent.ionBlur(getByTestId("search-bar"));
     });
 
     await waitFor(() => {
@@ -54,7 +55,7 @@ describe("Connection search input", () => {
     );
 
     act(() => {
-      fireEvent(getByTestId("search-bar"), new CustomEvent("ionFocus"));
+      ionFireEvent.ionFocus(getByTestId("search-bar"));
     });
 
     await waitFor(() => {

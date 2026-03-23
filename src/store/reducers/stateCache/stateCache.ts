@@ -2,15 +2,13 @@ import { LensFacing } from "@capacitor-mlkit/barcode-scanning";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { Salter } from "signify-ts";
 import { LoginAttempts } from "../../../core/agent/services/auth.types";
-import { ToastMsgType } from "../../../ui/globals/types";
+import { OperationType, ToastMsgType } from "../../../ui/globals/types";
 import { RootState } from "../../index";
 import {
   AuthenticationCacheProps,
   CurrentRouteCacheProps,
-  GlobalLoadingType,
   IncomingRequestProps,
   InitializationPhase,
-  PendingJoinGroupMetadata,
   StateCacheProps,
 } from "./stateCache.types";
 
@@ -19,9 +17,9 @@ const initialState: StateCacheProps = {
   recoveryCompleteNoInterruption: false,
   isOnline: false,
   routes: [],
-  showLoading: GlobalLoadingType.NONE,
   authentication: {
     loggedIn: false,
+    userName: "",
     time: 0,
     passcodeIsSet: false,
     seedPhraseIsSet: false,
@@ -36,14 +34,15 @@ const initialState: StateCacheProps = {
     },
     firstAppLaunch: true,
   },
+  currentOperation: OperationType.IDLE,
   queueIncomingRequest: {
     isProcessing: false,
     queues: [],
     isPaused: false,
   },
+  showConnections: false,
   toastMsgs: [],
   forceInitApp: 0,
-  pendingJoinGroupMetadata: null,
 };
 
 const stateCacheSlice = createSlice({
@@ -103,13 +102,10 @@ const stateCacheSlice = createSlice({
     ) => {
       state.authentication = action.payload;
     },
+    setCurrentOperation: (state, action: PayloadAction<OperationType>) => {
+      state.currentOperation = action.payload;
+    },
     setToastMsg: (state, action: PayloadAction<ToastMsgType>) => {
-      if (
-        state.isSetupProfile &&
-        action.payload === ToastMsgType.IDENTIFIER_UPDATED
-      )
-        return;
-
       state.toastMsgs = [
         {
           id: new Salter({}).qb64,
@@ -173,7 +169,10 @@ const stateCacheSlice = createSlice({
     showGenericError: (state, action: PayloadAction<boolean | undefined>) => {
       state.showGenericError = action.payload;
     },
-    showGlobalLoading: (state, action: PayloadAction<GlobalLoadingType>) => {
+    showConnections: (state, action: PayloadAction<boolean>) => {
+      state.showConnections = action.payload;
+    },
+    showGlobalLoading: (state, action: PayloadAction<boolean>) => {
       state.showLoading = action.payload;
     },
     showNoWitnessAlert: (state, action: PayloadAction<boolean | undefined>) => {
@@ -185,32 +184,8 @@ const stateCacheSlice = createSlice({
         forceInitApp: (state.forceInitApp || 0) + 1,
       };
     },
-    setIsSetupProfile: (state, action: PayloadAction<boolean | undefined>) => {
-      state.isSetupProfile = action.payload;
-    },
-    setPendingJoinGroupMetadata: (
-      state,
-      action: PayloadAction<PendingJoinGroupMetadata | null>
-    ) => {
-      state.pendingJoinGroupMetadata = action.payload;
-    },
-    setSeedPhraseVerified: (state, action: PayloadAction<boolean>) => {
-      state.authentication.seedPhraseIsSet = action.payload;
-    },
-    showVerifySeedPhraseAlert: (state, action: PayloadAction<boolean>) => {
-      state.showVerifySeedPhraseAlert = action.payload;
-    },
-    setSsiAgentIsSet: (state, action: PayloadAction<boolean>) => {
-      state.authentication.ssiAgentIsSet = action.payload;
-    },
-    setSyncingData: (state, action: PayloadAction<boolean>) => {
-      state.isSyncingData = action.payload;
-    },
-    setShowSeedPhraseScreen: (state, action: PayloadAction<boolean>) => {
-      state.isShowSeedPhraseScreen = action.payload;
-    },
-    setIsInBiometricProcess: (state, action: PayloadAction<boolean>) => {
-      state.isInBiometricProcess = action.payload;
+    setShowWelcomePage: (state, action: PayloadAction<boolean | undefined>) => {
+      state.showWelcomePage = action.payload;
     },
   },
 });
@@ -225,6 +200,7 @@ const {
   login,
   logout,
   setAuthentication,
+  setCurrentOperation,
   setToastMsg,
   dequeueIncomingRequest,
   setQueueIncomingRequest,
@@ -235,18 +211,12 @@ const {
   setFirstAppLaunchComplete,
   setCameraDirection,
   showGenericError,
+  showConnections,
   removeToastMessage,
   showNoWitnessAlert,
   clearStateCache,
   showGlobalLoading,
-  setIsSetupProfile,
-  setPendingJoinGroupMetadata,
-  setSeedPhraseVerified,
-  showVerifySeedPhraseAlert,
-  setSsiAgentIsSet,
-  setSyncingData,
-  setShowSeedPhraseScreen,
-  setIsInBiometricProcess,
+  setShowWelcomePage,
 } = stateCacheSlice.actions;
 
 const getStateCache = (state: RootState) => state.stateCache;
@@ -258,6 +228,8 @@ const getRoutes = (state: RootState) => state.stateCache.routes;
 const getCurrentRoute = (state: RootState) =>
   state.stateCache.routes.length ? state.stateCache.routes[0] : undefined;
 const getAuthentication = (state: RootState) => state.stateCache.authentication;
+const getCurrentOperation = (state: RootState) =>
+  state.stateCache.currentOperation;
 const getToastMsgs = (state: RootState) => state.stateCache.toastMsgs;
 const getQueueIncomingRequest = (state: RootState) =>
   state.stateCache.queueIncomingRequest;
@@ -270,20 +242,15 @@ const getCameraDirection = (state: RootState) =>
   state.stateCache.cameraDirection;
 const getShowCommonError = (state: RootState) =>
   state.stateCache.showGenericError;
+const getShowConnections = (state: RootState) =>
+  state.stateCache.showConnections;
 const getShowNoWitnessAlert = (state: RootState) =>
   state.stateCache.showNoWitnessAlert;
 const getToastMgs = (state: RootState) => state.stateCache.toastMsgs;
 const getForceInitApp = (state: RootState) => state.stateCache.forceInitApp;
 const getGlobalLoading = (state: RootState) => state.stateCache.showLoading;
-const getShowSetupProfilePage = (state: RootState) =>
-  state.stateCache.isSetupProfile;
-const getShowVerifySeedPhraseAlert = (state: RootState) =>
-  state.stateCache.showVerifySeedPhraseAlert;
-const getIsSyncingData = (state: RootState) => state.stateCache.isSyncingData;
-const getIsShowSeedPhrase = (state: RootState) =>
-  state.stateCache.isShowSeedPhraseScreen;
-const getIsInBiometricProcess = (state: RootState) =>
-  state.stateCache.isInBiometricProcess;
+const getShowWelcomePage = (state: RootState) =>
+  state.stateCache.showWelcomePage;
 
 export type {
   AuthenticationCacheProps,
@@ -297,21 +264,21 @@ export {
   enqueueIncomingRequest,
   getAuthentication,
   getCameraDirection,
+  getCurrentOperation,
   getCurrentRoute,
   getFirstAppLaunch,
   getForceInitApp,
   getGlobalLoading,
   getInitializationPhase,
   getIsOnline,
-  getIsSyncingData,
   getLoginAttempt,
   getQueueIncomingRequest,
   getRecoveryCompleteNoInterruption,
   getRoutes,
   getShowCommonError,
+  getShowConnections,
   getShowNoWitnessAlert,
-  getShowSetupProfilePage,
-  getShowVerifySeedPhraseAlert,
+  getShowWelcomePage,
   getStateCache,
   getToastMgs,
   getToastMsgs,
@@ -324,27 +291,20 @@ export {
   resetAllRoutes,
   setAuthentication,
   setCameraDirection,
+  setCurrentOperation,
   setCurrentRoute,
   setFirstAppLaunchComplete,
   setInitializationPhase,
   setIsOnline,
-  setIsSetupProfile,
   setLoginAttempt,
   setPauseQueueIncomingRequest,
-  setPendingJoinGroupMetadata,
   setQueueIncomingRequest,
   setRecoveryCompleteNoInterruption,
-  setSeedPhraseVerified,
-  setSsiAgentIsSet,
-  setSyncingData,
+  setShowWelcomePage,
   setToastMsg,
+  showConnections,
   showGenericError,
   showGlobalLoading,
   showNoWitnessAlert,
-  showVerifySeedPhraseAlert,
   stateCacheSlice,
-  getIsShowSeedPhrase,
-  setShowSeedPhraseScreen,
-  getIsInBiometricProcess,
-  setIsInBiometricProcess,
 };

@@ -1,4 +1,4 @@
-import { CreateIdentifierBody, HabState, Tier } from "signify-ts";
+import { CreateIdentifierBody, Tier } from "signify-ts";
 import { ConnectionStatus, CreationStatus } from "../../agent/agent.types";
 import {
   IdentifierMetadataRecord,
@@ -14,10 +14,9 @@ const memberMetadataRecordProps: IdentifierMetadataRecordProps = {
   createdAt: now,
   theme: 0,
   groupMetadata: {
-    groupId: "groupid",
+    groupId: "group-id",
     groupInitiator: true,
     groupCreated: false,
-    proposedUsername: "testUser",
   },
 };
 
@@ -36,7 +35,7 @@ const multisigMetadataRecord = {
 } as IdentifierMetadataRecord;
 
 const getMemberIdentifierResponse = {
-  name: "1.2.0.2:00:1:groupid::groupName",
+  name: "00:groupid:groupName",
   prefix: memberMetadataRecord.id,
   state: {
     vn: [1, 0],
@@ -119,7 +118,6 @@ const memberIdentifierRecord = {
     groupId: "08f22dee-8cb0-4d65-8600-a82bbc3f6fd7",
     groupInitiator: true,
     groupCreated: true,
-    proposedUsername: "testUser",
   },
   updatedAt: new Date("2024-06-28T03:55:04.260Z"),
 } as IdentifierMetadataRecordProps;
@@ -371,7 +369,7 @@ const mHab = {
 
 const multisigExnIpexGrantSerder = {
   kind: "JSON",
-  raw: '{"v":"KERI10JSON00025f_","t":"exn","d":"EFnDzHLeULKSm_jbQSIN427yWWFr82OBkkxg3iUf2FUW","i":"EGUORQAs0r1mup1OmX1H23PITDV7td-o2XGdMVL6lmmk","p":"","dt":"2024-08-02T03:53:30.133000+00:00","r":"/multisig/exn","q":{},"a":{"gid":"EPIKswKD9AiVxIqU4QLn14qpNuiAfgVGzoK-HVU0znjC"},"e":{"exn":{"v":"KERI10JSON000111_","t":"exn","d":"EMTArfbjevIfB-fbxzsepKO35RWHN2gQxTTU5Lov2Dld","i":"EPIKswKD9AiVxIqU4QLn14qpNuiAfgVGzoK-HVU0znjC","p":"EH-_9IgodejkwXi2Hw--A53rVYcO6bDYnBrbpCId8LOu","dt":"2024-08-02T03:53:29.400000+00:00","r":"/ipex/admit","q":{},"a":{"m":""},"e":{}},"d":"ECxCLDUf8A1y62wf7YkWAcj5RN-KVzNaxRefzgE7oIjq"}}',
+  raw: "{\"v\":\"KERI10JSON00025f_\",\"t\":\"exn\",\"d\":\"EFnDzHLeULKSm_jbQSIN427yWWFr82OBkkxg3iUf2FUW\",\"i\":\"EGUORQAs0r1mup1OmX1H23PITDV7td-o2XGdMVL6lmmk\",\"p\":\"\",\"dt\":\"2024-08-02T03:53:30.133000+00:00\",\"r\":\"/multisig/exn\",\"q\":{},\"a\":{\"gid\":\"EPIKswKD9AiVxIqU4QLn14qpNuiAfgVGzoK-HVU0znjC\"},\"e\":{\"exn\":{\"v\":\"KERI10JSON000111_\",\"t\":\"exn\",\"d\":\"EMTArfbjevIfB-fbxzsepKO35RWHN2gQxTTU5Lov2Dld\",\"i\":\"EPIKswKD9AiVxIqU4QLn14qpNuiAfgVGzoK-HVU0znjC\",\"p\":\"EH-_9IgodejkwXi2Hw--A53rVYcO6bDYnBrbpCId8LOu\",\"dt\":\"2024-08-02T03:53:29.400000+00:00\",\"r\":\"/ipex/admit\",\"q\":{},\"a\":{\"m\":\"\"},\"e\":{}},\"d\":\"ECxCLDUf8A1y62wf7YkWAcj5RN-KVzNaxRefzgE7oIjq\"}}",
   ked: {
     v: "KERI10JSON00066c_",
     t: "exn",
@@ -381,10 +379,7 @@ const multisigExnIpexGrantSerder = {
     dt: "2024-08-09T10:27:01.653000+00:00",
     r: "/multisig/exn",
     q: {},
-    a: {
-      gid: "EOfnSCpCa3XmSTUZ7vEgEJoYbruyiYIbl5DYsAwooXTY",
-      smids: ["EOfnSCpCa3XmSTUZ7vEgEJoYbruyiYIbl5DYsAwooXTY"],
-    },
+    a: { gid: "EOfnSCpCa3XmSTUZ7vEgEJoYbruyiYIbl5DYsAwooXTY" },
     e: {
       exn: {
         v: "KERI10JSON00051e_",
@@ -395,12 +390,7 @@ const multisigExnIpexGrantSerder = {
         dt: "2024-08-09T10:27:00.155000+00:00",
         r: "/ipex/grant",
         q: {},
-        a: {
-          m: "",
-          i: "ENDDYy0SVuFOI3rEnB3HbNFB_BFjhl4fQbZSeDZHGQf9",
-          smids: ["ENDDYy0SVuFOI3rEnB3HbNFB_BFjhl4fQbZSeDZHGQf9"],
-          gid: "ENDDYy0SVuFOI3rEnB3HbNFB_BFjhl4fQbZSeDZHGQf9",
-        },
+        a: { m: "", i: "ENDDYy0SVuFOI3rEnB3HbNFB_BFjhl4fQbZSeDZHGQf9" },
         e: {
           acdc: {
             v: "ACDC10JSON000197_",
@@ -502,8 +492,6 @@ const initiatorConnectionShortDetails = {
   oobi: "http://127.0.0.1:3902/oobi/EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ/agent/EF_dfLFGvUh9kMsV2LIJQtrkuXWG_-wxWzC_XjCWjlkQ",
   status: ConnectionStatus.CONFIRMED,
   createdAtUTC: new Date().toISOString(),
-  contactId: "EKlUo3CAqjPfFt0Wr2vvSc7MqT9WiL2EGadRsAP3V1IJ",
-  identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8",
 };
 
 const notificationMultisigExnRotation = {
@@ -602,7 +590,7 @@ const getRequestMultisigIcp = {
           "DF3YsSD2hvoQDDUPL39AtMOPou0IXUPdXoslqtAK70AC",
           "DJQU5RElChMsVUPbsbITts-rb564VYznYougeh2onWS4",
         ],
-        nt: "3",
+        nt: "2",
         n: [
           "EN9Gd-_TlXafq_8EEHOy_HZQyqYLj2_fW_JvbyNeDvpC",
           "EOWP49ymarMj78Xjct0UnN25e9kRHYdKqQ6ZfK0YxQ85",
@@ -855,25 +843,21 @@ const linkedContacts = [
     oobi: "http://127.0.0.1:3902/oobi/ENsj-3icUgAutHtrUHYnUPnP8RiafT5tOdVIZarFHuyP/agent/EF_dfLFGvUh9kMsV2LIJQtrkuXWG_-wxWzC_XjCWjlkQ",
     status: ConnectionStatus.CONFIRMED,
     createdAtUTC: new Date().toISOString(),
-    contactId: "ENsj-3icUgAutHtrUHYnUPnP8RiafT5tOdVIZarFHuyP",
-    groupId: "groupid",
+    groupId: "group-id",
   },
 ];
 
 const queuedIdentifier: QueuedGroupCreation & { initiator: true } = {
-  name: "1.2.0.2:0:Identifier 2",
-  data: inceptionDataFix as CreateIdentifierBody & { group: HabState },
+  name: "0:Identifier 2",
+  data: inceptionDataFix,
   initiator: true,
   groupConnections: linkedContacts,
-  threshold: {
-    signingThreshold: linkedContacts.length + 1,
-    rotationThreshold: linkedContacts.length,
-  },
+  threshold: linkedContacts.length + 1,
 };
 
 const queuedJoin: QueuedGroupCreation & { initiator: false } = {
-  name: "0:testUser",
-  data: inceptionDataFix as CreateIdentifierBody & { group: HabState },
+  name: "0:Identifier 2",
+  data: inceptionDataFix,
   initiator: false,
   notificationId: "notification-id",
   notificationSaid: "notification-said",

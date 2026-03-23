@@ -1,60 +1,4 @@
-jest.mock("@capacitor-community/tap-jacking", () => ({
-  TapJacking: {
-    preventOverlays: jest.fn(),
-  },
-}));
-
-jest.mock("@capacitor-mlkit/barcode-scanning", () => ({
-  LensFacing: {
-    FRONT: "FRONT",
-    BACK: "BACK",
-  },
-}));
-
-jest.mock("@capacitor/device", () => ({
-  Device: {
-    getInfo: jest.fn(() => Promise.resolve({ platform: "ios" })),
-  },
-}));
-
-jest.mock("@capacitor/app", () => ({
-  App: {
-    addListener: jest.fn(() => Promise.resolve({ remove: jest.fn() })),
-    removeAllListeners: jest.fn(),
-  },
-}));
-
-jest.mock("@evva/capacitor-secure-storage-plugin", () => ({
-  SecureStoragePlugin: {
-    get: jest.fn(() => Promise.resolve({ value: null })),
-    set: jest.fn(() => Promise.resolve()),
-    remove: jest.fn(() => Promise.resolve()),
-    keys: jest.fn(() => Promise.resolve({ value: [] })),
-  },
-}));
 const getConnectionShortDetailByIdMock = jest.fn();
-
-jest.mock("@capacitor/local-notifications", () => ({
-  LocalNotifications: {
-    requestPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    schedule: jest.fn(),
-    addListener: jest.fn(),
-    removeAllListeners: jest.fn(),
-    cancel: jest.fn(),
-    getPending: jest.fn(() => Promise.resolve({ notifications: [] })),
-    getDeliveredNotifications: jest.fn(() =>
-      Promise.resolve({ notifications: [] })
-    ),
-    checkPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    createChannel: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-jest.mock("@capacitor/core", () => ({
-  Capacitor: {
-    getPlatform: jest.fn(() => "ios"),
-  },
-}));
 
 import { render, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
@@ -63,7 +7,6 @@ import {
   ConnectionShortDetails,
   ConnectionStatus,
   CreationStatus,
-  MiscRecordId,
 } from "../../../core/agent/agent.types";
 import {
   AcdcStateChangedEvent,
@@ -85,29 +28,23 @@ import {
   PeerDisconnectedEvent,
 } from "../../../core/cardano/walletConnect/peerConnection.types";
 import { store } from "../../../store";
+import { updateOrAddConnectionCache } from "../../../store/reducers/connectionsCache";
+import { updateOrAddCredsCache } from "../../../store/reducers/credsCache";
 import {
-  updateOrAddConnectionCache,
-  DAppConnection,
-  addGroupProfile,
-  addOrUpdateProfileIdentity,
-  setPeerConnections,
-  updateOrAddCredsCache,
-  updatePeerConnectionsFromCore,
-  updateProfileCreationStatus,
-  setConnectedDApp,
-  setPendingDAppConnection,
-  addGroupProfileAsync,
-} from "../../../store/reducers/profileCache";
+  addGroupIdentifierCache,
+  updateCreationStatus,
+  updateOrAddIdentifiersCache,
+} from "../../../store/reducers/identifiersCache";
 import {
   setQueueIncomingRequest,
   setToastMsg,
 } from "../../../store/reducers/stateCache";
 import { IncomingRequestType } from "../../../store/reducers/stateCache/stateCache.types";
 import {
-  pendingGroupIdentifierFix,
-  pendingIdentifierFix,
-  pendingMemberIdentifierFix,
-} from "../../__fixtures__/filteredIdentifierFix";
+  ConnectionData,
+  setConnectedWallet,
+  setWalletConnectionsCache,
+} from "../../../store/reducers/walletConnectionsCache";
 import { ToastMsgType } from "../../globals/types";
 import {
   AppWrapper,
@@ -124,150 +61,85 @@ import {
   operationCompleteHandler,
   operationFailureHandler,
 } from "./coreEventListeners";
-import { notificationService } from "../../../native/pushNotifications/notificationService";
-import { clearNotificationsPreferences } from "../../../store/reducers/notificationsPreferences/notificationsPreferences";
+import {
+  pendingIdentifierFix,
+  pendingGroupIdentifierFix,
+} from "../../__fixtures__/filteredIdentifierFix";
 
-jest.mock("../../../native/pushNotifications/notificationService", () => ({
-  notificationService: {
-    initialize: jest.fn(() => Promise.resolve(false)),
-    setProfileSwitcher: jest.fn(),
-    arePermissionsGranted: jest.fn(() => Promise.resolve(false)),
-    requestPermissions: jest.fn(() => Promise.resolve(false)),
-  },
-}));
-
-jest.mock("../../../core/agent/agent", () => {
-  const mockPeerConnectionPairRecordPlainObject = {
-    id: "dApp-address:identifier",
-    peerConnectionId: "dApp-address",
-    accountId: "identifier",
-    creationStatus: "complete",
-    pendingDeletion: false,
-    name: "dApp-name",
-    url: "http://localhost:3000",
-    iconB64: "icon",
-    createdAt: new Date().toISOString(), // Directly provide ISO string
-  };
-
-  return {
-    Agent: {
-      agent: {
-        isVerificationEnforced: jest.fn(),
-        devPreload: jest.fn(),
-        start: jest.fn(),
-        setupLocalDependencies: jest.fn(),
-        auth: {
-          getLoginAttempts: jest.fn(() =>
-            Promise.resolve({
-              attempts: 0,
-              lockedUntil: Date.now(),
-            })
-          ),
-        },
-        isSeedPhraseVerified: jest.fn(() => true),
-        identifiers: {
-          getIdentifiers: jest.fn().mockResolvedValue([]),
-          getIdentifier: jest.fn().mockResolvedValue(null),
-          syncKeriaIdentifiers: jest.fn(),
-          onIdentifierAdded: jest.fn(),
-          getAvailableWitnesses: jest.fn(),
-        },
-        multiSigs: {
-          getMultisigIcpDetails: jest.fn().mockResolvedValue({}),
-          onGroupAdded: jest.fn(),
-        },
-        connections: {
-          getConnections: jest.fn().mockResolvedValue([]),
-          getMultisigConnections: jest.fn().mockResolvedValue([]),
-          onConnectionStateChanged: jest.fn(),
-          onConnectionInvalid: jest.fn(),
-          getConnectionShortDetails: jest.fn(),
-          isConnectionRequestSent: jest.fn(),
-          isConnectionResponseReceived: jest.fn(),
-          isConnectionRequestReceived: jest.fn(),
-          isConnectionResponseSent: jest.fn(),
-          isConnectionConnected: jest.fn(),
-          getConnectionShortDetailById: getConnectionShortDetailByIdMock,
-          getUnhandledConnections: jest.fn(),
-          syncKeriaContacts: jest.fn(),
-        },
-        credentials: {
-          getCredentials: jest.fn().mockResolvedValue([]),
-          onCredentialStateChanged: jest.fn(),
-          isCredentialOfferReceived: jest.fn(),
-          isCredentialRequestSent: jest.fn(),
-          createMetadata: jest.fn(),
-          isCredentialDone: jest.fn(),
-          updateMetadataCompleted: jest.fn(),
-          onAcdcStateChanged: jest.fn(),
-          syncKeriaCredentials: jest.fn(),
-        },
-        messages: {
-          onBasicMessageStateChanged: jest.fn(),
-          pickupMessagesFromMediator: jest.fn(),
-        },
-        keriaNotifications: {
-          pollNotifications: jest.fn(),
-          pollLongOperations: jest.fn(),
-          getNotifications: jest.fn(),
-          onNewNotification: jest.fn(),
-          onLongOperationSuccess: jest.fn(),
-          onLongOperationFailure: jest.fn(),
-          onRemoveNotification: jest.fn(),
-          stopPolling: jest.fn(),
-        },
-        getKeriaOnlineStatus: jest.fn(),
-        onKeriaStatusStateChanged: jest.fn(),
-        peerConnectionPair: {
-          getPeerConnection: jest.fn(),
-          getAllPeerConnectionAccount: jest.fn(),
-        },
-        basicStorage: {
-          findById: jest.fn(),
-          save: jest.fn(),
-          createOrUpdateBasicRecord: jest.fn(),
-          deleteById: jest.fn(),
-        },
-        dependenciesInitialized: false,
-        eventListenersSetup: false,
-        isPolling: false,
+jest.mock("../../../core/agent/agent", () => ({
+  Agent: {
+    agent: {
+      start: jest.fn(),
+      setupLocalDependencies: jest.fn(),
+      auth: {
+        getLoginAttempts: jest.fn(() =>
+          Promise.resolve({
+            attempts: 0,
+            lockedUntil: Date.now(),
+          })
+        ),
+      },
+      identifiers: {
+        getIdentifiers: jest.fn().mockResolvedValue([]),
+        syncKeriaIdentifiers: jest.fn(),
+        onIdentifierAdded: jest.fn(),
+        getAvailableWitnesses: jest.fn(),
+      },
+      multiSigs: {
+        getMultisigIcpDetails: jest.fn().mockResolvedValue({}),
+        onGroupAdded: jest.fn(),
+      },
+      connections: {
+        getConnections: jest.fn().mockResolvedValue([]),
+        getMultisigConnections: jest.fn().mockResolvedValue([]),
+        onConnectionStateChanged: jest.fn(),
+        getConnectionShortDetails: jest.fn(),
+        isConnectionRequestSent: jest.fn(),
+        isConnectionResponseReceived: jest.fn(),
+        isConnectionRequestReceived: jest.fn(),
+        isConnectionResponseSent: jest.fn(),
+        isConnectionConnected: jest.fn(),
+        getConnectionShortDetailById: getConnectionShortDetailByIdMock,
+        getUnhandledConnections: jest.fn(),
+        syncKeriaContacts: jest.fn(),
+      },
+      credentials: {
+        getCredentials: jest.fn().mockResolvedValue([]),
+        onCredentialStateChanged: jest.fn(),
+        isCredentialOfferReceived: jest.fn(),
+        isCredentialRequestSent: jest.fn(),
+        createMetadata: jest.fn(),
+        isCredentialDone: jest.fn(),
+        updateMetadataCompleted: jest.fn(),
+        onAcdcStateChanged: jest.fn(),
+        syncKeriaCredentials: jest.fn(),
+      },
+      messages: {
+        onBasicMessageStateChanged: jest.fn(),
+        pickupMessagesFromMediator: jest.fn(),
+      },
+      keriaNotifications: {
+        pollNotifications: jest.fn(),
+        pollLongOperations: jest.fn(),
+        getNotifications: jest.fn(),
+        onNewNotification: jest.fn(),
+        onLongOperationSuccess: jest.fn(),
+        onLongOperationFailure: jest.fn(),
+        onRemoveNotification: jest.fn(),
+        stopPolling: jest.fn(),
+      },
+      getKeriaOnlineStatus: jest.fn(),
+      onKeriaStatusStateChanged: jest.fn(),
+      peerConnectionMetadataStorage: {
+        getAllPeerConnectionMetadata: jest.fn(),
+        getPeerConnectionMetadata: jest.fn(),
+        getPeerConnection: jest.fn(),
+      },
+      basicStorage: {
+        findById: jest.fn(),
+        save: jest.fn(),
       },
     },
-  };
-});
-
-jest.mock("@capgo/capacitor-native-biometric", () => ({
-  NativeBiometric: {
-    isAvailable: jest.fn(() =>
-      Promise.resolve({
-        isAvailable: true,
-        biometryType: "fingerprint",
-        authenticationStrength: 1, // STRONG
-        deviceIsSecure: true,
-        strongBiometryIsAvailable: true,
-      })
-    ),
-    deleteCredentials: jest.fn(() => Promise.resolve()),
-  },
-  AuthenticationStrength: {
-    NONE: 0,
-    STRONG: 1,
-    WEAK: 2,
-  },
-  BiometricAuthError: {
-    UNKNOWN_ERROR: 0,
-    BIOMETRICS_UNAVAILABLE: 1,
-    USER_LOCKOUT: 2,
-    BIOMETRICS_NOT_ENROLLED: 3,
-    USER_TEMPORARY_LOCKOUT: 4,
-    AUTHENTICATION_FAILED: 10,
-    APP_CANCEL: 11,
-    INVALID_CONTEXT: 12,
-    NOT_INTERACTIVE: 13,
-    PASSCODE_NOT_SET: 14,
-    SYSTEM_CANCEL: 15,
-    USER_CANCEL: 16,
-    USER_FALLBACK: 17,
   },
 }));
 
@@ -287,150 +159,15 @@ describe("App Wrapper", () => {
   });
 });
 
-describe("AppWrapper notification preferences", () => {
-  const notificationModule = notificationService as jest.Mocked<
-    typeof notificationService
-  >;
-  const createOrUpdateMock = Agent.agent.basicStorage
-    .createOrUpdateBasicRecord as jest.Mock;
-  const findByIdMock = Agent.agent.basicStorage.findById as jest.Mock;
-
-  beforeEach(() => {
-    store.dispatch(clearNotificationsPreferences());
-    createOrUpdateMock.mockClear();
-    findByIdMock.mockReset();
-    findByIdMock.mockResolvedValue(null);
-    notificationModule.initialize.mockResolvedValue(false);
-    notificationModule.arePermissionsGranted.mockResolvedValue(false);
-    (Agent.agent as any).eventListenersSetup = false;
-    (Agent.agent as any).dependenciesInitialized = false;
-    (Agent.agent as any).isPolling = false;
-  });
-
-  test("persists preference when OS permissions already granted", async () => {
-    notificationModule.arePermissionsGranted.mockResolvedValue(true);
-
-    render(
-      <Provider store={store}>
-        <AppWrapper>
-          <div>App Content</div>
-        </AppWrapper>
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(createOrUpdateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: MiscRecordId.APP_NOTIFICATIONS,
-          content: { enabled: true, configured: true },
-        })
-      );
-    });
-  });
-
-  test("persists preference when notification service init succeeds", async () => {
-    notificationModule.initialize.mockResolvedValue(true);
-
-    render(
-      <Provider store={store}>
-        <AppWrapper>
-          <div>App Content</div>
-        </AppWrapper>
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(createOrUpdateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: MiscRecordId.APP_NOTIFICATIONS,
-          content: { enabled: true, configured: true },
-        })
-      );
-    });
-  });
-
-  test("does not re-enable notifications when disabled but configured", async () => {
-    findByIdMock.mockImplementation((id: MiscRecordId) => {
-      if (id === MiscRecordId.APP_NOTIFICATIONS) {
-        return Promise.resolve({
-          content: { enabled: false, configured: true },
-        });
-      }
-
-      return Promise.resolve(null);
-    });
-
-    render(
-      <Provider store={store}>
-        <AppWrapper>
-          <div>App Content</div>
-        </AppWrapper>
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(notificationModule.initialize).toHaveBeenCalled();
-    });
-
-    expect(createOrUpdateMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: MiscRecordId.APP_NOTIFICATIONS,
-        content: { enabled: true, configured: true },
-      })
-    );
-  });
-
-  test("does not persist notifications when dependenciesInitialized is false (wallet deletion scenario)", async () => {
-    // This test simulates the race condition during wallet deletion:
-    // 1. AppWrapper mounts and areDependenciesReady becomes true
-    // 2. Wallet is deleted, Agent.instance = undefined
-    // 3. notificationsPreferences.configured is reset to false
-    // 4. syncNotificationsPreferences effect runs but should NOT persist
-    //    because dependenciesInitialized is false in the new Agent instance
-
-    notificationModule.arePermissionsGranted.mockResolvedValue(true);
-
-    const { unmount } = render(
-      <Provider store={store}>
-        <AppWrapper>
-          <div>App Content</div>
-        </AppWrapper>
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect((Agent.agent as any).dependenciesInitialized).toBe(true);
-    });
-
-    (Agent.agent as any).dependenciesInitialized = false;
-    createOrUpdateMock.mockClear();
-
-    store.dispatch(clearNotificationsPreferences());
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(createOrUpdateMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: MiscRecordId.APP_NOTIFICATIONS,
-      })
-    );
-
-    unmount();
-  });
-});
-
 const connectionStateChangedEvent: ConnectionStateChangedEvent = {
   type: EventTypes.ConnectionStateChanged,
   payload: {
     status: ConnectionStatus.PENDING,
-    identifier: "identifier",
   },
 };
 
 const connectionShortDetails: ConnectionShortDetails = {
   id: "id",
-  contactId: "id",
-  identifier: "some-identifier",
   label: "idw",
   logo: "png",
   status: ConnectionStatus.PENDING,
@@ -468,23 +205,12 @@ const peerConnectionBrokenEvent: PeerConnectionBrokenEvent = {
   payload: {},
 };
 
-import { PeerConnectionPairRecord } from "../../../core/agent/records";
-
-const mockPeerConnectionPairRecordInstance = new PeerConnectionPairRecord({
-  id: "dApp-address:identifier",
-  selectedAid: "identifier",
+const peerConnection: ConnectionData = {
+  id: "dApp-address",
   name: "dApp-name",
-  url: "http://localhost:3000",
   iconB64: "icon",
-  createdAt: new Date(),
-});
-
-const peerConnection: DAppConnection = {
-  meerkatId: mockPeerConnectionPairRecordInstance.id,
-  name: mockPeerConnectionPairRecordInstance.name,
-  url: mockPeerConnectionPairRecordInstance.url,
-  createdAt: mockPeerConnectionPairRecordInstance.createdAt?.toISOString(),
-  iconB64: mockPeerConnectionPairRecordInstance.iconB64,
+  selectedAid: "identifier",
+  url: "http://localhost:3000",
 };
 
 const identifierAddedEvent: IdentifierAddedEvent = {
@@ -525,7 +251,6 @@ describe("Connection state changed handler", () => {
       payload: {
         status: ConnectionStatus.CONFIRMED,
         connectionId: "connectionId",
-        identifier: "identifier",
       },
     };
     await connectionStateChangedHandler(
@@ -588,32 +313,18 @@ describe("Credential state changed handler", () => {
 });
 
 describe("Peer connection states changed handler", () => {
-  beforeEach(() => {
-    dispatch.mockClear();
-  });
-
   test("handle peer connected event", async () => {
-    Agent.agent.peerConnectionPair.getPeerConnection = jest
+    Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata = jest
       .fn()
-      .mockResolvedValue(mockPeerConnectionPairRecordInstance);
-    Agent.agent.peerConnectionPair.getAllPeerConnectionAccount = jest
-      .fn()
-      .mockResolvedValue([mockPeerConnectionPairRecordInstance]);
+      .mockResolvedValue(peerConnection);
+    Agent.agent.peerConnectionMetadataStorage.getAllPeerConnectionMetadata =
+      jest.fn().mockResolvedValue([peerConnection]);
     await peerConnectedChangeHandler(peerConnectedEvent, dispatch);
     await waitFor(() => {
-      expect(dispatch).toBeCalledWith(setPendingDAppConnection(null));
+      expect(dispatch).toBeCalledWith(setConnectedWallet(peerConnection));
     });
     expect(dispatch).toBeCalledWith(
-      updatePeerConnectionsFromCore(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: mockPeerConnectionPairRecordInstance.id,
-            name: "dApp-name",
-            url: "http://localhost:3000",
-            iconB64: "icon",
-          }),
-        ])
-      )
+      setWalletConnectionsCache([peerConnection])
     );
     expect(dispatch).toBeCalledWith(
       setToastMsg(ToastMsgType.CONNECT_WALLET_SUCCESS)
@@ -623,33 +334,26 @@ describe("Peer connection states changed handler", () => {
   test("handle peer disconnected event", async () => {
     await peerDisconnectedChangeHandler(
       peerDisconnectedEvent,
-      peerConnection.meerkatId,
+      peerConnection.id,
       dispatch
     );
-    expect(dispatch).toBeCalledWith(setConnectedDApp(null));
+    expect(dispatch).toBeCalledWith(setConnectedWallet(null));
     expect(dispatch).toBeCalledWith(
       setToastMsg(ToastMsgType.DISCONNECT_WALLET_SUCCESS)
     );
   });
 
   test("handle peer sign request event", async () => {
-    Agent.agent.peerConnectionPair.getPeerConnection = jest
+    Agent.agent.peerConnectionMetadataStorage.getPeerConnection = jest
       .fn()
       .mockResolvedValue(peerConnection);
     await peerConnectRequestSignChangeHandler(peerSignRequestEvent, dispatch);
     expect(dispatch).toBeCalledWith(
-      setQueueIncomingRequest(
-        expect.objectContaining({
-          type: IncomingRequestType.PEER_CONNECT_SIGN,
-          peerConnection: expect.objectContaining({
-            meerkatId: peerConnection.meerkatId,
-            name: peerConnection.name,
-            url: peerConnection.url,
-            iconB64: peerConnection.iconB64,
-          }),
-          signTransaction: peerSignRequestEvent,
-        })
-      )
+      setQueueIncomingRequest({
+        signTransaction: peerSignRequestEvent,
+        peerConnection: peerConnection,
+        type: IncomingRequestType.PEER_CONNECT_SIGN,
+      })
     );
   });
 
@@ -658,7 +362,7 @@ describe("Peer connection states changed handler", () => {
       peerConnectionBrokenEvent,
       dispatch
     );
-    expect(dispatch).toBeCalledWith(setConnectedDApp(null));
+    expect(dispatch).toBeCalledWith(setConnectedWallet(null));
     expect(dispatch).toBeCalledWith(
       setToastMsg(ToastMsgType.DISCONNECT_WALLET_SUCCESS)
     );
@@ -673,15 +377,11 @@ describe("KERIA operation state changed handler", () => {
       dispatch
     );
     expect(dispatch).toBeCalledWith(
-      updateProfileCreationStatus({
-        id: id,
-        creationStatus: CreationStatus.COMPLETE,
-      })
+      updateCreationStatus({ id: id, creationStatus: CreationStatus.COMPLETE })
     );
     expect(dispatch).toBeCalledWith(
       setToastMsg(ToastMsgType.IDENTIFIER_UPDATED)
     );
-    dispatch.mockClear();
   });
 
   test("handles failed witness operation", async () => {
@@ -691,13 +391,10 @@ describe("KERIA operation state changed handler", () => {
       dispatch
     );
     expect(dispatch).toBeCalledWith(
-      updateProfileCreationStatus({
-        id: id,
-        creationStatus: CreationStatus.FAILED,
-      })
+      updateCreationStatus({ id: id, creationStatus: CreationStatus.FAILED })
     );
     expect(dispatch).toBeCalledWith(
-      setToastMsg(ToastMsgType.CREATE_IDENTIFIER_FAIL)
+      setToastMsg(ToastMsgType.IDENTIFIER_UPDATED)
     );
   });
 
@@ -705,11 +402,9 @@ describe("KERIA operation state changed handler", () => {
     const id = "id";
     const connectionMock = {
       id: "id",
-      label: "CF Credential Issuance",
-      createdAtUTC: new Date().toISOString(),
-      status: ConnectionStatus.PENDING,
-      contactId: "contact-id",
-      identifier: "test-identifier",
+      creationStatus: CreationStatus.PENDING,
+      createdAt: new Date(),
+      alias: "CF Credential Issuance",
       oobi: "http://oobi.com/",
     };
     getConnectionShortDetailByIdMock.mockResolvedValue(connectionMock);
@@ -727,79 +422,16 @@ describe("Identifier state changed handler", () => {
   test("handles identifier added event", async () => {
     await identifierAddedHandler(identifierAddedEvent, dispatch);
     expect(dispatch).toBeCalledWith(
-      addOrUpdateProfileIdentity(pendingIdentifierFix)
+      updateOrAddIdentifiersCache(pendingIdentifierFix)
     );
   });
 });
 
 describe("Group state changed handler", () => {
   test("handles group created event", async () => {
-    const innerDispatch = jest.fn();
-    const getState = jest.fn(() => ({ profilesCache: { recentProfiles: [] } }));
-
-    dispatch.mockImplementation((action) => {
-      if (typeof action === "function") {
-        action(innerDispatch, getState);
-      } else {
-        innerDispatch(action);
-      }
-    });
-
-    Agent.agent.identifiers.getIdentifier = jest.fn();
-    Agent.agent.connections.getMultisigConnections = jest.fn();
-
     await groupCreatedHandler(groupCreatedEvent, dispatch);
-
-    expect(innerDispatch).toBeCalledWith(
-      addGroupProfile(pendingGroupIdentifierFix)
+    expect(dispatch).toBeCalledWith(
+      addGroupIdentifierCache(pendingGroupIdentifierFix)
     );
-
-    expect(Agent.agent.connections.getMultisigConnections).not.toBeCalled();
-    expect(Agent.agent.identifiers.getIdentifier).not.toBeCalled();
-  });
-});
-
-describe("AppWrapper - defaultProfile logic", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test("sets defaultProfile to the oldest identifier if no default profile is set", async () => {
-    Agent.agent.basicStorage.findById = jest.fn().mockImplementation((id) => {
-      if (id === MiscRecordId.DEFAULT_PROFILE) return Promise.resolve(null);
-      return Promise.resolve(null);
-    });
-
-    const identifiers = [
-      {
-        id: "id-1",
-        displayName: "Alice",
-        createdAtUTC: "2020-01-01T00:00:00.000Z",
-      },
-      {
-        id: "id-2",
-        displayName: "Bob",
-        createdAtUTC: "2021-01-01T00:00:00.000Z",
-      },
-    ];
-    Agent.agent.identifiers.getIdentifiers = jest
-      .fn()
-      .mockResolvedValue(identifiers);
-
-    const storedIdentifiers = await Agent.agent.identifiers.getIdentifiers();
-    let defaultProfile = { defaultProfile: "" };
-    if (storedIdentifiers.length > 0) {
-      const oldest = storedIdentifiers
-        .slice()
-        .sort(
-          (a, b) =>
-            new Date(a.createdAtUTC).getTime() -
-            new Date(b.createdAtUTC).getTime()
-        )[0];
-      const id = oldest?.id || "";
-      defaultProfile = { defaultProfile: id };
-    }
-
-    expect(defaultProfile.defaultProfile).toBe("id-1");
   });
 });

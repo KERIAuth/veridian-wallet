@@ -4,7 +4,7 @@ import { i18n } from "../i18n";
 import { ConfigurationService } from "../core/configuration";
 
 export enum ThreatName {
-  PRIVILEGED_ACCESS = "Privileged access",
+  PRIVILEGED_ACCESS = "Privileged Access",
   DEBUG = "Debug",
   SIMULATOR = "Simulator",
   APP_INTEGRITY = "App Integrity",

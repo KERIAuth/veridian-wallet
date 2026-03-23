@@ -1,16 +1,14 @@
-import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
+import { AnyAction, Store } from "@reduxjs/toolkit";
+import configureStore from "redux-mock-store";
 import { Provider } from "react-redux";
-// connectionsMapFix is not needed here; keep fixture imports minimal
-import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
-import { makeTestStore } from "../../utils/makeTestStore";
-import { TabsRoutePath } from "../navigation/TabsMenu";
+import { identifierFix } from "../../__fixtures__/identifierFix";
+import { CardType } from "../../globals/types";
 import { SwitchCardView } from "./SwitchCardView";
-import ENG_trans from "../../../locales/en/en.json";
-import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
-import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix";
-import { connectionsFix } from "../../__fixtures__/connectionsFix";
+import { TabsRoutePath } from "../navigation/TabsMenu";
+import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
+import { connectionsMapFix } from "../../__fixtures__/connectionsFix";
 
 const historyPushMock = jest.fn();
 jest.mock("../../../core/agent/agent", () => ({
@@ -34,28 +32,13 @@ jest.mock("react-router-dom", () => ({
 
 const initialState = {
   stateCache: {
-    routes: [TabsRoutePath.CREDENTIALS],
+    routes: [TabsRoutePath.IDENTIFIERS],
     authentication: {
       loggedIn: true,
       time: Date.now(),
       passcodeIsSet: true,
       passwordIsSet: true,
     },
-  },
-  profilesCache: {
-    profiles: {
-      [filteredIdentifierFix[0].id]: {
-        identity: filteredIdentifierFix[0],
-        connections: connectionsFix,
-      },
-    },
-    defaultProfile: filteredIdentifierFix[0].id,
-    recentProfiles: [],
-    multiSigGroup: undefined,
-    connectedDApp: null,
-    pendingDAppConnection: null,
-    isConnectingToDApp: false,
-    showDAppConnect: false,
   },
   viewTypeCache: {
     identifier: {
@@ -67,6 +50,9 @@ const initialState = {
       favouriteIndex: 0,
     },
   },
+  connectionsCache: {
+    connections: connectionsMapFix,
+  },
 };
 let mockedStore: Store<unknown, AnyAction>;
 const dispatchMock = jest.fn();
@@ -74,18 +60,20 @@ const dispatchMock = jest.fn();
 describe("Card switch view list Tab", () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    const mockStore = configureStore();
 
     mockedStore = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
   });
 
-  test("Renders switch view: cred", async () => {
-    const { getByText, getByTestId, getAllByText } = render(
+  test("Renders switch view: identifier", async () => {
+    const { getByText, getByTestId } = render(
       <Provider store={mockedStore}>
         <SwitchCardView
-          cardsData={filteredCredsFix}
+          cardTypes={CardType.IDENTIFIERS}
+          cardsData={identifierFix}
           title="title"
           name="allidentifiers"
         />
@@ -104,7 +92,40 @@ describe("Card switch view list Tab", () => {
 
     expect(getByTestId("card-list")).toBeInTheDocument();
 
-    expect(getAllByText(connectionsFix[0].label)[0]).toBeVisible();
+    act(() => {
+      fireEvent.click(getByTestId("card-item-" + identifierFix[0].id));
+    });
+
+    await waitFor(() => {
+      expect(historyPushMock).toBeCalledWith({
+        pathname: `/tabs/identifiers/${identifierFix[0].id}`,
+      });
+    });
+  });
+
+  test("Renders switch view: cred", async () => {
+    const { getByText, getByTestId } = render(
+      <Provider store={mockedStore}>
+        <SwitchCardView
+          cardTypes={CardType.CREDENTIALS}
+          cardsData={filteredCredsFix}
+          title="title"
+          name="allidentifiers"
+        />
+      </Provider>
+    );
+
+    expect(getByText("title")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getByTestId("card-stack")).toBeInTheDocument();
+    });
+
+    act(() => {
+      fireEvent.click(getByTestId("list-header-second-icon"));
+    });
+
+    expect(getByTestId("card-list")).toBeInTheDocument();
 
     act(() => {
       fireEvent.click(getByTestId("card-item-" + filteredCredsFix[0].id));
@@ -123,73 +144,5 @@ describe("Card switch view list Tab", () => {
     await waitFor(() => {
       expect(getByTestId("card-stack")).toBeInTheDocument();
     });
-  });
-
-  test("Render unknown text when the issuer is missing", async () => {
-    const initialState = {
-      stateCache: {
-        routes: [TabsRoutePath.CREDENTIALS],
-        authentication: {
-          loggedIn: true,
-          time: Date.now(),
-          passcodeIsSet: true,
-          passwordIsSet: true,
-        },
-      },
-      profilesCache: {
-        profiles: {
-          [filteredIdentifierFix[0].id]: {
-            identity: filteredIdentifierFix[0],
-            connections: [],
-          },
-        },
-        defaultProfile: filteredIdentifierFix[0].id,
-        recentProfiles: [],
-        multiSigGroup: undefined,
-        connectedDApp: null,
-        pendingDAppConnection: null,
-        isConnectingToDApp: false,
-        showDAppConnect: false,
-      },
-      viewTypeCache: {
-        identifier: {
-          viewType: null,
-          favouriteIndex: 0,
-        },
-        credential: {
-          viewType: null,
-          favouriteIndex: 0,
-        },
-      },
-    };
-
-    mockedStore = {
-      ...makeTestStore(initialState),
-      dispatch: dispatchMock,
-    };
-
-    const { getByText, getByTestId, getAllByText } = render(
-      <Provider store={mockedStore}>
-        <SwitchCardView
-          cardsData={filteredCredsFix}
-          title="title"
-          name="allidentifiers"
-        />
-      </Provider>
-    );
-
-    expect(getByText("title")).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(getByTestId("card-stack")).toBeInTheDocument();
-    });
-
-    act(() => {
-      fireEvent.click(getByTestId("list-header-second-icon"));
-    });
-
-    expect(getByTestId("card-list")).toBeInTheDocument();
-
-    expect(getAllByText(ENG_trans.tabs.connections.unknown)[0]).toBeVisible();
   });
 });

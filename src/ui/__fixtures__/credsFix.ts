@@ -11,8 +11,6 @@ import { IdentifierType } from "../../core/agent/services/identifier.types";
 
 const connectionDetailsFix: ConnectionDetails = {
   id: "test_id",
-  contactId: "test_id",
-  identifier: "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfB",
   label: "test_label",
   createdAtUTC: "2010-01-01T19:23:24Z",
   status: ConnectionStatus.CONFIRMED,

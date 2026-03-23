@@ -2,8 +2,9 @@ import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
-import { makeTestStore } from "../../utils/makeTestStore";
+import configureStore from "redux-mock-store";
+import { identifierFix } from "../../__fixtures__/identifierFix";
+import { CardType } from "../../globals/types";
 import { TabsRoutePath } from "../navigation/TabsMenu";
 import { CardSlider } from "./CardSlider";
 
@@ -31,7 +32,7 @@ jest.mock("react-router-dom", () => ({
 
 const initialState = {
   stateCache: {
-    routes: [TabsRoutePath.CREDENTIALS],
+    routes: [TabsRoutePath.IDENTIFIERS],
     authentication: {
       loggedIn: true,
       time: Date.now(),
@@ -56,19 +57,22 @@ const dispatchMock = jest.fn();
 describe("Card slider", () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    const mockStore = configureStore();
+
     mockedStore = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
   });
 
-  test("Render credentials", async () => {
-    const { getByText, getByTestId } = render(
+  test("Render", async () => {
+    const { getByText, getByTestId, queryByTestId } = render(
       <Provider store={mockedStore}>
         <CardSlider
-          cardsData={filteredCredsFix}
+          cardType={CardType.IDENTIFIERS}
+          cardsData={[identifierFix[0]]}
           title="title"
-          name="allcredential"
+          name="allidentifiers"
         />
       </Provider>
     );
@@ -77,13 +81,16 @@ describe("Card slider", () => {
 
     await waitFor(() => {
       expect(
-        getByTestId(`card-slide-container-${filteredCredsFix[0].id}`)
+        getByTestId(`card-slide-container-${identifierFix[0].id}`)
       ).toBeInTheDocument();
     });
 
+    expect(queryByTestId("slide-pagination-0")).toBe(null);
+
     act(() => {
-      fireEvent.click(getByTestId("slide-pagination-0"));
-      fireEvent.click(getByTestId("keri-card-template-allcredential-index-0"));
+      fireEvent.click(
+        getByTestId("identifier-card-template-allidentifiers-index-0")
+      );
     });
 
     await waitFor(() => {

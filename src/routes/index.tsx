@@ -1,9 +1,7 @@
-import { IonRouterOutlet, useIonRouter } from "@ionic/react";
+import { IonRouterOutlet } from "@ionic/react";
 import { useEffect } from "react";
 import { Redirect, Route } from "react-router-dom";
-import { PUSH_NOTIFICATION_EVENT_LISTENER_TYPE } from "../native/pushNotifications/notificationService";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { getCurrentProfile } from "../store/reducers/profileCache";
 import {
   getRoutes,
   getStateCache,
@@ -13,54 +11,29 @@ import { TabsMenu, tabsRoutes } from "../ui/components/navigation/TabsMenu";
 import { CreatePassword } from "../ui/pages/CreatePassword";
 import { CreateSSIAgent } from "../ui/pages/CreateSSIAgent";
 import { CredentialDetails } from "../ui/pages/CredentialDetails";
+import { GenerateSeedPhrase } from "../ui/pages/GenerateSeedPhrase";
+import { IdentifierDetails } from "../ui/pages/IdentifierDetails";
 import { NotificationDetails } from "../ui/pages/NotificationDetails";
 import { Onboarding } from "../ui/pages/Onboarding";
-import { ProfileSetup } from "../ui/pages/ProfileSetup/ProfileSetup";
 import { SetPasscode } from "../ui/pages/SetPasscode";
 import { SetupBiometrics } from "../ui/pages/SetupBiometrics/SetupBiometrics";
-import { SetupGroupProfile } from "../ui/pages/SetupGroupProfile";
-import { TermsAndPrivacy } from "../ui/pages/TermsAndPrivacy";
 import { VerifyRecoverySeedPhrase } from "../ui/pages/VerifyRecoverySeedPhrase";
+import { VerifySeedPhrase } from "../ui/pages/VerifySeedPhrase";
 import { getNextRoute } from "./nextRoute";
 import { RoutePath, TabsRoutePath } from "./paths";
 
 const Routes = () => {
   const stateCache = useAppSelector(getStateCache);
-  const currentProfile = useAppSelector(getCurrentProfile);
   const dispatch = useAppDispatch();
   const routes = useAppSelector(getRoutes);
-  const ionRouter = useIonRouter();
 
   const { nextPath } = getNextRoute(RoutePath.ROOT, {
-    store: { stateCache, currentProfile },
+    store: { stateCache },
   });
 
   useEffect(() => {
     if (!routes.length) dispatch(setCurrentRoute({ path: nextPath.pathname }));
   }, [routes, nextPath.pathname, dispatch]);
-
-  useEffect(() => {
-    const handleNotificationNavigation = (event: Event) => {
-      if (!(event instanceof CustomEvent))
-        throw new Error(
-          "handleNotificationNavigation expects events of type CustomEvent only"
-        );
-      const { path } = event.detail;
-      ionRouter.push(path);
-    };
-
-    window.addEventListener(
-      PUSH_NOTIFICATION_EVENT_LISTENER_TYPE,
-      handleNotificationNavigation
-    );
-
-    return () => {
-      window.removeEventListener(
-        PUSH_NOTIFICATION_EVENT_LISTENER_TYPE,
-        handleNotificationNavigation
-      );
-    };
-  }, [ionRouter]);
 
   return (
     <IonRouterOutlet animated={false}>
@@ -75,8 +48,13 @@ const Routes = () => {
         exact
       />
       <Route
-        path={RoutePath.TERMS_AND_PRIVACY}
-        component={TermsAndPrivacy}
+        path={RoutePath.GENERATE_SEED_PHRASE}
+        component={GenerateSeedPhrase}
+        exact
+      />
+      <Route
+        path={RoutePath.VERIFY_SEED_PHRASE}
+        component={VerifySeedPhrase}
         exact
       />
       <Route
@@ -94,14 +72,10 @@ const Routes = () => {
         component={VerifyRecoverySeedPhrase}
         exact
       />
+
       <Route
         path={RoutePath.SSI_AGENT}
         component={CreateSSIAgent}
-        exact
-      />
-      <Route
-        path={RoutePath.GROUP_PROFILE_SETUP}
-        component={SetupGroupProfile}
         exact
       />
       {tabsRoutes.map((tab, index: number) => {
@@ -120,6 +94,11 @@ const Routes = () => {
         );
       })}
       <Route
+        path={TabsRoutePath.IDENTIFIER_DETAILS}
+        component={IdentifierDetails}
+        exact
+      />
+      <Route
         path={RoutePath.SETUP_BIOMETRICS}
         component={SetupBiometrics}
         exact
@@ -132,11 +111,6 @@ const Routes = () => {
       <Route
         path={TabsRoutePath.NOTIFICATION_DETAILS}
         component={NotificationDetails}
-        exact
-      />
-      <Route
-        path={RoutePath.PROFILE_SETUP}
-        component={ProfileSetup}
         exact
       />
       <Redirect

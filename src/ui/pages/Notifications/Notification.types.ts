@@ -9,6 +9,7 @@ enum NotificationFilters {
 interface NotificationItemProps {
   item: KeriaNotification;
   onClick: (item: KeriaNotification) => void;
+  onOptionButtonClick: (item: KeriaNotification) => void;
 }
 
 export { NotificationFilters };

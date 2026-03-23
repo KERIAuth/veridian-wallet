@@ -49,7 +49,6 @@ describe("Connection Note", () => {
         }}
         onDeleteNote={handleDelete}
         onNoteDataChange={handleUpdate}
-        onErrorChange={jest.fn()}
       />
     );
 
@@ -73,7 +72,6 @@ describe("Connection Note", () => {
         }}
         onDeleteNote={handleDelete}
         onNoteDataChange={handleUpdate}
-        onErrorChange={jest.fn()}
       />
     );
 
@@ -97,7 +95,6 @@ describe("Connection Note", () => {
         }}
         onDeleteNote={handleDelete}
         onNoteDataChange={handleUpdate}
-        onErrorChange={jest.fn()}
       />
     );
 

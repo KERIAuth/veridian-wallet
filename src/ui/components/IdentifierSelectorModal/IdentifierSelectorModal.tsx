@@ -4,13 +4,13 @@ import { CreationStatus } from "../../../core/agent/agent.types";
 import { IdentifierShortDetails } from "../../../core/agent/services/identifier.types";
 import { i18n } from "../../../i18n";
 import { useAppSelector } from "../../../store/hooks";
+import { getIdentifiersCache } from "../../../store/reducers/identifiersCache";
 import { CardItem, CardList } from "../CardList";
 import { PageFooter } from "../PageFooter";
 import { PageHeader } from "../PageHeader";
 import { ResponsivePageLayout } from "../layout/ResponsivePageLayout";
 import "./IdentifierSelectorModal.scss";
 import { IdentifierSelectorProps } from "./IdentifierSelectorModal.types";
-import { getProfiles } from "../../../store/reducers/profileCache";
 
 const IdentifierSelectorModal = ({
   open,
@@ -18,7 +18,7 @@ const IdentifierSelectorModal = ({
   onSubmit,
   identifiers,
 }: IdentifierSelectorProps) => {
-  const profiles = useAppSelector(getProfiles);
+  const identifierCache = useAppSelector(getIdentifiersCache);
 
   const [selectedIdentifier, setSelectedIdentifier] =
     useState<IdentifierShortDetails | null>(null);
@@ -26,12 +26,9 @@ const IdentifierSelectorModal = ({
   const displayIdentifiers = (() => {
     const result = identifiers
       ? identifiers
-      : Object.values(profiles)
-          .filter(
-            (item) => item.identity.creationStatus === CreationStatus.COMPLETE
-          )
-          .filter((item) => !item.identity.groupMetadata?.groupId)
-          .map((item) => item.identity);
+      : Object.values(identifierCache)
+        .filter((item) => item.creationStatus === CreationStatus.COMPLETE)
+        .filter((item) => !item.groupMetadata?.groupId);
 
     return result.map(
       (identifier): CardItem<IdentifierShortDetails> => ({
@@ -68,12 +65,10 @@ const IdentifierSelectorModal = ({
         activeStatus={open}
         header={
           <PageHeader
-            title={`${i18n.t(
-              "tabs.connections.tab.indentifierselector.title"
-            )}`}
+            title={`${i18n.t("connections.page.indentifierselector.title")}`}
             closeButton
             closeButtonLabel={`${i18n.t(
-              "tabs.connections.tab.indentifierselector.button.cancel"
+              "connections.page.indentifierselector.button.cancel"
             )}`}
             closeButtonAction={handleClose}
             hardwareBackButtonConfig={{
@@ -83,7 +78,7 @@ const IdentifierSelectorModal = ({
         }
       >
         <h2 className="title">
-          {i18n.t("tabs.connections.tab.indentifierselector.message")}
+          {i18n.t("connections.page.indentifierselector.message")}
         </h2>
         <IonContent className="identifier-list">
           <CardList
@@ -109,7 +104,7 @@ const IdentifierSelectorModal = ({
         </IonContent>
         <PageFooter
           primaryButtonText={`${i18n.t(
-            "tabs.connections.tab.indentifierselector.button.confirm"
+            "connections.page.indentifierselector.button.confirm"
           )}`}
           primaryButtonAction={handleConnectWallet}
           primaryButtonDisabled={!selectedIdentifier}

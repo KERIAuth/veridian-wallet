@@ -1,15 +1,16 @@
 import { IonIcon } from "@ionic/react";
 import { informationCircleOutline } from "ionicons/icons";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { useSelector } from "react-redux";
 import { Agent } from "../../../core/agent/agent";
 import { MiscRecordId } from "../../../core/agent/agent.types";
 import { BasicRecord } from "../../../core/agent/records";
 import { AuthService } from "../../../core/agent/services";
 import { KeyStoreKeys } from "../../../core/storage";
 import { i18n } from "../../../i18n";
-import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { useAppDispatch } from "../../../store/hooks";
 import {
-  getAuthentication,
+  getStateCache,
   setAuthentication,
 } from "../../../store/reducers/stateCache";
 import { ToastMsgType } from "../../globals/types";
@@ -22,13 +23,17 @@ import { combineClassNames } from "../../utils/style";
 import { Alert as AlertExisting } from "../Alert";
 import { CustomInput } from "../CustomInput";
 import { ErrorMessage } from "../ErrorMessage";
+import { PageFooter } from "../PageFooter";
 import "./PasswordModule.scss";
 import { PasswordModuleProps, PasswordModuleRef } from "./PasswordModule.types";
 import { PasswordMeter } from "./components/PasswordMeter";
 import { SymbolModal } from "./components/SymbolModal";
 
 const PasswordModule = forwardRef<PasswordModuleRef, PasswordModuleProps>(
-  ({ title, description, testId, onValidationChange }, ref) => {
+  ({ title, description, testId, onCreateSuccess }, ref) => {
+    const dispatch = useAppDispatch();
+    const stateCache = useSelector(getStateCache);
+    const authentication = stateCache.authentication;
     const [createPasswordValue, setCreatePasswordValue] = useState("");
     const [confirmPasswordValue, setConfirmPasswordValue] = useState("");
     const [confirmPasswordFocus, setConfirmPasswordFocus] = useState(false);
@@ -36,8 +41,6 @@ const PasswordModule = forwardRef<PasswordModuleRef, PasswordModuleProps>(
     const [hintValue, setHintValue] = useState("");
     const [alertExistingIsOpen, setAlertExistingIsOpen] = useState(false);
     const [isOpenSymbol, setIsOpenSymbol] = useState(false);
-    const dispatch = useAppDispatch();
-    const authentication = useAppSelector(getAuthentication);
 
     const createPasswordValueMatching =
       createPasswordValue.length > 0 &&
@@ -67,97 +70,89 @@ const PasswordModule = forwardRef<PasswordModuleRef, PasswordModuleProps>(
       handleClearState();
     };
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        clearState: handleClearState,
-        savePassword: async () => {
-          if (authentication.passwordIsSet) {
-            try {
-              if (
-                await Agent.agent.auth.verifySecret(
-                  KeyStoreKeys.APP_OP_PASSWORD,
-                  createPasswordValue
-                )
-              ) {
-                setAlertExistingIsOpen(true);
-                return false;
-              }
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                error.message.startsWith(AuthService.SECRET_NOT_STORED)
-              ) {
-                showError(
-                  "Unable to get current password",
-                  new Error("Unable to get current password"),
-                  dispatch
-                );
-                return;
-              }
-              throw error;
+    useImperativeHandle(ref, () => ({
+      clearState: handleClearState,
+    }));
+
+    const handleContinue = async (skipped: boolean) => {
+      if (!skipped) {
+        if (authentication.passwordIsSet) {
+          try {
+            if (
+              await Agent.agent.auth.verifySecret(
+                KeyStoreKeys.APP_OP_PASSWORD,
+                createPasswordValue
+              )
+            ) {
+              setAlertExistingIsOpen(true);
+              return;
             }
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              error.message.startsWith(AuthService.SECRET_NOT_STORED)
+            ) {
+              showError(
+                "Unable to get current password",
+                new Error("Unable to get current password"),
+                dispatch
+              );
+              return;
+            }
+            throw error;
           }
+        }
 
-          await Agent.agent.auth.storeSecret(
-            KeyStoreKeys.APP_OP_PASSWORD,
-            createPasswordValue
+        await Agent.agent.auth.storeSecret(
+          KeyStoreKeys.APP_OP_PASSWORD,
+          createPasswordValue
+        );
+
+        if (authentication.passwordIsSkipped) {
+          await Agent.agent.basicStorage.deleteById(
+            MiscRecordId.APP_PASSWORD_SKIPPED
           );
+        }
 
-          if (authentication.passwordIsSkipped) {
-            await Agent.agent.basicStorage.deleteById(
-              MiscRecordId.APP_PASSWORD_SKIPPED
-            );
-          }
-
-          dispatch(
-            setAuthentication({
-              ...authentication,
-              passwordIsSet: true,
-              passwordIsSkipped: false,
+        dispatch(
+          setAuthentication({
+            ...authentication,
+            passwordIsSet: true,
+            passwordIsSkipped: false,
+          })
+        );
+        if (hintValue) {
+          await Agent.agent.basicStorage.createOrUpdateBasicRecord(
+            new BasicRecord({
+              id: MiscRecordId.OP_PASS_HINT,
+              content: { value: hintValue },
             })
           );
-          if (hintValue) {
-            await Agent.agent.basicStorage.createOrUpdateBasicRecord(
-              new BasicRecord({
-                id: MiscRecordId.OP_PASS_HINT,
-                content: { value: hintValue },
-              })
-            );
+        } else {
+          try {
+            const previousHint = (
+              await Agent.agent.basicStorage.findById(MiscRecordId.OP_PASS_HINT)
+            )?.content?.value;
 
-            return true;
-          } else {
-            try {
-              const previousHint = (
-                await Agent.agent.basicStorage.findById(
-                  MiscRecordId.OP_PASS_HINT
-                )
-              )?.content?.value;
-
-              if (previousHint) {
-                await Agent.agent.basicStorage.deleteById(
-                  MiscRecordId.OP_PASS_HINT
-                );
-              }
-
-              return true;
-            } catch (e) {
-              showError(
-                "Unable to delete password hint",
-                e,
-                dispatch,
-                ToastMsgType.UNABLE_DELETE_PASSWORD_HINT
+            if (previousHint) {
+              await Agent.agent.basicStorage.deleteById(
+                MiscRecordId.OP_PASS_HINT
               );
             }
+          } catch (e) {
+            showError(
+              "Unable to delete password hint",
+              e,
+              dispatch,
+              ToastMsgType.UNABLE_DELETE_PASSWORD_HINT
+            );
           }
-        },
-      }),
-      [authentication, createPasswordValue, dispatch, hintValue]
-    );
+        }
+      }
 
-    useEffect(() => {
-      onValidationChange?.(validated);
-    }, [validated, onValidationChange]);
+      onCreateSuccess(skipped);
+      handleClearState();
+    };
 
     const showPasswordMeter =
       createPasswordValue.length === 0 ||
@@ -252,10 +247,10 @@ const PasswordModule = forwardRef<PasswordModuleRef, PasswordModuleProps>(
             {!confirmPasswordFocus &&
               !!confirmPasswordValue.length &&
               createPasswordValueNotMatching && (
-                <ErrorMessage
-                  message={`${i18n.t("createpassword.error.hasNoMatch")}`}
-                />
-              )}
+              <ErrorMessage
+                message={`${i18n.t("createpassword.error.hasNoMatch")}`}
+              />
+            )}
             <CustomInput
               dataTestId="create-hint-input"
               title={`${i18n.t("createpassword.input.third.title")}`}
@@ -275,16 +270,22 @@ const PasswordModule = forwardRef<PasswordModuleRef, PasswordModuleProps>(
               />
             )}
           </form>
+          <PageFooter
+            pageId={testId}
+            primaryButtonText={`${i18n.t("createpassword.button.continue")}`}
+            primaryButtonAction={() => handleContinue(false)}
+            primaryButtonDisabled={!validated}
+          />
         </div>
         <AlertExisting
           isOpen={alertExistingIsOpen}
           setIsOpen={setAlertExistingIsOpen}
           dataTestId="manage-password-alert-existing"
           headerText={`${i18n.t(
-            "settings.sections.security.managepassword.page.alert.existingpassword"
+            "tabs.menu.tab.settings.sections.security.managepassword.page.alert.existingpassword"
           )}`}
           confirmButtonText={`${i18n.t(
-            "settings.sections.security.managepassword.page.alert.ok"
+            "tabs.menu.tab.settings.sections.security.managepassword.page.alert.ok"
           )}`}
           actionConfirm={handleClearExisting}
         />

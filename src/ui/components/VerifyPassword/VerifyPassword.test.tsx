@@ -1,18 +1,18 @@
 const verifySecretMock = jest.fn();
 
 import { IonInput } from "@ionic/react";
+import { ionFireEvent } from "@ionic/react-test-utils";
 import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-
+import configureStore from "redux-mock-store";
 import { Agent } from "../../../core/agent/agent";
 import { BasicRecord } from "../../../core/agent/records";
 import { SecureStorage } from "../../../core/storage";
 import ENG_Trans from "../../../locales/en/en.json";
 import { credsFixAcdc } from "../../__fixtures__/credsFix";
 import { TabsRoutePath } from "../../components/navigation/TabsMenu";
-import { makeTestStore } from "../../utils/makeTestStore";
 import { CustomInputProps } from "../CustomInput/CustomInput.types";
 import { VerifyPassword } from "./VerifyPassword";
 
@@ -58,6 +58,8 @@ const initialStateNoPassword = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
+  credsCache: { creds: credsFixAcdc },
+  credsArchivedCache: { creds: credsFixAcdc },
 };
 
 const initialStateWithPassword = {
@@ -77,6 +79,8 @@ const initialStateWithPassword = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
+  credsCache: { creds: credsFixAcdc },
+  credsArchivedCache: { creds: credsFixAcdc },
 };
 
 jest.mock("../CustomInput", () => ({
@@ -100,9 +104,10 @@ jest.mock("@ionic/react", () => ({
 describe("Verify Password", () => {
   let storeMocked: Store<unknown, AnyAction>;
   beforeEach(() => {
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateNoPassword),
+      ...mockStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
   });
@@ -122,9 +127,10 @@ describe("Verify Password", () => {
       })
     );
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
@@ -150,28 +156,15 @@ describe("Verify Password", () => {
     const confirmButton = await findByTestId("primary-button");
 
     act(() => {
-      fireEvent(
-        passwordInput,
-        new CustomEvent("ionInput", {
-          detail: { value: "1111111111" },
-        })
-      );
-    });
-
-    await waitFor(() => {
-      expect(getByTestId("primary-button")).toHaveAttribute(
-        "disabled",
-        "false"
-      );
+      ionFireEvent.ionInput(passwordInput, "1111");
     });
 
     act(() => {
-      fireEvent.click(confirmButton);
+      ionFireEvent.click(confirmButton);
     });
 
     await waitFor(() => {
       expect(getByTestId("error-message")).toBeVisible();
-      expect(getByTestId("primary-button")).toHaveAttribute("disabled", "true");
     });
   });
 
@@ -187,9 +180,10 @@ describe("Verify Password", () => {
       })
     );
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
@@ -214,16 +208,11 @@ describe("Verify Password", () => {
     const confirmButton = getByTestId("primary-button");
 
     act(() => {
-      fireEvent(
-        passwordInput,
-        new CustomEvent("ionInput", {
-          detail: { value: "1111" },
-        })
-      );
+      ionFireEvent.ionInput(passwordInput, "1111");
     });
 
     act(() => {
-      fireEvent.click(confirmButton);
+      ionFireEvent.click(confirmButton);
     });
 
     await waitFor(() => {
@@ -242,9 +231,10 @@ describe("Verify Password", () => {
       } as any)
     );
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
@@ -299,9 +289,10 @@ describe("Verify Password", () => {
       } as any)
     );
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
@@ -356,9 +347,10 @@ describe("Verify Password", () => {
       } as any)
     );
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
@@ -390,57 +382,6 @@ describe("Verify Password", () => {
 
     await waitFor(() => {
       expect(setIsOpenMock).toBeCalled();
-    });
-  });
-
-  test("Confirm button is disabled when input is empty and enabled when input has value", async () => {
-    jest.spyOn(Agent.agent.basicStorage, "findById").mockResolvedValue(
-      Promise.resolve({
-        content: {
-          value: "1111",
-        },
-      } as any)
-    );
-
-    const dispatchMock = jest.fn();
-    storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
-      dispatch: dispatchMock,
-    };
-
-    const setIsOpenMock = jest.fn();
-    const onVerifyMock = jest.fn();
-
-    const { getByTestId } = render(
-      <Provider store={storeMocked}>
-        <VerifyPassword
-          isOpen={true}
-          setIsOpen={setIsOpenMock}
-          onVerify={onVerifyMock}
-        />
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(getByTestId("forgot-hint-btn")).toBeVisible();
-    });
-
-    const confirmButton = getByTestId("primary-button");
-    const passwordInput = getByTestId("verify-password-value");
-
-    expect(confirmButton.getAttribute("disabled")).not.toBe("false");
-
-    act(() => {
-      fireEvent(
-        passwordInput,
-        new CustomEvent("ionInput", {
-          detail: { value: "testgames" },
-        })
-      );
-    });
-
-    await waitFor(() => {
-      expect(confirmButton.getAttribute("disabled")).toBe("false");
     });
   });
 });

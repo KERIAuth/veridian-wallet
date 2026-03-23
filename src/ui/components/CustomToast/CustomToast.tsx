@@ -2,8 +2,12 @@ import { createAnimation, IonToast } from "@ionic/react";
 import { closeOutline } from "ionicons/icons";
 import { useCallback } from "react";
 import { i18n } from "../../../i18n";
-import { useAppDispatch } from "../../../store/hooks";
-import { removeToastMessage } from "../../../store/reducers/stateCache";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import {
+  getAuthentication,
+  removeToastMessage,
+} from "../../../store/reducers/stateCache";
+import { ToastMsgType } from "../../globals/types";
 import { useScreenSize } from "../../hooks";
 import "./CustomToast.scss";
 import { ToastMessageProps } from "./CustomToast.types";
@@ -12,7 +16,7 @@ const TOAST_HEIGHT = 52;
 // Toast height on small screen
 const SMALL_TOAST_HEIGHT = 45;
 const TOAST_ANIMATION_DURATION = 350;
-export const TOAST_DURATION = 2500;
+const TOAST_DURATION = 2500;
 
 const CustomToast = ({
   toastMsg,
@@ -24,6 +28,8 @@ const CustomToast = ({
   const width = useScreenSize();
 
   const dispatch = useAppDispatch();
+  const authentication = useAppSelector(getAuthentication);
+  const username = authentication.userName;
 
   // Note: caculate toast position
   const toastPosition = (() => {
@@ -54,7 +60,12 @@ const CustomToast = ({
       className="custom-toast"
       style={styles}
       onDidDismiss={handleDismissToast}
-      message={message && `${i18n.t("toast." + message.toLowerCase())}`}
+      message={
+        message &&
+        (message === ToastMsgType.USERNAME_CREATION_SUCCESS
+          ? `${i18n.t("toast.usernamecreationsuccess", { username })}`
+          : `${i18n.t("toast." + message.toLowerCase())}`)
+      }
       color={message?.toLowerCase().includes("error") ? "danger" : "secondary"}
       position="top"
       data-testid={`confirmation-toast-${id}`}

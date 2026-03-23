@@ -14,7 +14,7 @@ const AlphabetSelector = () => {
     const element = document.getElementById(letter);
     if (element) {
       setTimeout(() => {
-        element.scrollIntoView?.({ behavior: "smooth" });
+        element.scrollIntoView({ behavior: "smooth" });
       }, 150);
     }
   };
@@ -24,10 +24,7 @@ const AlphabetSelector = () => {
   const handleMove = useCallback((ev: TouchEvent) => {
     const touch = ev.touches[0];
 
-    if (!touch) return;
-
-    const elements =
-      document.elementsFromPoint?.(touch.clientX, touch.clientY) || [];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
 
     const button = elements.find((item) => {
       return (
@@ -65,10 +62,7 @@ const AlphabetSelector = () => {
   }, [handleMove, handleTouchEnd, handleTouchCancel]);
 
   return (
-    <div
-      data-testid="alphabet-selector"
-      className="alphabet-selector"
-    >
+    <div className="alphabet-selector">
       {alphabet.map((letter, index) => {
         return (
           <IonButton
@@ -81,7 +75,6 @@ const AlphabetSelector = () => {
               (e.target as HTMLButtonElement).classList.add(ACTIVE_CLASS);
               lastItemRef.current = e.target as HTMLButtonElement;
             }}
-            data-testid={`alphabet-selector-${letter}`}
           >
             {letter}
           </IonButton>

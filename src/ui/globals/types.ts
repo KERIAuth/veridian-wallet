@@ -1,20 +1,35 @@
+enum CardType {
+  CREDENTIALS = "credentials",
+  IDENTIFIERS = "identifiers",
+}
+
 enum RequestType {
   CONNECTION = "Connection",
   CREDENTIAL = "Credential",
+}
+
+// String enums as some of these map to i18n values (if relevant)
+enum OperationType {
+  IDLE = "idle",
+  DELETE_CONNECTION = "deleteConnection",
+  SCAN_CONNECTION = "scanConnection",
+  MULTI_SIG_INITIATOR_SCAN = "multiSigInitiatorScan",
+  MULTI_SIG_RECEIVER_SCAN = "multiSigReceiverScan",
+  MULTI_SIG_INITIATOR_INIT = "multiSigInitiatorInit",
+  SCAN_WALLET_CONNECTION = "scanWalletConnection",
+  SCAN_SSI_BOOT_URL = "scanSSIBootUrl",
+  SCAN_SSI_CONNECT_URL = "scanSSIConnectUrl",
+  OPEN_WALLET_CONNECTION_DETAIL = "openWalletConnection",
+  OPEN_MULTISIG_IDENTIFIER = "openMultisignIdentifier",
 }
 
 enum ToastMsgType {
   COPIED_TO_CLIPBOARD = "copiedToClipboard",
   IDENTIFIER_REQUESTED = "identifierRequested",
   IDENTIFIER_CREATED = "identifierCreated",
-  GROUP_REQUEST_SEND = "grouprequestsend",
-  UNABLE_CREATE_GROUP_ERROR = "unablecreategrouperror",
+  MULTI_SIGN_IDENTIFIER_CREATED = "multiSignIdentifierCreated",
   DELEGATED_IDENTIFIER_CREATED = "delegatedidentifiercreated",
   IDENTIFIER_UPDATED = "identifierUpdated",
-  IDENTIFIER_NAME_UPDATED = "identifierNameUpdated",
-  IDENTIFIER_USERNAME_UPDATED = "identifierUsernameUpdated",
-  GROUP_UPDATED = "groupnameupdate",
-  GROUP_UPDATED_FAIL = "groupnameupdateerror",
   IDENTIFIER_DELETED = "identifierDeleted",
   CREDENTIAL_DELETED = "credentialDeleted",
   CREDENTIAL_RESTORED = "credentialRestored",
@@ -29,24 +44,24 @@ enum ToastMsgType {
   NEW_CREDENTIAL_ADDED = "newCredentialAdded",
   NOTES_UPDATED = "notesUpdated",
   NOTE_REMOVED = "noteRemoved",
-  MAX_FAVOURITES_REACHED = "maxFavouritesReachedError",
-  WALLET_CONNECTION_DELETED = "dappconnectiondeleted",
-  WALLET_CONNECTION_DELETE_ERROR = "dappconnectiondeleteerror",
+  MAX_FAVOURITES_REACHED = "maxFavouritesReached",
+  USERNAME_CREATION_SUCCESS = "usernameCreationSuccess",
+  USERNAME_CREATION_ERROR = "usernameCreationError",
+  WALLET_CONNECTION_DELETED = "walletconnectiondeleted",
   CONNECT_WALLET_SUCCESS = "connectwalletsuccess",
   DISCONNECT_WALLET_SUCCESS = "disconnectwallet",
   UNABLE_CONNECT_WALLET = "unableconnectwalleterror",
   PEER_ID_SUCCESS = "peeridsuccess",
   PEER_ID_ERROR = "peeriderror",
+  PEER_ID_NOT_RECOGNISED = "peeridnotrecognised",
   SETUP_BIOMETRIC_AUTHENTICATION_SUCCESS = "setupbiometricsuccess",
   ROTATE_KEY_SUCCESS = "rotatekeysuccess",
   ROTATE_KEY_ERROR = "rotatekeyerror",
-  SCAN_SELF_CONNECTION = "scanselfconnectionerror",
-  CONNECTION_ERROR = "connectionerror",
+  SCANNER_ERROR = "qrerror",
   NEW_MULTI_SIGN_MEMBER = "newmultisignmember",
   PASSCODE_UPDATED = "passcodeupdated",
   PASSWORD_UPDATED = "passwordupdated",
-  PASSWORD_SETTING_UPDATE = "passwordsettingupdate",
-  PASSWORD_SETTING_UPDATE_FAIL = "passwordsettingupdateerror",
+  PASSWORD_DISABLED = "passworddisabled",
   PASSWORD_CREATED = "passwordcreated",
   PROPOSED_CRED_SUCCESS = "proposedcredsuccess",
   SHARE_CRED_SUCCESS = "sharecredsuccess",
@@ -68,26 +83,6 @@ enum ToastMsgType {
   DELETE_ACCOUNT_SUCCESS = "deleteaccountsuccess",
   REMOTE_SIGN_SUCCESS = "remotesignsuccess",
   UNKNOWN_ERROR = "unknownerror",
-  URL_ERROR = "urlerror",
-  PROFILE_SWITCHED = "profileswitched",
-  UNABLE_TO_SWITCH_PROFILE = "unabletoswitchprofile",
-  NOT_VALID_GROUP_INVITE = "notvalidgrouperror",
-  GROUP_NAME_NOT_FOUND_ERROR = "groupnamenotfounderror",
-  DUPLICATE_GROUP_ID_ERROR = "duplicategroupiderror",
-  GROUP_METADATA_NOT_FOUND_ERROR = "groupmetadatanotfounderror",
-  UNABLE_TO_ACCEPT = "unabletoaccepterror",
-  ACCEPT_SUCCESS = "acceptsuccess",
-  CONNECT_URL_MISMATCH = "connecturlmismatch",
-  INVALID_BOOT_URL = "invalidbooturlerror",
-  MISMATCH_ERROR = "mismatcherror",
-  INVALID_REMOVED_CONNECTION_URL = "invalidremovedconnectionurlerror",
-  NETWORK_ERROR = "networkerror",
-  CREATE_IDENTIFIER_FAIL = "createidentifiererror",
-  INVALID_CONNECTION_URL = "invalidconnectionurlerror",
-  PROFILE_NOT_EXIST = "profilenotexisterror",
-  MEMBER_ALREADY_EXIST = "memberalreadyexisterror",
-  GROUP_CREATED = "groupcreated",
-  SIGN_ERROR = "signerror",
 }
 
 const PASSCODE_MAPPING = {
@@ -115,4 +110,11 @@ enum BackEventPriorityType {
   Tab = 101,
 }
 
-export { BackEventPriorityType, PASSCODE_MAPPING, RequestType, ToastMsgType };
+export {
+  BackEventPriorityType,
+  CardType,
+  OperationType,
+  PASSCODE_MAPPING,
+  RequestType,
+  ToastMsgType,
+};

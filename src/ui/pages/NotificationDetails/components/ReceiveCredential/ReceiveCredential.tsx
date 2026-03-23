@@ -1,42 +1,47 @@
-import { IonButton, IonCol, IonIcon } from "@ionic/react";
+import { IonButton, IonCol, IonIcon, IonItem, IonText } from "@ionic/react";
 import {
   alertCircleOutline,
   checkmark,
-  checkmarkCircleOutline,
   informationCircleOutline,
   personCircleOutline,
   swapHorizontalOutline,
 } from "ionicons/icons";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Agent } from "../../../../../core/agent/agent";
 import {
   ACDCDetails,
   CredentialStatus,
 } from "../../../../../core/agent/services/credentialService.types";
 import { IdentifierType } from "../../../../../core/agent/services/identifier.types";
-import { IpexCommunicationService } from "../../../../../core/agent/services/ipexCommunicationService";
 import { LinkedGroupInfo } from "../../../../../core/agent/services/ipexCommunicationService.types";
 import { NotificationRoute } from "../../../../../core/agent/services/keriaNotificationService.types";
 import { i18n } from "../../../../../i18n";
 import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
 import {
-  deleteNotificationById,
   getConnectionsCache,
   getMultisigConnectionsCache,
-  getProfiles,
-} from "../../../../../store/reducers/profileCache";
+} from "../../../../../store/reducers/connectionsCache";
+import { getIdentifiersCache } from "../../../../../store/reducers/identifiersCache";
+import {
+  deleteNotificationById,
+  getNotificationsCache,
+  setNotificationsCache,
+} from "../../../../../store/reducers/notificationsCache";
+import { getAuthentication } from "../../../../../store/reducers/stateCache";
 import { Alert, Alert as AlertDecline } from "../../../../components/Alert";
-import { Avatar, MemberAvatar } from "../../../../components/Avatar";
-import { CardBlock, CardDetailsItem } from "../../../../components/CardDetails";
+import { CardDetailsBlock } from "../../../../components/CardDetails";
+import { CardTheme } from "../../../../components/CardTheme";
 import { CredentialDetailModal } from "../../../../components/CredentialDetailModule";
-import { MemberAcceptStatus } from "../../../../components/CredentialDetailModule/components";
+import {
+  MemberAcceptStatus,
+  MultisigMember,
+} from "../../../../components/CredentialDetailModule/components";
 import { FallbackIcon } from "../../../../components/FallbackIcon";
+import { IdentifierDetailModal } from "../../../../components/IdentifierDetailModule";
 import { InfoCard } from "../../../../components/InfoCard";
 import { ScrollablePageLayout } from "../../../../components/layout/ScrollablePageLayout";
-import { MemberList } from "../../../../components/MemberList";
 import { PageFooter } from "../../../../components/PageFooter";
 import { PageHeader } from "../../../../components/PageHeader";
-import { ProfileDetailsModal } from "../../../../components/ProfileDetailsModal";
 import { Spinner } from "../../../../components/Spinner";
 import { Verification } from "../../../../components/Verification";
 import { BackEventPriorityType } from "../../../../globals/types";
@@ -46,12 +51,11 @@ import {
 } from "../../../../hooks";
 import { showError } from "../../../../utils/error";
 import { combineClassNames } from "../../../../utils/style";
+import { getTheme } from "../../../../utils/theme";
 import { NotificationDetailsProps } from "../../NotificationDetails.types";
 import "./ReceiveCredential.scss";
 
 const ANIMATION_DELAY = 2600;
-// Cache viewport height on initial load to prevent issues with mobile browsers resizing the viewport when showing/hiding the keyboard, which can cause unwanted jumps in the animation.
-const INITIAL_VIEWPORT_HEIGHT = window.innerHeight;
 
 const ReceiveCredential = ({
   pageId,
@@ -60,20 +64,21 @@ const ReceiveCredential = ({
   handleBack,
 }: NotificationDetailsProps) => {
   const dispatch = useAppDispatch();
+  const notificationsCache = useAppSelector(getNotificationsCache);
+  const [notifications, setNotifications] = useState(notificationsCache);
+  const userName = useAppSelector(getAuthentication)?.userName;
   const connectionsCache = useAppSelector(getConnectionsCache);
   const multisignConnectionsCache = useAppSelector(getMultisigConnectionsCache);
-
-  const iconsRowRef = useRef<HTMLDivElement>(null);
   const [alertDeclineIsOpen, setAlertDeclineIsOpen] = useState(false);
   const [verifyIsOpen, setVerifyIsOpen] = useState(false);
-  const [isAccepting, setIsAccepting] = useState(false);
+  const [initiateAnimation, setInitiateAnimation] = useState(false);
   const [openInfo, setOpenInfo] = useState(false);
   const [showCommonError, setShowCommonError] = useState(false);
   const [showMissingIssuerModal, setShowMissingIssuerModal] = useState(false);
   const [credDetail, setCredDetail] = useState<ACDCDetails>();
   const [multisigMemberStatus, setMultisigMemberStatus] =
     useState<LinkedGroupInfo>({
-      threshold: { signingThreshold: 0, rotationThreshold: 0 },
+      threshold: "0",
       members: [],
       othersJoined: [],
       linkedRequest: {
@@ -81,27 +86,25 @@ const ReceiveCredential = ({
       },
     });
   const [isLoading, setIsLoading] = useState(false);
-  const profiles = useAppSelector(getProfiles);
+  const identifiersData = useAppSelector(getIdentifiersCache);
 
   const isMultisig = credDetail?.identifierType === IdentifierType.Group;
   const [isRevoked, setIsRevoked] = useState(false);
   const [openIdentifierDetail, setOpenIdentifierDetail] = useState(false);
 
-  const connection = connectionsCache?.find(
-    (c) => c.id === notificationDetails.connectionId
-  )?.label;
+  const connection =
+    connectionsCache?.[notificationDetails.connectionId]?.label;
 
   const userAccepted = multisigMemberStatus.linkedRequest.accepted;
   const maxThreshold =
     isMultisig &&
     multisigMemberStatus.othersJoined.length +
       (multisigMemberStatus.linkedRequest.accepted ? 1 : 0) >=
-      Number(multisigMemberStatus.threshold.signingThreshold);
+      Number(multisigMemberStatus.threshold);
 
-  const profile = profiles[credDetail?.identifierId || ""];
+  const identifier = identifiersData[credDetail?.identifierId || ""];
   const groupInitiatorAid = multisigMemberStatus.members[0] || "";
-  const isGroupInitiator =
-    profile?.identity.groupMemberPre === groupInitiatorAid;
+  const isGroupInitiator = identifier?.groupMemberPre === groupInitiatorAid;
   const displayInitiatorNotAcceptedAlert =
     isMultisig &&
     !isRevoked &&
@@ -115,12 +118,14 @@ const ReceiveCredential = ({
   );
 
   const handleNotificationUpdate = async () => {
-    dispatch(deleteNotificationById(notificationDetails.id));
+    const updatedNotifications = notifications.filter(
+      (notification) => notification.id !== notificationDetails.id
+    );
+    setNotifications(updatedNotifications);
+    dispatch(setNotificationsCache(updatedNotifications));
   };
 
   const getMultiSigMemberStatus = useCallback(async () => {
-    if (isAccepting) return;
-
     try {
       const result =
         await Agent.agent.ipexCommunications.getLinkedGroupFromIpexGrant(
@@ -129,21 +134,12 @@ const ReceiveCredential = ({
 
       setMultisigMemberStatus(result);
     } catch (e) {
-      setIsAccepting(false);
-      if (
-        e instanceof Error &&
-        e.message.includes(IpexCommunicationService.NOTIFICATION_NOT_FOUND)
-      ) {
-        handleBack();
-        return;
-      }
+      setInitiateAnimation(false);
       showError("Unable to get group members", e, dispatch);
     }
-  }, [dispatch, notificationDetails, isAccepting, handleBack]);
+  }, [dispatch, notificationDetails]);
 
   const getAcdc = useCallback(async () => {
-    if (isAccepting) return;
-
     try {
       setIsLoading(!credDetail);
 
@@ -152,11 +148,11 @@ const ReceiveCredential = ({
           notificationDetails.a.d as string
         );
 
-      const profile = profiles[credential.identifierId];
+      const identifier = identifiersData[credential.identifierId];
 
       // @TODO: identifierType is not needed to render the component so this could be optimised. If it's needed, it should be fetched in the core for simplicity.
       const identifierType =
-        profile?.identity.groupMetadata || profile?.identity.groupMemberPre
+        identifier?.groupMetadata || identifier?.groupMemberPre
           ? IdentifierType.Group
           : IdentifierType.Individual;
 
@@ -176,18 +172,16 @@ const ReceiveCredential = ({
     } catch (e) {
       setShowCommonError(true);
       setTimeout(handleBack);
-      setIsAccepting(false);
+      setInitiateAnimation(false);
       showError("Unable to get acdc", e, dispatch);
     } finally {
       setIsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     dispatch,
     getMultiSigMemberStatus,
-    profiles,
+    identifiersData,
     notificationDetails.a.d,
-    isAccepting,
   ]);
 
   useOnlineStatusEffect(getAcdc);
@@ -205,38 +199,10 @@ const ReceiveCredential = ({
     }
   };
 
-  const moveContentToCenter = () => {
-    if (!iconsRowRef.current) return;
-    const header = document.getElementsByClassName("page-header")?.[0];
-    if (!header) return;
-    const iconRow = iconsRowRef.current.querySelector("#request-icons-row");
-    if (!iconRow) return;
-    const infoRow = iconsRowRef.current.querySelector("#request-info-row");
-    if (!infoRow) return;
-    const requestStatus = iconsRowRef.current.querySelector("#request-status");
-    if (!requestStatus) return;
-
-    const combinedHeight = 28.5 + iconRow.getBoundingClientRect().height;
-    const headerHeight = (header as HTMLDivElement).offsetHeight;
-    const viewportHeight = INITIAL_VIEWPORT_HEIGHT;
-
-    const opticalCenter = viewportHeight * 0.5;
-
-    const translateY = opticalCenter - headerHeight - combinedHeight / 2;
-
-    iconsRowRef.current.style.transform = `translateY(${translateY}px)`;
-  };
-
-  const removeContentTranslation = () => {
-    if (!iconsRowRef.current) return;
-    iconsRowRef.current.style.transform = "";
-  };
-
   const handleAccept = async () => {
     try {
       const startTime = Date.now();
-      setIsAccepting(true);
-      moveContentToCenter();
+      setInitiateAnimation(true);
 
       if (!isMultisig || (isMultisig && isGroupInitiator)) {
         await Agent.agent.ipexCommunications.admitAcdcFromGrant(
@@ -259,8 +225,7 @@ const ReceiveCredential = ({
         setOpenInfo(false);
       }, ANIMATION_DELAY - (finishTime - startTime));
     } catch (e) {
-      setIsAccepting(false);
-      removeContentTranslation();
+      setInitiateAnimation(false);
       showError("Unable to accept acdc", e, dispatch);
     }
   };
@@ -280,8 +245,8 @@ const ReceiveCredential = ({
   };
 
   const classes = combineClassNames(`${pageId}-receive-credential`, {
-    "animation-on": isAccepting,
-    "animation-off": !isAccepting,
+    "animation-on": initiateAnimation,
+    "animation-off": !initiateAnimation,
     "pending-multisig": userAccepted && isMultisig,
     "ion-hide": isLoading || showCommonError,
     revoked: isRevoked,
@@ -295,7 +260,7 @@ const ReceiveCredential = ({
 
       if (
         multisigMemberStatus.linkedRequest.accepted &&
-        profile?.identity.groupMemberPre === member
+        identifier?.groupMemberPre === member
       ) {
         return MemberAcceptStatus.Accepted;
       }
@@ -305,34 +270,22 @@ const ReceiveCredential = ({
     [
       multisigMemberStatus.othersJoined,
       multisigMemberStatus.linkedRequest,
-      profile,
+      identifier,
     ]
   );
 
-  const members = multisigMemberStatus.members.map((member, index) => {
-    const memberConnection = multisignConnectionsCache.find(
-      (c) => c.id === member
-    );
+  const members = multisigMemberStatus.members.map((member) => {
+    const memberConnection = multisignConnectionsCache[member];
 
     let name = memberConnection?.label || member;
-    let isCurrent = false;
+
     if (!memberConnection?.label) {
-      name = profile.identity.groupUsername || "";
-      isCurrent = true;
+      name = userName;
     }
 
-    const rank = index >= 0 ? index % 5 : 0;
-
     return {
+      id: member,
       name,
-      isCurrentUser: isCurrent,
-      avatar: (
-        <MemberAvatar
-          firstLetter={name.at(0)?.toLocaleUpperCase() || ""}
-          rank={rank}
-        />
-      ),
-      status: getStatus(member),
     };
   });
 
@@ -352,19 +305,22 @@ const ReceiveCredential = ({
 
   const closeAlert = () => setShowMissingIssuerModal(false);
 
-  const primaryButtonText =
-    isRevoked || displayInitiatorNotAcceptedAlert
-      ? undefined
-      : `${i18n.t(
-          maxThreshold
-            ? "tabs.notifications.details.buttons.addcred"
-            : "tabs.notifications.details.buttons.accept"
-        )}`;
+  const primaryButtonText = isRevoked
+    ? undefined
+    : `${i18n.t(
+      displayInitiatorNotAcceptedAlert
+        ? "tabs.notifications.details.buttons.ok"
+        : maxThreshold
+          ? "tabs.notifications.details.buttons.addcred"
+          : "tabs.notifications.details.buttons.accept"
+    )}`;
 
   const declineButtonText =
     maxThreshold || isRevoked || displayInitiatorNotAcceptedAlert
       ? undefined
       : `${i18n.t("tabs.notifications.details.buttons.decline")}`;
+
+  const theme = getTheme(identifier?.theme || 0);
 
   const closeDeclineAlert = () => setAlertDeclineIsOpen(false);
 
@@ -423,143 +379,130 @@ const ReceiveCredential = ({
             icon={isRevoked ? alertCircleOutline : undefined}
           />
         )}
-        {(maxThreshold || multisigMemberStatus.linkedRequest.accepted) && (
-          <InfoCard
-            className={`alert ${maxThreshold ? " max-threshhold" : ""}`}
-            content={i18n.t(
-              `tabs.notifications.details.credential.receive.${
-                maxThreshold ? "thresholdmet" : "accepted"
-              }`
-            )}
-            icon={maxThreshold ? checkmarkCircleOutline : undefined}
-          />
-        )}
-        <div className="receive-page-container">
-          <div
-            className="request-animation-center"
-            ref={iconsRowRef}
-          >
-            <div
-              id="request-icons-row"
-              className="request-icons-row"
+        <div className="request-animation-center">
+          <div className="request-icons-row">
+            <div className="request-user-logo">
+              <IonIcon
+                icon={personCircleOutline}
+                color="light"
+              />
+            </div>
+            <div className="request-swap-logo">
+              <span>
+                <IonIcon icon={swapHorizontalOutline} />
+              </span>
+            </div>
+            <div className="request-checkmark-logo">
+              <span>
+                <IonIcon icon={checkmark} />
+              </span>
+            </div>
+            <div className="request-provider-logo">
+              <FallbackIcon
+                data-testid="credential-request-provider-logo"
+                alt="request-provider-logo"
+              />
+            </div>
+          </div>
+          <div className="request-info-row">
+            <IonCol size="12">
+              <span>
+                {i18n.t(
+                  "tabs.notifications.details.credential.receive.receivefrom"
+                )}
+              </span>
+              <strong className="credential-type">
+                {credDetail?.s?.title}
+              </strong>
+              <span className="break-text">
+                {i18n.t("tabs.notifications.details.credential.receive.from")}
+              </span>
+              <span className="issuer-name">
+                <strong>{connection || i18n.t("connections.unknown")}</strong>
+                {!connection && (
+                  <IonIcon
+                    onClick={() => setShowMissingIssuerModal(true)}
+                    data-testid="show-missing-issuer-icon"
+                    className="missing-connection-icon"
+                    icon={informationCircleOutline}
+                  />
+                )}
+              </span>
+            </IonCol>
+          </div>
+          <div className="request-status">
+            <IonCol size="12">
+              <strong>
+                {i18n.t(
+                  "tabs.notifications.details.credential.receive.credentialpending"
+                )}
+              </strong>
+            </IonCol>
+          </div>
+          <div className="credential-detail">
+            <IonButton
+              fill="outline"
+              className="credential-button secondary-button"
+              onClick={() => setOpenInfo(true)}
+              data-testid="cred-detail-btn"
             >
-              <div className="request-user-logo">
-                <IonIcon
-                  icon={personCircleOutline}
-                  color="light"
+              <IonIcon
+                slot="start"
+                icon={informationCircleOutline}
+              />
+              {i18n.t(
+                "tabs.notifications.details.credential.receive.credentialdetailbutton"
+              )}
+            </IonButton>
+          </div>
+          {isMultisig && (
+            <CardDetailsBlock
+              className="group-members"
+              title={i18n.t(
+                "tabs.notifications.details.credential.receive.members"
+              )}
+            >
+              {members.map(({ id, name }) => (
+                <MultisigMember
+                  key={id}
+                  name={name}
+                  status={getStatus(id)}
                 />
-              </div>
-              <div className="request-swap-logo">
-                <span>
-                  <IonIcon icon={swapHorizontalOutline} />
-                </span>
-              </div>
-              <div className="request-checkmark-logo">
-                <span>
-                  <IonIcon icon={checkmark} />
-                </span>
-              </div>
-              <div className="request-provider-logo">
-                <FallbackIcon
-                  data-testid="credential-request-provider-logo"
-                  alt="request-provider-logo"
-                />
-              </div>
-            </div>
-            <div
-              id="request-info-row"
-              className="request-info-row"
+              ))}
+            </CardDetailsBlock>
+          )}
+          {identifier && (
+            <CardDetailsBlock
+              className="related-identifiers"
+              title={i18n.t(
+                "tabs.notifications.details.credential.receive.relatedidentifier"
+              )}
             >
-              <IonCol size="12">
-                <span>
-                  {i18n.t(
-                    "tabs.notifications.details.credential.receive.receivefrom"
-                  )}
-                </span>
-                <strong className="credential-type">
-                  {credDetail?.s?.title}
-                </strong>
-                <span className="break-text">
-                  {i18n.t("tabs.notifications.details.credential.receive.from")}
-                </span>
-                <span className="issuer-name">
-                  <strong>
-                    {connection || i18n.t("tabs.connections.unknown")}
-                  </strong>
-                  {!connection && (
-                    <IonIcon
-                      onClick={() => setShowMissingIssuerModal(true)}
-                      data-testid="show-missing-issuer-icon"
-                      className="missing-connection-icon"
-                      icon={informationCircleOutline}
-                    />
-                  )}
-                </span>
-              </IonCol>
-            </div>
-            <div
-              id="request-status"
-              className="request-status"
-            >
-              <IonCol size="12">
-                <strong>
-                  {i18n.t(
-                    "tabs.notifications.details.credential.receive.credentialpending"
-                  )}
-                </strong>
-              </IonCol>
-            </div>
-            <div className="credential-detail">
-              <IonButton
-                fill="outline"
-                className="credential-button secondary-button"
-                onClick={() => setOpenInfo(true)}
-                data-testid="cred-detail-btn"
+              <IonItem
+                lines="none"
+                className="related-identifier"
+                onClick={() => setOpenIdentifierDetail(true)}
+                data-testid="related-identifier-detail"
               >
-                <IonIcon
+                <div
                   slot="start"
+                  className="theme"
+                >
+                  <CardTheme {...theme} />
+                </div>
+                <IonText
+                  slot="start"
+                  className="identifier-name"
+                >
+                  {identifier.displayName}
+                </IonText>
+                <IonIcon
+                  slot="end"
                   icon={informationCircleOutline}
                 />
-                {i18n.t(
-                  "tabs.notifications.details.credential.receive.credentialdetailbutton"
-                )}
-              </IonButton>
-            </div>
-            {isMultisig && (
-              <CardBlock
-                className="group-members"
-                testId="group-members-content"
-                title={i18n.t(
-                  "tabs.notifications.details.credential.receive.members"
-                )}
-              >
-                <MemberList
-                  members={members}
-                  bottomText={`${i18n.t(
-                    "tabs.notifications.details.credential.receive.bottom",
-                    { members: members?.length || 0 }
-                  )}`}
-                />
-              </CardBlock>
-            )}
-            {profile && (
-              <CardBlock
-                className="related-identifiers"
-                testId="related-profile"
-                title={i18n.t(
-                  "tabs.notifications.details.credential.receive.relatedprofile"
-                )}
-                onClick={() => setOpenIdentifierDetail(true)}
-              >
-                <CardDetailsItem
-                  info={profile.identity.displayName}
-                  startSlot={<Avatar id={profile.identity.id} />}
-                  className="member"
-                  testId="related-identifier-detail"
-                />
-              </CardBlock>
-            )}
-          </div>
+              </IonItem>
+            </CardDetailsBlock>
+          )}
         </div>
       </ScrollablePageLayout>
       <AlertDecline
@@ -607,12 +550,11 @@ const ReceiveCredential = ({
         viewOnly
       />
       {credDetail && (
-        <ProfileDetailsModal
+        <IdentifierDetailModal
           isOpen={openIdentifierDetail}
           setIsOpen={setOpenIdentifierDetail}
-          pageId="profile-details"
-          profileId={credDetail.identifierId}
-          restrictedOptions
+          pageId="identifier-detail"
+          identifierDetailId={credDetail.identifierId}
         />
       )}
     </>

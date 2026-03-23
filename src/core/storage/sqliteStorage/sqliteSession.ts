@@ -5,32 +5,25 @@ import {
 } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { randomPasscode } from "signify-ts";
-import { LocalMigrationManager } from "./migrations/localMigrationManager";
-import { CloudMigrationManager } from "./cloudMigrations/cloudMigrationManager";
+import { versionCompare } from "./utils";
+import { MIGRATIONS } from "./migrations";
+import { MigrationType } from "./migrations/migrations.types";
 import { KeyStoreKeys, SecureStorage } from "../secureStorage";
-import { BasicStorage } from "../../agent/records/basicStorage";
-import { SqliteStorage } from "./sqliteStorage";
-import { BasicRecord } from "../../agent/records/basicRecord";
-import { Agent } from "../../agent/agent";
-import { MiscRecordId } from "../../agent/agent.types";
-import { OnlineOnly } from "../../agent/services/utils";
 
 class SqliteSession {
   static readonly VERSION_DATABASE_KEY = "VERSION_DATABASE_KEY";
-  static readonly CLOUD_VERSION_KEY = "CLOUD_VERSION_KEY";
   static readonly GET_KV_SQL = "SELECT * FROM kv where key = ?";
   static readonly INSERT_KV_SQL =
     "INSERT OR REPLACE INTO kv (key,value) VALUES (?,?)";
   static readonly BASE_VERSION = "0.0.0";
+
   private sessionInstance?: SQLiteDBConnection;
-  private basicStorageService!: BasicStorage;
-  private localMigrationManager?: LocalMigrationManager;
 
   get session() {
     return this.sessionInstance;
   }
 
-  private async getKv(key: string): Promise<unknown> {
+  private async getKv(key: string): Promise<any> {
     const qValues = await this.sessionInstance?.query(
       SqliteSession.GET_KV_SQL,
       [key]
@@ -41,35 +34,15 @@ class SqliteSession {
     return undefined;
   }
 
-  private async setKv(key: string, value: unknown): Promise<void> {
-    await this.sessionInstance?.query(SqliteSession.INSERT_KV_SQL, [
-      key,
-      JSON.stringify(value),
-    ]);
-  }
-
   private async getCurrentVersionDatabase(): Promise<string> {
     try {
       const currentVersionDatabase = await this.getKv(
         SqliteSession.VERSION_DATABASE_KEY
       );
-      return (currentVersionDatabase as string) ?? SqliteSession.BASE_VERSION;
+      return currentVersionDatabase ?? SqliteSession.BASE_VERSION;
     } catch (error) {
       return SqliteSession.BASE_VERSION;
     }
-  }
-
-  private async getCloudVersion(): Promise<string> {
-    try {
-      const cloudVersion = await this.getKv(SqliteSession.CLOUD_VERSION_KEY);
-      return (cloudVersion as string) ?? SqliteSession.BASE_VERSION;
-    } catch (error) {
-      return SqliteSession.BASE_VERSION;
-    }
-  }
-
-  private async setCloudVersion(version: string): Promise<void> {
-    await this.setKv(SqliteSession.CLOUD_VERSION_KEY, version);
   }
 
   async open(storageName: string): Promise<void> {
@@ -105,12 +78,6 @@ class SqliteSession {
       );
     }
     await this.sessionInstance.open();
-    if (!this.sessionInstance) {
-      throw new Error("Failed to open SQLite session");
-    }
-    this.basicStorageService = new BasicStorage(
-      new SqliteStorage<BasicRecord>(this.sessionInstance)
-    );
     await this.migrateDb();
   }
 
@@ -119,51 +86,36 @@ class SqliteSession {
     await CapacitorSQLite.deleteDatabase({ database: storageName });
   }
 
-  /**
-   * Executes cloud migrations when connecting to KERIA
-   * Should be called on normal startup or recovery when KERIA connection is established
-   */
-  @OnlineOnly
-  async executeCloudMigrationsOnConnection(): Promise<void> {
-    const isKeriaConfigured = await this.isKeriaConfigured();
-    if (!isKeriaConfigured) {
-      // eslint-disable-next-line no-console
-      console.log("Skipping cloud migrations - KERIA not configured");
-      return;
-    }
-
-    const cloudMigrationManager = new CloudMigrationManager(
-      Agent.agent.client,
-      this.getCloudVersion.bind(this),
-      this.setCloudVersion.bind(this)
-    );
-
-    await cloudMigrationManager.executeCloudMigrations();
-  }
-
   private async migrateDb(): Promise<void> {
     const currentVersion = await this.getCurrentVersionDatabase();
-    await this.executeLocalMigrations(currentVersion);
-  }
 
-  private async executeLocalMigrations(currentVersion: string): Promise<void> {
-    if (!this.localMigrationManager) {
-      if (!this.sessionInstance) {
-        throw new Error("Session instance not available");
-      }
-      this.localMigrationManager = new LocalMigrationManager(
-        this.sessionInstance
-      );
-    }
-
-    await this.localMigrationManager.executeLocalMigrations(currentVersion);
-  }
-
-  private async isKeriaConfigured(): Promise<boolean> {
-    const connectUrlRecord = await this.basicStorageService.findById(
-      MiscRecordId.KERIA_CONNECT_URL
+    const orderedMigrations = MIGRATIONS.sort((a, b) =>
+      versionCompare(a.version, b.version)
     );
-    return !!connectUrlRecord?.content?.url;
+    for (const migration of orderedMigrations) {
+      if (versionCompare(migration.version, currentVersion) !== 1) {
+        continue;
+      }
+
+      const migrationStatements = [];
+      if (migration.type === MigrationType.SQL) {
+        for (const sqlStatement of migration.sql) {
+          migrationStatements.push({ statement: sqlStatement });
+        }
+      } else {
+        const statements = await migration.migrationStatements(this.session!);
+        migrationStatements.push(...statements);
+      }
+
+      migrationStatements.push({
+        statement: SqliteSession.INSERT_KV_SQL,
+        values: [
+          SqliteSession.VERSION_DATABASE_KEY,
+          JSON.stringify(migration.version),
+        ],
+      });
+      await this.session!.executeTransaction(migrationStatements);
+    }
   }
 }
 

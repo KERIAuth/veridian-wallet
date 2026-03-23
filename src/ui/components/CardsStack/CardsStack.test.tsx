@@ -1,14 +1,17 @@
-import { IonReactRouter } from "@ionic/react-router";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
 import { Route } from "react-router-dom";
-import { CredentialStatus } from "../../../core/agent/services/credentialService.types";
+import { IonReactRouter } from "@ionic/react-router";
+import { CLEAR_STATE_DELAY, CardsStack, NAVIGATION_DELAY } from "./CardsStack";
+import { identifierFix } from "../../__fixtures__/identifierFix";
 import { store } from "../../../store";
-import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
-import { CredentialDetails } from "../../pages/CredentialDetails";
+import { IdentifierDetails } from "../../pages/IdentifierDetails";
 import { TabsRoutePath } from "../navigation/TabsMenu";
-import { CardsStack, NAVIGATION_DELAY } from "./CardsStack";
+import { CardType } from "../../globals/types";
+import { CredentialDetails } from "../../pages/CredentialDetails";
+import { CredentialStatus } from "../../../core/agent/services/credentialService.types";
+import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
 
 jest.mock("../../../core/agent/agent", () => ({
   Agent: {
@@ -59,11 +62,30 @@ jest.mock("../../../core/agent/agent", () => ({
 }));
 
 describe("Cards Stack Component", () => {
+  test("It renders Cards Stack", () => {
+    const { getByText } = render(
+      <Provider store={store}>
+        <CardsStack
+          name="example"
+          cardsType={CardType.IDENTIFIERS}
+          cardsData={identifierFix}
+        />
+      </Provider>
+    );
+    const firstCardId = getByText(
+      identifierFix[0].id.substring(0, 5) +
+        "..." +
+        identifierFix[0].id.slice(-5)
+    );
+    expect(firstCardId).toBeInTheDocument();
+  });
+
   test("It renders on Credential card with card pending", () => {
     const { getByText } = render(
       <Provider store={store}>
         <CardsStack
           name="example"
+          cardsType={CardType.CREDENTIALS}
           cardsData={[
             {
               ...filteredCredsFix[0],
@@ -77,6 +99,45 @@ describe("Cards Stack Component", () => {
     expect(labelPending).toBeInTheDocument();
   });
 
+  test("It navigates to Identifier Details and back", async () => {
+    jest.useFakeTimers();
+    const { findByTestId } = render(
+      <IonReactRouter>
+        <Provider store={store}>
+          <CardsStack
+            name="example"
+            cardsType={CardType.IDENTIFIERS}
+            cardsData={identifierFix}
+          />
+          <Route
+            path={TabsRoutePath.IDENTIFIER_DETAILS}
+            component={IdentifierDetails}
+          />
+        </Provider>
+      </IonReactRouter>
+    );
+
+    const firstCard = await findByTestId(
+      "identifier-card-template-example-index-0"
+    );
+    await waitFor(() => expect(firstCard).not.toHaveClass("active"));
+
+    act(() => {
+      fireEvent.click(firstCard);
+      jest.advanceTimersByTime(NAVIGATION_DELAY);
+    });
+
+    await waitFor(() => expect(firstCard).toHaveClass("active"));
+
+    const doneButton = await findByTestId("close-button");
+    act(() => {
+      fireEvent.click(doneButton);
+      jest.advanceTimersByTime(CLEAR_STATE_DELAY);
+    });
+
+    await waitFor(() => expect(firstCard).not.toHaveClass("active"));
+  });
+
   test("It navigates to Credential Details", async () => {
     jest.useFakeTimers();
     const { findByTestId } = render(
@@ -84,6 +145,7 @@ describe("Cards Stack Component", () => {
         <Provider store={store}>
           <CardsStack
             name="example"
+            cardsType={CardType.CREDENTIALS}
             cardsData={filteredCredsFix}
           />
           <Route

@@ -15,8 +15,11 @@ import { MultiSigIcpRequestDetails } from "../../../../../core/agent/services/id
 import { NotificationRoute } from "../../../../../core/agent/services/keriaNotificationService.types";
 import { MultiSigService } from "../../../../../core/agent/services/multiSigService";
 import { i18n } from "../../../../../i18n";
-import { useAppDispatch } from "../../../../../store/hooks";
-import { deleteNotificationById } from "../../../../../store/reducers/profileCache";
+import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
+import {
+  getNotificationsCache,
+  setNotificationsCache,
+} from "../../../../../store/reducers/notificationsCache";
 import { Alert as AlertDecline } from "../../../../components/Alert";
 import { FallbackIcon } from "../../../../components/FallbackIcon";
 import { ScrollablePageLayout } from "../../../../components/layout/ScrollablePageLayout";
@@ -41,6 +44,8 @@ const MultiSigRequest = ({
   handleBack,
 }: NotificationDetailsProps) => {
   const dispatch = useAppDispatch();
+  const notificationsCache = useAppSelector(getNotificationsCache);
+  const [notifications, setNotifications] = useState(notificationsCache);
   const [spinner, setSpinner] = useState(false);
   const [alertDeclineIsOpen, setAlertDeclineIsOpen] = useState(false);
   const [multisigIcpDetails, setMultisigIcpDetails] =
@@ -73,7 +78,11 @@ const MultiSigRequest = ({
   useOnlineStatusEffect(getDetails);
 
   const handleNotificationUpdate = async () => {
-    dispatch(deleteNotificationById(notificationDetails.id));
+    const updatedNotifications = notifications.filter(
+      (notification) => notification.id !== notificationDetails.id
+    );
+    setNotifications(updatedNotifications);
+    dispatch(setNotificationsCache(updatedNotifications));
   };
 
   const actionAccept = async () => {
@@ -89,7 +98,7 @@ const MultiSigRequest = ({
         notificationDetails.id,
         notificationDetails.a.d as string
       );
-      multisigIcpDetails.signingThreshold === 1
+      multisigIcpDetails.threshold === 1
         ? ToastMsgType.IDENTIFIER_CREATED
         : ToastMsgType.IDENTIFIER_REQUESTED;
       handleNotificationUpdate();
@@ -245,7 +254,7 @@ const MultiSigRequest = ({
                             >
                               <IonLabel>
                                 {connection.label ||
-                                  i18n.t("tabs.connections.unknown")}
+                                  i18n.t("connections.unknown")}
                               </IonLabel>
                             </IonCol>
                           </IonRow>
@@ -263,7 +272,7 @@ const MultiSigRequest = ({
           <IonCard className="multisig-request-details">
             <IonList lines="none">
               <IonItem className="multisig-request-item">
-                <IonLabel>{multisigIcpDetails?.signingThreshold}</IonLabel>
+                <IonLabel>{multisigIcpDetails?.threshold}</IonLabel>
               </IonItem>
             </IonList>
           </IonCard>

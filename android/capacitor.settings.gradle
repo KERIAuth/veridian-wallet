@@ -2,6 +2,9 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
+include ':aparajita-capacitor-biometric-auth'
+project(':aparajita-capacitor-biometric-auth').projectDir = new File('../node_modules/@aparajita/capacitor-biometric-auth/android')
+
 include ':capacitor-community-privacy-screen'
 project(':capacitor-community-privacy-screen').projectDir = new File('../node_modules/@capacitor-community/privacy-screen/android')
 
@@ -29,9 +32,6 @@ project(':capacitor-device').projectDir = new File('../node_modules/@capacitor/d
 include ':capacitor-keyboard'
 project(':capacitor-keyboard').projectDir = new File('../node_modules/@capacitor/keyboard/android')
 
-include ':capacitor-local-notifications'
-project(':capacitor-local-notifications').projectDir = new File('../node_modules/@capacitor/local-notifications/android')
-
 include ':capacitor-screen-orientation'
 project(':capacitor-screen-orientation').projectDir = new File('../node_modules/@capacitor/screen-orientation/android')
 
@@ -43,9 +43,6 @@ project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capa
 
 include ':capacitor-status-bar'
 project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacitor/status-bar/android')
-
-include ':capgo-capacitor-native-biometric'
-project(':capgo-capacitor-native-biometric').projectDir = new File('../node_modules/@capgo/capacitor-native-biometric/android')
 
 include ':evva-capacitor-secure-storage-plugin'
 project(':evva-capacitor-secure-storage-plugin').projectDir = new File('../node_modules/@evva/capacitor-secure-storage-plugin/android')

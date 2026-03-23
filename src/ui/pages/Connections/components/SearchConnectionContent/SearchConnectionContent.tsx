@@ -1,7 +1,6 @@
-import { useMemo } from "react";
 import { IonIcon } from "@ionic/react";
 import { search } from "ionicons/icons";
-import { RegularConnectionDetails } from "../../../../../core/agent/agent.types";
+import { ConnectionShortDetails } from "../../../../../core/agent/agent.types";
 import { i18n } from "../../../../../i18n";
 import { CardItem, CardList } from "../../../../components/CardList";
 import { ListHeader } from "../../../../components/ListHeader";
@@ -18,7 +17,7 @@ const SearchConnectionList = ({
   title,
 }: SearchConnectionListProps) => {
   const cardListData = connections.map(
-    (connection): CardItem<RegularConnectionDetails> => {
+    (connection): CardItem<ConnectionShortDetails> => {
       return {
         id: connection.id,
         title: connection.label,
@@ -35,7 +34,7 @@ const SearchConnectionList = ({
         className="connections-card-list"
         data={cardListData}
         lines="none"
-        onCardClick={(item) => onItemClick(item)}
+        onCardClick={onItemClick}
         testId={`${testId}-list`}
       />
     </div>
@@ -47,15 +46,13 @@ const SearchConnectionContent = ({
   onItemClick,
   keyword,
 }: SearchConnectionContentProps) => {
-  const filteredConnections = useMemo(() => {
-    return mappedConnections.flatMap((item) =>
-      item.value.filter((connection) =>
-        connection.label.toLowerCase().includes(keyword.toLowerCase())
-      )
+  const connections = mappedConnections.flatMap((item) => {
+    return item.value.filter((item) =>
+      item.label.toLowerCase().includes(keyword.toLowerCase())
     );
-  }, [mappedConnections, keyword]);
+  });
 
-  if (filteredConnections.length === 0) {
+  if (connections.length === 0) {
     return (
       <div
         data-testid="empty-search-connection"
@@ -63,11 +60,11 @@ const SearchConnectionContent = ({
       >
         <IonIcon icon={search} />
         <h3>
-          {i18n.t("tabs.connections.tab.search.noresult.title", {
+          {i18n.t("connections.page.search.noresult.title", {
             keyword,
           })}
         </h3>
-        <p>{i18n.t("tabs.connections.tab.search.noresult.text")}</p>
+        <p>{i18n.t("connections.page.search.noresult.text")}</p>
       </div>
     );
   }
@@ -78,9 +75,9 @@ const SearchConnectionContent = ({
       className="search-connection-content"
     >
       <SearchConnectionList
-        title={`${i18n.t("tabs.connections.tab.search.connections")}`}
-        connections={filteredConnections}
-        onItemClick={(item) => onItemClick(item)}
+        title={`${i18n.t("connections.page.search.connections")}`}
+        connections={connections}
+        onItemClick={onItemClick}
         testId="connection-search"
       />
     </div>

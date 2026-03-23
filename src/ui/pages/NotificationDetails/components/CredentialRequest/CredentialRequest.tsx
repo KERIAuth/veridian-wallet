@@ -1,26 +1,20 @@
 import { IonSpinner } from "@ionic/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Agent } from "../../../../../core/agent/agent";
 import { IdentifierType } from "../../../../../core/agent/services/identifier.types";
 import { CredentialsMatchingApply } from "../../../../../core/agent/services/ipexCommunicationService.types";
 import { i18n } from "../../../../../i18n";
 import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
-import {
-  deleteNotificationById,
-  getCurrentProfile,
-  getMultisigConnectionsCache,
-  getProfiles,
-} from "../../../../../store/reducers/profileCache";
-import { setToastMsg } from "../../../../../store/reducers/stateCache";
+import { getMultisigConnectionsCache } from "../../../../../store/reducers/connectionsCache";
+import { getIdentifiersCache } from "../../../../../store/reducers/identifiersCache";
+import { getAuthentication } from "../../../../../store/reducers/stateCache";
 import { Alert } from "../../../../components/Alert";
-import { Verification } from "../../../../components/Verification";
-import { ToastMsgType } from "../../../../globals/types";
 import { useOnlineStatusEffect } from "../../../../hooks";
 import { showError } from "../../../../utils/error";
 import { NotificationDetailsProps } from "../../NotificationDetails.types";
 import { ChooseCredential } from "./ChooseCredential";
 import "./CredentialRequest.scss";
-import { LinkedGroup, RequestCredential } from "./CredentialRequest.types";
+import { LinkedGroup } from "./CredentialRequest.types";
 import { CredentialRequestInformation } from "./CredentialRequestInformation";
 
 const CredentialRequest = ({
@@ -30,31 +24,25 @@ const CredentialRequest = ({
   handleBack,
 }: NotificationDetailsProps) => {
   const dispatch = useAppDispatch();
-  const profiles = useAppSelector(getProfiles);
+  const identifiersData = useAppSelector(getIdentifiersCache);
   const multisignConnectionsCache = useAppSelector(getMultisigConnectionsCache);
+  const userName = useAppSelector(getAuthentication)?.userName;
   const [requestStage, setRequestStage] = useState(0);
   const [credentialRequest, setCredentialRequest] =
     useState<CredentialsMatchingApply | null>();
-  const currentProfile = useAppSelector(getCurrentProfile);
+
   const [linkedGroup, setLinkedGroup] = useState<LinkedGroup | null>(null);
   const [isOpenAlert, setIsOpenAlert] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [suitableCredential, setSuitableCredential] =
-    useState<RequestCredential | null>(null);
-  const [verifyIsOpen, setVerifyIsOpen] = useState(false);
 
-  const notificationExists = !!currentProfile?.notifications.some(
-    (notification) => notification.id === notificationDetails.id
-  );
   const reachThreshold =
     linkedGroup &&
     linkedGroup.othersJoined.length +
       (linkedGroup.linkedRequest.accepted ? 1 : 0) >=
-      Number(linkedGroup.threshold.signingThreshold);
+      Number(linkedGroup.threshold);
 
-  const userAID = !credentialRequest?.identifier
+  const userAID = !credentialRequest
     ? null
-    : profiles[credentialRequest.identifier]?.identity.groupMemberPre || null;
+    : identifiersData[credentialRequest.identifier]?.groupMemberPre || null;
 
   const getMultisigInfo = useCallback(async () => {
     const linkedGroup =
@@ -63,15 +51,12 @@ const CredentialRequest = ({
       );
 
     const memberInfos = linkedGroup.members.map((member: string) => {
-      const memberConnection = multisignConnectionsCache.find(
-        (c) => c.id === member
-      );
+      const memberConnection = multisignConnectionsCache[member];
       if (!memberConnection) {
         return {
           aid: member,
-          name: currentProfile?.identity.groupUsername || "",
+          name: userName,
           joined: linkedGroup.linkedRequest.accepted,
-          isCurrentUser: true,
         };
       }
 
@@ -79,7 +64,6 @@ const CredentialRequest = ({
         aid: member,
         name: memberConnection.label || member,
         joined: linkedGroup.othersJoined.includes(member),
-        isCurrentUser: false,
       };
     });
 
@@ -87,24 +71,18 @@ const CredentialRequest = ({
       ...linkedGroup,
       memberInfos,
     });
-  }, [
-    currentProfile?.identity.groupUsername,
-    multisignConnectionsCache,
-    notificationDetails.id,
-  ]);
+  }, [multisignConnectionsCache, notificationDetails.id, userName]);
 
   const getCrendetialRequest = useCallback(async () => {
-    if (!notificationExists) return;
-
     try {
       const request = await Agent.agent.ipexCommunications.getIpexApplyDetails(
         notificationDetails
       );
 
-      const profile = profiles[request.identifier];
+      const identifier = identifiersData[request.identifier];
 
       const identifierType =
-        profile?.identity.groupMemberPre || profile?.identity.groupMetadata
+        identifier?.groupMemberPre || identifier?.groupMetadata
           ? IdentifierType.Group
           : IdentifierType.Individual;
 
@@ -117,65 +95,9 @@ const CredentialRequest = ({
       handleBack();
       showError("Unable to get credential request detail", e, dispatch);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    notificationDetails,
-    profiles,
-    getMultisigInfo,
-    dispatch,
-    notificationExists,
-  ]);
+  }, [notificationDetails, identifiersData, getMultisigInfo, dispatch]);
 
   useOnlineStatusEffect(getCrendetialRequest);
-
-  // Function to get suitable credentials (similar to ChooseCredential logic)
-  const suitableCredentials = useMemo(() => {
-    if (!credentialRequest) return [];
-
-    return credentialRequest.credentials.map(
-      (cred): RequestCredential => ({
-        connectionId: cred.connectionId,
-        acdc: cred.acdc,
-      })
-    );
-  }, [credentialRequest]);
-
-  // Function to automatically submit a credential
-  const handleSubmitCredential = useCallback(
-    async (credential: RequestCredential) => {
-      try {
-        setLoading(true);
-
-        await Agent.agent.ipexCommunications.offerAcdcFromApply(
-          notificationDetails.id,
-          credential.acdc
-        );
-
-        if (!linkedGroup) {
-          dispatch(deleteNotificationById(notificationDetails.id));
-        }
-
-        dispatch(
-          setToastMsg(
-            !linkedGroup
-              ? ToastMsgType.SHARE_CRED_SUCCESS
-              : ToastMsgType.PROPOSED_CRED_SUCCESS
-          )
-        );
-        handleBack();
-      } catch (e) {
-        showError(
-          "Failed to show cred",
-          e,
-          dispatch,
-          ToastMsgType.SHARE_CRED_FAIL
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [notificationDetails.id, linkedGroup, dispatch, handleBack]
-  );
 
   const changeToStageTwo = () => {
     if (reachThreshold) {
@@ -185,12 +107,6 @@ const CredentialRequest = ({
 
     if (credentialRequest?.credentials.length === 0) {
       setIsOpenAlert(true);
-      return;
-    }
-
-    if (suitableCredentials.length === 1) {
-      setSuitableCredential(suitableCredentials[0]);
-      setVerifyIsOpen(true);
       return;
     }
 
@@ -229,7 +145,6 @@ const CredentialRequest = ({
           onBack={handleBack}
           userAID={userAID}
           onReloadData={getCrendetialRequest}
-          suitableCredentialsCount={suitableCredentials.length}
         />
       ) : (
         <ChooseCredential
@@ -237,18 +152,11 @@ const CredentialRequest = ({
           activeStatus={activeStatus}
           credentialRequest={credentialRequest}
           notificationDetails={notificationDetails}
+          linkedGroup={linkedGroup}
           onBack={backToStageOne}
+          onClose={handleBack}
           reloadData={getCrendetialRequest}
-          onSubmit={handleSubmitCredential}
         />
-      )}
-      {loading && (
-        <div
-          className="credential-request-spinner-container"
-          data-testid="credential-request-auto-submit-spinner"
-        >
-          <IonSpinner name="circular" />
-        </div>
       )}
       <Alert
         isOpen={isOpenAlert}
@@ -262,13 +170,6 @@ const CredentialRequest = ({
         )}`}
         actionConfirm={handleClose}
         actionDismiss={handleClose}
-      />
-      <Verification
-        verifyIsOpen={verifyIsOpen}
-        setVerifyIsOpen={setVerifyIsOpen}
-        onVerify={() =>
-          suitableCredential && handleSubmitCredential(suitableCredential)
-        }
       />
     </div>
   );

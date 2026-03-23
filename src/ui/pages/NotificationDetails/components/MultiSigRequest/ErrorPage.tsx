@@ -2,15 +2,13 @@ import { IonText } from "@ionic/react";
 import { alertCircleOutline } from "ionicons/icons";
 import { useState } from "react";
 import { Trans } from "react-i18next";
-import { isMultisigConnectionDetails } from "../../../../../core/agent/agent.types";
 import { IdentifierShortDetails } from "../../../../../core/agent/services/identifier.types";
 import { i18n } from "../../../../../i18n";
 import { useAppSelector } from "../../../../../store/hooks";
-import {
-  getMultisigConnectionsCache,
-  getProfiles,
-} from "../../../../../store/reducers/profileCache";
+import { getMultisigConnectionsCache } from "../../../../../store/reducers/connectionsCache";
+import { getIdentifiersCache } from "../../../../../store/reducers/identifiersCache";
 import { CardDetailsBlock } from "../../../../components/CardDetails";
+import { CreateGroupIdentifier } from "../../../../components/CreateGroupIdentifier";
 import { InfoCard } from "../../../../components/InfoCard";
 import { ScrollablePageLayout } from "../../../../components/layout/ScrollablePageLayout";
 import { PageFooter } from "../../../../components/PageFooter";
@@ -24,31 +22,33 @@ const ErrorPage = ({
   activeStatus,
   handleBack,
   notificationDetails,
+  onFinishSetup,
 }: ErrorPageProps) => {
-  const profiles = useAppSelector(getProfiles);
+  const identifierCache = useAppSelector(getIdentifiersCache);
   const connectionsCache = useAppSelector(getMultisigConnectionsCache);
-  const [, setResumeMultiSig] = useState<IdentifierShortDetails | null>(null);
+  const [resumeMultiSig, setResumeMultiSig] =
+    useState<IdentifierShortDetails | null>(null);
 
-  const [, setCreateIdentifierModalIsOpen] = useState(false);
+  const [createIdentifierModalIsOpen, setCreateIdentifierModalIsOpen] =
+    useState(false);
 
   const actionAccept = () => {
-    const connection = connectionsCache.find(
-      (c) => c.id === notificationDetails.connectionId
-    );
     const multiSignGroupId =
-      connection && isMultisigConnectionDetails(connection)
-        ? connection.groupId
-        : undefined;
+      connectionsCache[notificationDetails.connectionId].groupId;
 
-    const identifier = Object.values(profiles).find((item) => {
-      const profileGroupId = item.identity.groupMetadata?.groupId;
-      return profileGroupId === multiSignGroupId;
-    });
+    const identifier = Object.values(identifierCache).find(
+      (item) => item.groupMetadata?.groupId === multiSignGroupId
+    );
 
     if (identifier) {
-      setResumeMultiSig(identifier.identity);
+      setResumeMultiSig(identifier);
       setCreateIdentifierModalIsOpen(true);
     }
+  };
+
+  const handleCloseCreateIdentifier = () => {
+    setCreateIdentifierModalIsOpen(false);
+    onFinishSetup();
   };
 
   const HandleEmail = () => {
@@ -142,6 +142,13 @@ const ErrorPage = ({
           </IonText>
         </div>
       </ScrollablePageLayout>
+      <CreateGroupIdentifier
+        modalIsOpen={createIdentifierModalIsOpen}
+        setModalIsOpen={handleCloseCreateIdentifier}
+        resumeMultiSig={resumeMultiSig}
+        setResumeMultiSig={setResumeMultiSig}
+        preventRedirect
+      />
     </>
   );
 };

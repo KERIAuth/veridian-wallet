@@ -10,12 +10,5 @@ interface ForgotAuthInfoProps {
   overrideAlertZIndex?: boolean;
 }
 
-interface VerifySeedPhraseProps {
-  onVerifySuccess: () => void;
-  onCancel: () => void;
-  type: ForgotType;
-  overrideAlertZIndex?: boolean;
-}
-
-export type { ForgotAuthInfoProps, VerifySeedPhraseProps };
+export type { ForgotAuthInfoProps };
 export { ForgotType };

@@ -2,20 +2,18 @@ import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
+import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../routes/paths";
-import { credsFixAcdc } from "../../__fixtures__/credsFix";
 import {
   filteredCredsFix,
   revokedCredsFix,
 } from "../../__fixtures__/filteredCredsFix";
-import { filteredIdentifierMapFix } from "../../__fixtures__/filteredIdentifierFix";
 import { notificationsFix } from "../../__fixtures__/notificationsFix";
-import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
 import { ArchivedCredentialsContainer } from "./ArchivedCredentials";
-import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
-import { CredentialStatus } from "../../../core/agent/services/credentialService.types";
+import { credsFixAcdc } from "../../__fixtures__/credsFix";
+import { filteredIdentifierMapFix } from "../../__fixtures__/filteredIdentifierFix";
 
 const deleteCredentialsMock = jest.fn((id: string) => Promise.resolve(true));
 const deleteNotificationMock = jest.fn(() => Promise.resolve(true));
@@ -65,19 +63,33 @@ const initialStateEmpty = {
       passcodeIsSet: true,
     },
   },
+  seedPhraseCache: {},
+  credsCache: {
+    creds: [],
+  },
+  notificationsCache: {
+    notifications: [],
+  },
   biometricsCache: {
     enabled: false,
   },
-  profilesCache: profileCacheFixData,
+  connectionsCache: {
+    connections: {},
+    multisigConnections: {},
+  },
+  identifiersCache: {
+    identifiers: filteredIdentifierMapFix,
+  },
 };
 
 let mockedStore: Store<unknown, AnyAction>;
 describe("Archived and revoked credentials", () => {
+  const mockStore = configureStore();
   const dispatchMock = jest.fn();
 
   beforeEach(() => {
     mockedStore = {
-      ...makeTestStore(initialStateEmpty),
+      ...mockStore(initialStateEmpty),
       dispatch: dispatchMock,
     };
   });
@@ -164,14 +176,7 @@ describe("Archived and revoked credentials", () => {
       });
 
       await waitFor(() => {
-        expect(
-          getByText(
-            EN_TRANSLATIONS.tabs.credentials.archived.manyselected.replace(
-              "{{amount}}",
-              "0"
-            )
-          )
-        ).toBeVisible();
+        expect(getByText("0 Credentials Selected")).toBeVisible();
       });
 
       const cardItem = getByTestId(
@@ -181,7 +186,7 @@ describe("Archived and revoked credentials", () => {
 
       await waitFor(() => {
         expect(getByTestId("selected-amount-credentials").innerHTML).toBe(
-          EN_TRANSLATIONS.tabs.credentials.archived.oneselected
+          "1 Credential Selected"
         );
       });
 
@@ -220,9 +225,6 @@ describe("Archived and revoked credentials", () => {
 
       await waitFor(() => {
         expect(getByTestId("action-button")).toBeVisible();
-        expect(
-          getByText(EN_TRANSLATIONS.tabs.credentials.archived.archivedtitle)
-        ).toBeVisible();
       });
 
       act(() => {
@@ -238,14 +240,7 @@ describe("Archived and revoked credentials", () => {
       });
 
       await waitFor(() => {
-        expect(
-          getByText(
-            EN_TRANSLATIONS.tabs.credentials.archived.manyselected.replace(
-              "{{amount}}",
-              "0"
-            )
-          )
-        ).toBeVisible();
+        expect(getByText("0 Credentials Selected")).toBeVisible();
       });
 
       const cardItem = getByTestId(
@@ -291,30 +286,36 @@ describe("Archived and revoked credentials", () => {
           passcodeIsSet: true,
         },
       },
-      profilesCache: {
-        ...profileCacheFixData,
-        profiles: {
-          ...profileCacheFixData.profiles,
-          ...(profileCacheFixData.defaultProfile
-            ? {
-                [profileCacheFixData.defaultProfile as string]: {
-                  ...profileCacheFixData.profiles[
-                    profileCacheFixData.defaultProfile as string
-                  ],
-                  connections: [],
-                  multisigConnections: [],
-                },
-              }
-            : {}),
-        },
+      seedPhraseCache: {},
+      credsCache: {
+        creds: revokedCredsFix,
+      },
+      notificationsCache: {
+        notifications: [
+          {
+            ...notificationsFix[0],
+            a: {
+              ...notificationsFix[0].a,
+              credentialId: revokedCredsFix[0].id,
+            },
+          },
+        ],
       },
       biometricsCache: {
         enabled: false,
       },
+      connectionsCache: {
+        connections: {},
+        multisigConnections: {},
+      },
+
+      identifiersCache: {
+        identifiers: filteredIdentifierMapFix,
+      },
     };
 
     const mockedStore = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: dispatchMock,
     };
 
@@ -324,9 +325,7 @@ describe("Archived and revoked credentials", () => {
           <ArchivedCredentialsContainer
             revokedCreds={revokedCredsFix}
             archivedCredentialsIsOpen={true}
-            archivedCreds={filteredCredsFix.filter(
-              (item) => item.status !== CredentialStatus.REVOKED
-            )}
+            archivedCreds={filteredCredsFix}
             setArchivedCredentialsIsOpen={jest.fn()}
           />
         </Provider>
@@ -334,9 +333,6 @@ describe("Archived and revoked credentials", () => {
 
       await waitFor(() => {
         expect(getByTestId("action-button")).toBeVisible();
-        expect(
-          getByText(EN_TRANSLATIONS.tabs.credentials.archived.revokedtitle)
-        ).toBeVisible();
       });
 
       act(() => {
@@ -352,14 +348,7 @@ describe("Archived and revoked credentials", () => {
       });
 
       await waitFor(() => {
-        expect(
-          getByText(
-            EN_TRANSLATIONS.tabs.credentials.archived.manyselected.replace(
-              "{{amount}}",
-              "0"
-            )
-          )
-        ).toBeVisible();
+        expect(getByText("0 Credentials Selected")).toBeVisible();
       });
 
       const cardItem = getByTestId(
@@ -401,9 +390,7 @@ describe("Archived and revoked credentials", () => {
           <ArchivedCredentialsContainer
             revokedCreds={revokedCredsFix}
             archivedCredentialsIsOpen={true}
-            archivedCreds={filteredCredsFix.filter(
-              (item) => item.status !== CredentialStatus.REVOKED
-            )}
+            archivedCreds={filteredCredsFix}
             setArchivedCredentialsIsOpen={jest.fn()}
           />
         </Provider>
@@ -424,14 +411,7 @@ describe("Archived and revoked credentials", () => {
       });
 
       await waitFor(() => {
-        expect(
-          getByText(
-            EN_TRANSLATIONS.tabs.credentials.archived.manyselected.replace(
-              "{{amount}}",
-              "0"
-            )
-          )
-        ).toBeVisible();
+        expect(getByText("0 Credentials Selected")).toBeVisible();
       });
 
       const cardItem = getByTestId(
@@ -441,7 +421,7 @@ describe("Archived and revoked credentials", () => {
 
       await waitFor(() => {
         expect(getByTestId("selected-amount-credentials").innerHTML).toBe(
-          EN_TRANSLATIONS.tabs.credentials.archived.oneselected
+          "1 Credential Selected"
         );
       });
 

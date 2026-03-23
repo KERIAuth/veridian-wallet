@@ -1,6 +1,6 @@
-import { CreateIdentifierBody, HabState } from "signify-ts";
+import { CreateIdentifierBody } from "signify-ts";
 import {
-  MultisigConnectionDetails,
+  ConnectionShortDetails,
   CreationStatus,
   JSONObject,
 } from "../agent.types";
@@ -10,8 +10,6 @@ interface GroupMetadata {
   groupId: string;
   groupInitiator: boolean;
   groupCreated: boolean;
-  proposedUsername: string;
-  initiatorName?: string;
 }
 
 interface CreateIdentifierInputs {
@@ -28,7 +26,6 @@ interface IdentifierShortDetails {
   creationStatus: CreationStatus;
   groupMetadata?: GroupMetadata;
   groupMemberPre?: string;
-  groupUsername?: string;
 }
 
 interface IdentifierDetails extends IdentifierShortDetails {
@@ -46,10 +43,9 @@ interface IdentifierDetails extends IdentifierShortDetails {
 
 interface MultiSigIcpRequestDetails {
   ourIdentifier: IdentifierShortDetails;
-  sender: MultisigConnectionDetails;
-  otherConnections: MultisigConnectionDetails[];
-  signingThreshold: number;
-  rotationThreshold: number;
+  sender: ConnectionShortDetails;
+  otherConnections: ConnectionShortDetails[];
+  threshold: number;
 }
 
 interface CreateIdentifierResult {
@@ -62,40 +58,16 @@ enum IdentifierType {
   Group = "group",
 }
 
-interface MultisigThresholds {
-  signingThreshold: number;
-  rotationThreshold: number;
-}
+type QueuedIdentifierCreation = {
+  name: string;
+  data: CreateIdentifierBody;
+};
 
-type QueuedGroupCreation =
-  | {
-      initiator: true;
-      name: string;
-      data: CreateIdentifierBody & { group: HabState };
-      groupConnections: MultisigConnectionDetails[];
-      threshold: number | MultisigThresholds;
-    }
-  | {
-      initiator: false;
-      name: string;
-      data: CreateIdentifierBody & { group: HabState };
-      notificationId: string;
-      notificationSaid: string;
-    };
-
-// Type guard to check if CreateIdentifierBody has group data
-function isGroupInceptionData(
-  data: CreateIdentifierBody
-): data is CreateIdentifierBody & { group: HabState } {
-  return data.group !== undefined;
-}
-
-// Helper type used in multiSigService for generating inception data
 type QueuedGroupProps =
   | {
       initiator: true;
-      groupConnections: MultisigConnectionDetails[];
-      threshold: number | MultisigThresholds;
+      groupConnections: ConnectionShortDetails[];
+      threshold: number;
     }
   | {
       initiator: false;
@@ -103,24 +75,11 @@ type QueuedGroupProps =
       notificationSaid: string;
     };
 
+type QueuedGroupCreation = QueuedIdentifierCreation & QueuedGroupProps;
+
 interface GroupParticipants {
   ourIdentifier: IdentifierMetadataRecord;
-  multisigMembers: {
-    signing: Array<{
-      aid: string;
-      ends: {
-        agent: Record<string, { http: string }>;
-        witness: Record<string, { http: string; tcp: string }>;
-      };
-    }>;
-    rotation: Array<{
-      aid: string;
-      ends: {
-        agent: Record<string, { http: string }>;
-        witness: Record<string, { http: string; tcp: string }>;
-      };
-    }>;
-  };
+  multisigMembers: any;
 }
 
 interface RemoteSignRequest {
@@ -128,16 +87,17 @@ interface RemoteSignRequest {
   payload: JSONObject;
 }
 
-export { IdentifierType, isGroupInceptionData };
-
 export type {
   IdentifierShortDetails,
   IdentifierDetails,
   MultiSigIcpRequestDetails,
   CreateIdentifierInputs,
   CreateIdentifierResult,
-  MultisigThresholds,
-  GroupMetadata,
+};
+
+export { IdentifierType };
+export type {
+  QueuedIdentifierCreation,
   QueuedGroupProps,
   QueuedGroupCreation,
   GroupParticipants,

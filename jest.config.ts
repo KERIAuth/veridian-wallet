@@ -33,14 +33,13 @@ export default {
     "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$":
       "<rootDir>/src/ui/__mocks__/fileMock.ts",
     "\\.(css|scss)$": "<rootDir>/src/ui/__mocks__/styleMock.ts",
-    "^ionicons/components/ion-icon.js$":
-      "<rootDir>/src/ui/__mocks__/ionicons.ts",
+    // Jest cannot import the browser version so we can map in the NodeJS version instead.
   },
   testEnvironment: "jsdom",
   testMatch: ["**/src/**/?(*.)+(test).[tj]s?(x)"],
   testPathIgnorePatterns: ["/node_modules/", "/credential-server-ui/"],
   transformIgnorePatterns: [
-    "node_modules/(?!(@ionic/react|@ionic/react-router|@ionic/core|@stencil/core|ionicons|swiper|ssr-window|@capgo/capacitor-native-biometric)/)",
+    "node_modules/(?!(@ionic/react|@ionic/react-router|@ionic/core|@stencil/core|ionicons|swiper|ssr-window|@aparajita/capacitor-biometric-auth)/)",
   ],
   transform: {
     "^.+\\.(ts|tsx)$": "ts-jest",

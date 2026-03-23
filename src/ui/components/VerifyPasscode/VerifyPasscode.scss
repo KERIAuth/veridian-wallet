@@ -3,9 +3,6 @@
     .page-header {
       ion-toolbar {
         --background: transparent;
-        @media screen and (min-width: 250px) and (max-width: 370px) {
-          padding: 0;
-        }
       }
     }
   }

@@ -29,8 +29,12 @@
   .lock-page-title {
     margin-top: 4rem;
   }
-
+  
   img {
     max-width: 68%;
   }
+}
+
+.alert-forgotten {
+  z-index: 2147483647 !important; // max value
 }

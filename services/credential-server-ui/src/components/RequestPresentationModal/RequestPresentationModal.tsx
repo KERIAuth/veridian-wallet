@@ -7,7 +7,7 @@ import { IGNORE_ATTRIBUTES } from "../../const";
 import { useSchemaDetail } from "../../hooks/SchemaDetail";
 import { i18n } from "../../i18n";
 import { CredentialService } from "../../services";
-import { CredentialRequest } from "../../services/credential.types";
+import { CredentialIssueRequest } from "../../services/credential.types";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { savePresentationRequest } from "../../store/reducers/connectionsSlice";
 import { PresentationRequestStatus } from "../../store/reducers/connectionsSlice.types";
@@ -111,16 +111,23 @@ const RequestPresentationModal = ({
     if (!selectedCredTemplate || !selectedConnection || !credTemplateType)
       return;
 
-    const attributeData: Record<string, string> = {};
+    let objAttributes = {};
+    const attribute: Record<string, string> = {};
 
     Object.entries(attributes).forEach(([key, value]) => {
-      if (key && value) attributeData[key] = value;
+      if (key && value) attribute[key] = value;
     });
 
-    const data: CredentialRequest = {
+    if (Object.keys(attribute).length) {
+      objAttributes = {
+        attribute,
+      };
+    }
+
+    const data: CredentialIssueRequest = {
       schemaSaid: selectedCredTemplate,
       aid: selectedConnection,
-      attributes: attributeData,
+      ...objAttributes,
     };
 
     try {
@@ -206,9 +213,7 @@ const RequestPresentationModal = ({
         const data: SelectListData[] = connections.map((connection) => ({
           id: connection.id,
           text: connection.alias,
-          subText: `${connection.id.substring(0, 4)}...${connection.id.slice(
-            -4
-          )}`,
+          subText: `${connection.id.substring(0, 4)}...${connection.id.slice(-4)}`,
         }));
 
         return (

@@ -1,7 +1,7 @@
 import { IonChip, IonIcon } from "@ionic/react";
 import { hourglassOutline } from "ionicons/icons";
 import {
-  RegularConnectionDetails,
+  ConnectionShortDetails,
   ConnectionStatus,
 } from "../../../../core/agent/agent.types";
 import { CardList } from "../../../components/CardList";
@@ -11,8 +11,8 @@ const AlphabeticList = ({
   items,
   handleShowConnectionDetails,
 }: {
-  items: RegularConnectionDetails[];
-  handleShowConnectionDetails: (item: RegularConnectionDetails) => void;
+  items: ConnectionShortDetails[];
+  handleShowConnectionDetails: (item: ConnectionShortDetails) => void;
 }) => {
   const displayConnection = items.map((connection) => ({
     id: connection.id,
@@ -24,16 +24,19 @@ const AlphabeticList = ({
 
   return (
     <CardList
-      onCardClick={(connection) => handleShowConnectionDetails(connection)}
+      onCardClick={handleShowConnectionDetails}
       data={displayConnection}
       onRenderEndSlot={(data) =>
         data.status === ConnectionStatus.PENDING ||
         data.status === ConnectionStatus.FAILED ? (
-          <IonChip>
-            <IonIcon icon={hourglassOutline}></IonIcon>
-            <span>{ConnectionStatus.PENDING}</span>
-          </IonChip>
-        ) : null
+            <IonChip>
+              <IonIcon
+                icon={hourglassOutline}
+                color="primary"
+              ></IonIcon>
+              <span>{ConnectionStatus.PENDING}</span>
+            </IonChip>
+          ) : null
       }
     />
   );

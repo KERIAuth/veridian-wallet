@@ -1,8 +1,11 @@
 import { IonReactMemoryRouter } from "@ionic/react-router";
-import { fireEvent, render, waitFor, act } from "@testing-library/react";
+import { mockIonicReact } from "@ionic/react-test-utils";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { createMemoryHistory } from "history";
 import { Provider } from "react-redux";
 import { Route } from "react-router-dom";
+import configureStore from "redux-mock-store";
+import { act } from "react";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../routes/paths";
 import { connectionsFix } from "../../__fixtures__/connectionsFix";
@@ -11,8 +14,8 @@ import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix"
 import { notificationsFix } from "../../__fixtures__/notificationsFix";
 import { NotificationDetails } from "./NotificationDetails";
 import { credsFixAcdc } from "../../__fixtures__/credsFix";
-import { makeTestStore } from "../../utils/makeTestStore";
-import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
+
+mockIonicReact();
 
 const getMultiSignMock = jest.fn().mockResolvedValue({
   sender: {
@@ -39,6 +42,7 @@ jest.mock("../../../core/agent/agent", () => ({
   },
 }));
 
+const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const initialState = {
   stateCache: {
@@ -50,7 +54,21 @@ const initialState = {
     },
     isOnline: true,
   },
-  profilesCache: profileCacheFixData,
+  connectionsCache: {
+    connections: [],
+  },
+  identifiersCache: {
+    identifiers: filteredIdentifierFix,
+  },
+  notificationsCache: {
+    notifications: notificationsFix,
+  },
+  credsCache: {
+    creds: [],
+  },
+  credsArchivedCache: {
+    creds: [],
+  },
   biometricsCache: {
     enabled: false,
   },
@@ -59,7 +77,7 @@ const initialState = {
 describe("Notification Detail", () => {
   test("render credential receiver request", async () => {
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -96,7 +114,7 @@ describe("Notification Detail", () => {
 
   test("render mutil-sign request", async () => {
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -126,7 +144,7 @@ describe("Notification Detail", () => {
 
   test("render issue cred request", async () => {
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -156,7 +174,7 @@ describe("Notification Detail", () => {
 
   test("render issue cred receive", async () => {
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 

@@ -1,4 +1,4 @@
-import { useIonViewWillEnter } from "@ionic/react";
+import { IonList, useIonViewWillEnter } from "@ionic/react";
 import { useEffect, useRef, useState } from "react";
 import { useHistory } from "react-router-dom";
 import { Agent } from "../../../core/agent/agent";
@@ -9,45 +9,44 @@ import {
 import { i18n } from "../../../i18n";
 import { TabsRoutePath } from "../../../routes/paths";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { getConnectionsCache } from "../../../store/reducers/connectionsCache";
 import {
-  getConnectionsCache,
-  getCurrentProfile,
+  getNotificationsCache,
   markNotificationAsRead,
-} from "../../../store/reducers/profileCache";
+} from "../../../store/reducers/notificationsCache";
 import { setCurrentRoute } from "../../../store/reducers/stateCache";
 import { Alert } from "../../components/Alert";
-import { Avatar } from "../../components/Avatar";
-import { AvatarProps } from "../../components/Avatar/Avatar.types";
 import { CredentialDetailModal } from "../../components/CredentialDetailModule";
 import { FilterChip } from "../../components/FilterChip/FilterChip";
 import { AllowedChipFilter } from "../../components/FilterChip/FilterChip.types";
 import { TabLayout } from "../../components/layout/TabLayout";
 import { showError } from "../../utils/error";
 import { timeDifference } from "../../utils/formatters";
-import { Profiles } from "../Profiles";
+import { IdentifiersFilters } from "../Identifiers/Identifiers.types";
 import { NotificationFilters } from "./Notification.types";
+import { NotificationItem } from "./NotificationItem";
 import "./Notifications.scss";
-import { NotificationSection } from "./components";
-import { NotificationSectionRef } from "./components/NotificationSection.types";
+import { EarlierNotification } from "./components";
+import { EarlierNotificationRef } from "./components/EarlierNotification.types";
+import { NotificationOptionsModal } from "./components/NotificationOptionsModal";
 
 const Notifications = () => {
   const pageId = "notifications-tab";
   const dispatch = useAppDispatch();
   const history = useHistory();
   const connectionsCache = useAppSelector(getConnectionsCache);
-  const currentProfile = useAppSelector(getCurrentProfile);
-  const profileNotifications: KeriaNotification[] =
-    (currentProfile?.notifications as KeriaNotification[]) ?? [];
-  const notifications = [...profileNotifications].sort(
+  const notificationsCache = useAppSelector(getNotificationsCache);
+  const notifications = [...notificationsCache].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  const [selectedFilter, setSelectedFilter] = useState<NotificationFilters>(
-    NotificationFilters.All
+  const [selectedFilter, setSelectedFilter] = useState<
+    NotificationFilters | IdentifiersFilters
+  >(NotificationFilters.All);
+  const earlierNotificationRef = useRef<EarlierNotificationRef>(null);
+  const [selectedItem, setSelectedItem] = useState<KeriaNotification | null>(
+    null
   );
-  const earlierNotificationRef = useRef<NotificationSectionRef>(null);
-
   const [isOpenCredModal, setIsOpenCredModal] = useState(false);
-  const [openProfiles, setOpenProfiles] = useState(false);
   const [viewCred, setViewCred] = useState("");
   const [openUnknownConnectionAlert, setOpenUnknownConnectionAlert] =
     useState(false);
@@ -112,20 +111,20 @@ const Notifications = () => {
   const handleNotificationClick = async (item: KeriaNotification) => {
     await maskAsReaded(item);
 
-    if (item.a.r === NotificationRoute.ExnIpexApply) {
-      const conn = connectionsCache.find((c) => c.id === item.connectionId);
-      if (!conn?.label) {
-        setOpenUnknownPresentConnectionAlert(true);
-        return;
-      }
+    if (
+      item.a.r === NotificationRoute.ExnIpexApply &&
+      !connectionsCache[item.connectionId]?.label
+    ) {
+      setOpenUnknownPresentConnectionAlert(true);
+      return;
     }
 
-    if (item.a.r === NotificationRoute.ExnIpexGrant) {
-      const conn = connectionsCache.find((c) => c.id === item.connectionId);
-      if (!conn?.label) {
-        setOpenUnknownConnectionAlert(true);
-        return;
-      }
+    if (
+      item.a.r === NotificationRoute.ExnIpexGrant &&
+      !connectionsCache?.[item.connectionId]?.label
+    ) {
+      setOpenUnknownConnectionAlert(true);
+      return;
     }
 
     if (item.a.r === NotificationRoute.LocalAcdcRevoked) {
@@ -146,7 +145,7 @@ const Notifications = () => {
     },
     {
       filter: NotificationFilters.Identifier,
-      label: i18n.t("tabs.notifications.tab.chips.connections"),
+      label: i18n.t("tabs.notifications.tab.chips.identifiers"),
     },
     {
       filter: NotificationFilters.Credential,
@@ -157,6 +156,10 @@ const Notifications = () => {
   const handleSelectFilter = (filter: AllowedChipFilter) => {
     setSelectedFilter(filter as NotificationFilters);
     earlierNotificationRef.current?.reset();
+  };
+
+  const onOpenOptionModal = (item: KeriaNotification | null) => {
+    setSelectedItem(item);
   };
 
   useEffect(() => {
@@ -177,32 +180,12 @@ const Notifications = () => {
     setOpenUnknownPresentConnectionAlert(false);
   };
 
-  const handleAvatarClick = () => {
-    setOpenProfiles(true);
-  };
-
-  const AdditionalButtons = ({
-    handleAvatarClick,
-  }: {
-    handleAvatarClick: AvatarProps["handleAvatarClick"];
-  }) => {
-    return (
-      <Avatar
-        id={currentProfile?.identity.id || ""}
-        handleAvatarClick={handleAvatarClick}
-      />
-    );
-  };
-
   return (
     <>
       <TabLayout
         pageId={pageId}
         header={true}
         title={`${i18n.t("tabs.notifications.tab.header")}`}
-        additionalButtons={
-          <AdditionalButtons handleAvatarClick={handleAvatarClick} />
-        }
       >
         <div className="notifications-tab-chips">
           {filterOptions.map((option) => (
@@ -216,39 +199,51 @@ const Notifications = () => {
           ))}
         </div>
         <div className="notifications-tab-content">
-          {filteredNotification.length > 0 ? (
-            <>
-              <NotificationSection
-                title={i18n.t("tabs.notifications.tab.sections.new")}
-                data={notificationsNew}
-                pageId={pageId}
-                onNotificationClick={handleNotificationClick}
-                enableInfiniteScroll={false}
-                testId="notifications-tab-section-new"
-              />
-              <NotificationSection
-                title={i18n.t("tabs.notifications.tab.sections.earlier.title")}
-                data={notificationsEarlier}
-                pageId={pageId}
-                onNotificationClick={handleNotificationClick}
-                enableInfiniteScroll
-                initialDisplayCount={3}
-                loadMoreCount={5}
-                testId="notifications-tab-section-earlier"
-                ref={earlierNotificationRef}
-              />
-            </>
-          ) : (
-            <p className="notification-empty">
-              {i18n.t("tabs.notifications.tab.empty")}
-            </p>
+          {!!notificationsNew.length && (
+            <div
+              className="notifications-tab-section"
+              data-testid="notifications-tab-section-new"
+            >
+              <h3 className="notifications-tab-section-title">
+                {i18n.t("tabs.notifications.tab.sections.new")}
+              </h3>
+              <IonList
+                lines="none"
+                data-testid="notifications-items"
+              >
+                {notificationsNew.map((item: KeriaNotification) => (
+                  <NotificationItem
+                    key={item.id}
+                    item={item}
+                    onClick={handleNotificationClick}
+                    onOptionButtonClick={onOpenOptionModal}
+                  />
+                ))}
+              </IonList>
+            </div>
           )}
+          <EarlierNotification
+            pageId={pageId}
+            ref={earlierNotificationRef}
+            data={notificationsEarlier}
+            onNotificationClick={handleNotificationClick}
+            onOpenOptionModal={onOpenOptionModal}
+          />
+          <p className="notification-empty">
+            {filteredNotification.length === 0
+              ? i18n.t("tabs.notifications.tab.empty")
+              : i18n.t("tabs.notifications.tab.sections.earlier.end")}
+          </p>
         </div>
+        {selectedItem && (
+          <NotificationOptionsModal
+            notification={selectedItem}
+            onShowDetail={handleNotificationClick}
+            optionsIsOpen={!!selectedItem}
+            setCloseModal={() => onOpenOptionModal(null)}
+          />
+        )}
       </TabLayout>
-      <Profiles
-        isOpen={openProfiles}
-        setIsOpen={setOpenProfiles}
-      />
       <CredentialDetailModal
         pageId="revoke-credential"
         isOpen={isOpenCredModal}

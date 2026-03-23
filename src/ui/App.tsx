@@ -9,154 +9,51 @@ import {
   setupIonicReact,
 } from "@ionic/react";
 import { IonReactRouter } from "@ionic/react-router";
-
-import { SafeArea } from "capacitor-plugin-safe-area";
 import { StrictMode, useEffect, useState } from "react";
-import { ConfigurationService } from "../core/configuration";
-import { SecureStorage } from "../core/storage";
-import { i18n } from "../i18n";
+import { SafeArea } from "capacitor-plugin-safe-area";
 import { Routes } from "../routes";
-import { initializeFreeRASP, ThreatCheck } from "../security/freerasp";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
-  getCurrentProfile,
-  getShowProfileState,
-} from "../store/reducers/profileCache";
-import {
+  getCurrentOperation,
   getGlobalLoading,
   getInitializationPhase,
-  getShowVerifySeedPhraseAlert,
-  getIsSyncingData,
 } from "../store/reducers/stateCache";
-import {
-  GlobalLoadingType,
-  InitializationPhase,
-} from "../store/reducers/stateCache/stateCache.types";
 import { AppOffline } from "./components/AppOffline";
 import { AppWrapper } from "./components/AppWrapper";
 import { ToastStack } from "./components/CustomToast/ToastStack";
 import { GenericError, NoWitnessAlert } from "./components/Error";
 import { InputRequest } from "./components/InputRequest";
-import { ProfileStateModal } from "./components/ProfileStateModal";
-import { SetGroupUserName } from "./components/SetGroupUserName";
 import { SidePage } from "./components/SidePage";
-import { VerifySeedPhraseAlert } from "./components/VerifySeedPhraseAlert";
+import { OperationType } from "./globals/types";
+import { FullPageScanner } from "./pages/FullPageScanner";
+import { LoadingPage } from "./pages/LoadingPage/LoadingPage";
+import { LockPage } from "./pages/LockPage/LockPage";
+import "./styles/ionic.scss";
+import "./styles/style.scss";
+import "./App.scss";
+import { showError } from "./utils/error";
+import SystemCompatibilityAlert from "./pages/SystemCompatibilityAlert/SystemCompatibilityAlert";
+import { SecureStorage } from "../core/storage";
+import { compareVersion } from "./utils/version";
 import {
   ANDROID_MIN_VERSION,
   IOS_MIN_VERSION,
   WEBVIEW_MIN_VERSION,
 } from "./globals/constants";
-import { LoadingPage } from "./pages/LoadingPage/LoadingPage";
+import { InitializationPhase } from "../store/reducers/stateCache/stateCache.types";
 import { LoadingType } from "./pages/LoadingPage/LoadingPage.types";
-import { LockPage } from "./pages/LockPage/LockPage";
-import SystemCompatibilityAlert from "./pages/SystemCompatibilityAlert/SystemCompatibilityAlert";
+import { initializeFreeRASP, ThreatCheck } from "../security/freerasp";
 import { SystemThreatAlert } from "./pages/SystemThreatAlert/SystemThreatAlert";
-import "./styles/ionic.scss";
-import "./styles/style.scss";
-import "./App.scss";
-import { showError } from "./utils/error";
-import { compareVersion } from "./utils/version";
-import { BiometricOverlay } from "./components/Verification/BiometricOverlay";
+import { ConfigurationService } from "../core/configuration";
+import { i18n } from "../i18n";
 
 setupIonicReact();
 
-const SetGroupNameWrapper = () => {
-  const currentProfile = useAppSelector(getCurrentProfile);
-
-  const isGroupProfile =
-    !!currentProfile?.identity.groupMetadata ||
-    !!currentProfile?.identity.groupMemberPre;
-
-  if (
-    !isGroupProfile ||
-    currentProfile.identity.groupMetadata?.proposedUsername ||
-    currentProfile.identity.groupUsername
-  )
-    return;
-
-  return <SetGroupUserName identifier={currentProfile.identity} />;
-};
-
-const InitPhase = ({ initPhase }: { initPhase: InitializationPhase }) => {
-  const showProfileState = useAppSelector(getShowProfileState);
-  const showAlert = useAppSelector(getShowVerifySeedPhraseAlert);
-  const isSyncingData = useAppSelector(getIsSyncingData);
-
-  switch (initPhase) {
-    case InitializationPhase.PHASE_ZERO:
-      return <LoadingPage />;
-    case InitializationPhase.PHASE_ONE:
-      return (
-        <>
-          <LoadingPage
-            type={isSyncingData ? LoadingType.Spin : LoadingType.Splash}
-          />
-          <LockPage />
-        </>
-      );
-    case InitializationPhase.PHASE_TWO:
-      return (
-        <>
-          <IonReactRouter>
-            <div
-              className="app-spinner-container"
-              data-testid="app-spinner-container"
-            >
-              <IonSpinner name="circular" />
-            </div>
-            <div
-              className={`app-router ${
-                showProfileState || showAlert ? "ion-hide" : ""
-              }`}
-            >
-              <Routes />
-            </div>
-            <ProfileStateModal />
-            <LockPage />
-            <NoWitnessAlert />
-          </IonReactRouter>
-          <SetGroupNameWrapper />
-          <AppOffline />
-        </>
-      );
-  }
-};
-
-const AppContent = ({
-  isFreeRASPInitialized,
-}: {
-  isFreeRASPInitialized: boolean;
-}) => {
+const App = () => {
   const initializationPhase = useAppSelector(getInitializationPhase);
   const globalLoading = useAppSelector(getGlobalLoading);
-
-  if (Capacitor.isNativePlatform() && !isFreeRASPInitialized) {
-    return <LoadingPage />;
-  }
-
-  return (
-    <>
-      <AppWrapper>
-        <StrictMode>
-          <InitPhase initPhase={initializationPhase} />
-          <InputRequest />
-          <SidePage />
-          <GenericError />
-          <ToastStack />
-          {globalLoading !== GlobalLoadingType.NONE && (
-            <LoadingPage
-              hideBg={globalLoading === GlobalLoadingType.HIDEBG}
-              fullPage
-            />
-          )}
-          <VerifySeedPhraseAlert />
-        </StrictMode>
-      </AppWrapper>
-    </>
-  );
-};
-
-const App = () => {
+  const currentOperation = useAppSelector(getCurrentOperation);
+  const [showScan, setShowScan] = useState(false);
   const [isCompatible, setIsCompatible] = useState(true);
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [isFreeRASPInitialized, setIsFreeRASPInitialized] = useState(false);
@@ -213,6 +110,19 @@ const App = () => {
       window.removeEventListener("error", handleUnknownError);
     };
   }, [dispatch]);
+
+  useEffect(() => {
+    setShowScan(
+      [
+        OperationType.SCAN_CONNECTION,
+        OperationType.SCAN_WALLET_CONNECTION,
+        OperationType.MULTI_SIG_INITIATOR_SCAN,
+        OperationType.MULTI_SIG_RECEIVER_SCAN,
+        OperationType.SCAN_SSI_BOOT_URL,
+        OperationType.SCAN_SSI_CONNECT_URL,
+      ].includes(currentOperation)
+    );
+  }, [currentOperation]);
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
@@ -273,30 +183,66 @@ const App = () => {
     checkCompatibility();
   }, []);
 
-  // Fix for aria-hidden focus warning by blurring focused elements on hidden elements
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes") {
-          const el = mutation.target as HTMLElement;
-          if (
-            (el.classList.contains("ion-page-hidden") ||
-              el.getAttribute("aria-hidden") === "true") &&
-            el.querySelector(":focus")
-          ) {
-            (el.querySelector(":focus") as HTMLElement).blur();
-          }
-        }
-      });
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "aria-hidden"],
-    });
-    return () => observer.disconnect();
-  }, []);
+  const renderContentByInitPhase = (initPhase: InitializationPhase) => {
+    switch (initPhase) {
+      case InitializationPhase.PHASE_ZERO:
+        return <LoadingPage />;
+      case InitializationPhase.PHASE_ONE:
+        return (
+          <>
+            <LoadingPage type={LoadingType.Splash} />
+            <LockPage />
+          </>
+        );
+      case InitializationPhase.PHASE_TWO:
+        return (
+          <>
+            <IonReactRouter>
+              {showScan ? (
+                <FullPageScanner
+                  showScan={showScan}
+                  setShowScan={setShowScan}
+                />
+              ) : (
+                <div
+                  className="app-spinner-container"
+                  data-testid="app-spinner-container"
+                >
+                  <IonSpinner name="circular" />
+                </div>
+              )}
+              <div className={showScan ? "ion-hide" : ""}>
+                <Routes />
+              </div>
+              <LockPage />
+            </IonReactRouter>
+            <AppOffline />
+          </>
+        );
+    }
+  };
+
+  const renderApp = () => {
+    if (Capacitor.isNativePlatform() && !isFreeRASPInitialized) {
+      return <LoadingPage />;
+    }
+
+    return (
+      <>
+        <AppWrapper>
+          <StrictMode>
+            {renderContentByInitPhase(initializationPhase)}
+            <InputRequest />
+            <SidePage />
+            <GenericError />
+            <NoWitnessAlert />
+            <ToastStack />
+            {globalLoading && <LoadingPage fullPage />}
+          </StrictMode>
+        </AppWrapper>
+      </>
+    );
+  };
 
   if (!isCompatible) {
     return <SystemCompatibilityAlert deviceInfo={deviceInfo} />;
@@ -314,12 +260,7 @@ const App = () => {
     );
   }
 
-  return (
-    <IonApp>
-      <AppContent isFreeRASPInitialized={isFreeRASPInitialized} />
-      <BiometricOverlay />
-    </IonApp>
-  );
+  return <IonApp>{renderApp()}</IonApp>;
 };
 
 export { App };

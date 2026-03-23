@@ -15,24 +15,28 @@ import {
   useState,
 } from "react";
 import { Agent } from "../../../core/agent/agent";
-import { CredentialShortDetails } from "../../../core/agent/services/credentialService.types";
 import { NotificationRoute } from "../../../core/agent/services/keriaNotificationService.types";
+import { CredentialShortDetails } from "../../../core/agent/services/credentialService.types";
 import { i18n } from "../../../i18n";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { setCredsArchivedCache } from "../../../store/reducers/credsArchivedCache";
 import {
   getCredsCache,
-  getNotificationsCache,
-  setCredsArchivedCache,
   setCredsCache,
+} from "../../../store/reducers/credsCache";
+import {
+  getNotificationsCache,
   setNotificationsCache,
-} from "../../../store/reducers/profileCache";
-import { setToastMsg } from "../../../store/reducers/stateCache";
+} from "../../../store/reducers/notificationsCache";
+import {
+  setCurrentOperation,
+  setToastMsg,
+} from "../../../store/reducers/stateCache";
 import {
   Alert as AlertDelete,
   Alert as AlertRestore,
 } from "../../components/Alert";
-import { ToastMsgType } from "../../globals/types";
-import { showError } from "../../utils/error";
+import { OperationType, ToastMsgType } from "../../globals/types";
 import { CredentialDetailModal } from "../CredentialDetailModule";
 import { ScrollablePageLayout } from "../layout/ScrollablePageLayout";
 import { ListHeader } from "../ListHeader";
@@ -44,6 +48,7 @@ import {
   ArchivedCredentialsProps,
 } from "./ArchivedCredentials.types";
 import { CredentialItem } from "./CredentialItem";
+import { showError } from "../../utils/error";
 
 const ArchivedCredentialsContainer = forwardRef<
   ArchivedCredentialsContainerRef,
@@ -232,6 +237,7 @@ const ArchivedCredentialsContainer = forwardRef<
 
   const handleCancelAction = () => {
     !activeList && setSelectedCredentials([]);
+    dispatch(setCurrentOperation(OperationType.IDLE));
   };
 
   const handlePageClose = () =>
@@ -333,7 +339,7 @@ const ArchivedCredentialsContainer = forwardRef<
           />
         }
       >
-        {haveArchivedCreds && (
+        {haveRevokedCreds && haveArchivedCreds && (
           <ListHeader
             title={`${i18n.t("tabs.credentials.archived.archivedtitle")}`}
           />
@@ -361,7 +367,7 @@ const ArchivedCredentialsContainer = forwardRef<
             })}
           </IonList>
         )}
-        {haveRevokedCreds && (
+        {haveRevokedCreds && haveArchivedCreds && (
           <ListHeader
             title={`${i18n.t("tabs.credentials.archived.revokedtitle")}`}
           />
@@ -411,8 +417,8 @@ const ArchivedCredentialsContainer = forwardRef<
                 {selectedCredentials.length === 1
                   ? i18n.t("tabs.credentials.archived.oneselected")
                   : t("tabs.credentials.archived.manyselected", {
-                      amount: selectedCredentials.length,
-                    })}
+                    amount: selectedCredentials.length,
+                  })}
               </div>
               <IonButtons slot="end">
                 <IonButton

@@ -9,6 +9,7 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
+    implementation project(':aparajita-capacitor-biometric-auth')
     implementation project(':capacitor-community-privacy-screen')
     implementation project(':capacitor-community-sqlite')
     implementation project(':capacitor-community-tap-jacking')
@@ -18,12 +19,10 @@ dependencies {
     implementation project(':capacitor-clipboard')
     implementation project(':capacitor-device')
     implementation project(':capacitor-keyboard')
-    implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-screen-orientation')
     implementation project(':capacitor-share')
     implementation project(':capacitor-splash-screen')
     implementation project(':capacitor-status-bar')
-    implementation project(':capgo-capacitor-native-biometric')
     implementation project(':evva-capacitor-secure-storage-plugin')
     implementation project(':capacitor-freerasp')
     implementation project(':capacitor-native-settings')

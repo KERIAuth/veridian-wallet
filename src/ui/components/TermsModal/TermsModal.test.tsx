@@ -1,7 +1,8 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import { makeTestStore } from "../../utils/makeTestStore";
+import configureStore from "redux-mock-store";
+import { store } from "../../../store";
 import { TermsModal } from "./TermsModal";
 
 jest.mock("i18next", () => ({
@@ -29,7 +30,8 @@ jest.mock("i18next", () => ({
 
 describe("Terms and conditions screen", () => {
   test("User can close the modal by clicking on the backdrop", async () => {
-    const storeMocked = makeTestStore();
+    const mockStore = configureStore();
+    const storeMocked = mockStore(store.getState());
 
     const mockSetIsOpen = jest.fn();
     const { getByTestId } = render(

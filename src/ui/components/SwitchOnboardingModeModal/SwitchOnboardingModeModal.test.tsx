@@ -1,10 +1,10 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
+import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { SwitchOnboardingModeModal } from "./SwitchOnboardingModeModal";
 import { OnboardingMode } from "./SwitchOnboardingModeModal.types";
-import { makeTestStore } from "../../utils/makeTestStore";
 
 const deleteById = jest.fn();
 const createNew = jest.fn();
@@ -20,6 +20,7 @@ jest.mock("../../../core/agent/agent", () => ({
   },
 }));
 
+const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const initialState = {
   stateCache: {
@@ -37,7 +38,7 @@ const initialState = {
 };
 
 const storeMocked = {
-  ...makeTestStore(initialState),
+  ...mockStore(initialState),
   dispatch: dispatchMock,
 };
 

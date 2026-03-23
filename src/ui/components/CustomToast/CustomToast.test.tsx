@@ -1,19 +1,20 @@
 import { render } from "@testing-library/react";
 import { Provider } from "react-redux";
+import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { ToastMsgType } from "../../globals/types";
 import { CustomToast } from "./CustomToast";
 import { ToastStack } from "./ToastStack";
-import { makeTestStore } from "../../utils/makeTestStore";
 
 describe("Custom toast", () => {
+  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
       routes: ["/"],
-      currentProfileId: "Account1",
       authentication: {
         loggedIn: true,
+        userName: "Test",
         time: Date.now(),
         passcodeIsSet: true,
       },
@@ -21,7 +22,7 @@ describe("Custom toast", () => {
   };
 
   const storeMocked = {
-    ...makeTestStore(initialState),
+    ...mockStore(initialState),
     dispatch: dispatchMock,
   };
 
@@ -49,10 +50,10 @@ describe("Custom toast", () => {
     );
   });
 
-  test("It renders error message successfully", async () => {
+  test("It renders message with user name successfully", async () => {
     const toastMsg = {
       id: "1",
-      message: ToastMsgType.UNKNOWN_ERROR,
+      message: ToastMsgType.USERNAME_CREATION_SUCCESS,
     };
 
     const { getByTestId } = render(
@@ -64,6 +65,30 @@ describe("Custom toast", () => {
       </Provider>
     );
     expect(getByTestId("confirmation-toast-1")).toHaveAttribute(
+      "message",
+      "Welcome, Test!"
+    );
+  });
+
+  test("It renders error message successfully", async () => {
+    const toastMsg = {
+      id: "1",
+      message: ToastMsgType.USERNAME_CREATION_ERROR,
+    };
+
+    const { getByTestId } = render(
+      <Provider store={storeMocked}>
+        <CustomToast
+          toastMsg={toastMsg}
+          index={0}
+        />
+      </Provider>
+    );
+    expect(getByTestId("confirmation-toast-1")).toHaveAttribute(
+      "message",
+      EN_TRANSLATIONS.toast.usernamecreationerror
+    );
+    expect(getByTestId("confirmation-toast-1")).toHaveAttribute(
       "color",
       "danger"
     );
@@ -71,13 +96,14 @@ describe("Custom toast", () => {
 });
 
 describe("Toast stack", () => {
+  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
       routes: ["/"],
-      currentProfileId: "Account1",
       authentication: {
         loggedIn: true,
+        userName: "Test",
         time: Date.now(),
         passcodeIsSet: true,
       },
@@ -95,7 +121,7 @@ describe("Toast stack", () => {
   };
 
   const storeMocked = {
-    ...makeTestStore(initialState),
+    ...mockStore(initialState),
     dispatch: dispatchMock,
   };
 

@@ -16,7 +16,6 @@ const SearchInput = ({ onFocus, onInputChange, value }: SearchInputProps) => {
 
   return (
     <IonSearchbar
-      data-testid="search-bar"
       className="connection-search-input"
       showCancelButton={showCancel}
       onIonCancel={handleCancel}
@@ -27,7 +26,7 @@ const SearchInput = ({ onFocus, onInputChange, value }: SearchInputProps) => {
       onIonInput={(e) => {
         onInputChange(e.target.value || "");
       }}
-      placeholder={`${i18n.t("tabs.connections.tab.search.placeholder")}`}
+      placeholder={`${i18n.t("connections.page.search.placeholder")}`}
     />
   );
 };

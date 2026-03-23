@@ -16,57 +16,23 @@ interface ConnectionHistoryItem {
   credentialType?: string;
 }
 
-interface ConnectionShortDetailsBase {
-  id: string;
-  label: string;
-  createdAtUTC: string;
-  status: ConnectionStatus;
-  logo?: string;
-  oobi?: string;
-  contactId: string;
-}
-
-// Regular connection with identifier
-interface RegularConnectionDetails extends ConnectionShortDetailsBase {
-  identifier: string;
-}
-
-// Multisig connection with groupId
-interface MultisigConnectionDetails extends ConnectionShortDetailsBase {
-  groupId: string;
-  hasAccepted?: boolean;
-}
-
-type ConnectionShortDetails =
-  | RegularConnectionDetails
-  | MultisigConnectionDetails;
-
-// Type guard functions for runtime checking
-function isRegularConnectionDetails(
-  connection: ConnectionShortDetails
-): connection is RegularConnectionDetails {
-  return "identifier" in connection && !("groupId" in connection);
-}
-
-function isMultisigConnectionDetails(
-  connection: ConnectionShortDetails
-): connection is MultisigConnectionDetails {
-  return "groupId" in connection;
-}
-
 enum MiscRecordId {
   OP_PASS_HINT = "op-password-hint",
   APP_ALREADY_INIT = "app-already-init",
   APP_STATE_FLAGS = "app-state-flags",
   APP_LANGUAGE = "app-language",
+  IDENTIFIERS_FAVOURITES = "identifiers-favourites",
   CREDS_FAVOURITES = "creds-favourites",
-  DEFAULT_PROFILE = "default-profile",
+  USER_NAME = "user-name",
   APP_BIOMETRY = "app-biometry",
-  APP_NOTIFICATIONS = "app-notifications",
   KERIA_NOTIFICATION_MARKER = "keria-notification-marker",
+  APP_IDENTIFIER_VIEW_TYPE = "app-identifier-view-type",
   APP_CRED_VIEW_TYPE = "app-cred-view-type",
+  APP_IDENTIFIER_SELECTED_FILTER = "app-identifier-selected-filter",
+  APP_CRED_SELECTED_FILTER = "app-cred-selected-filter",
   KERIA_CONNECT_URL = "keria-connect-url",
   KERIA_BOOT_URL = "keria-boot-url",
+  APP_IDENTIFIER_FAVOURITE_INDEX = "identifier-favourite-index",
   APP_CRED_FAVOURITE_INDEX = "cred-favourite-index",
   APP_PASSWORD_SKIPPED = "app-password-skipped",
   APP_RECOVERY_WALLET = "recovery-wallet",
@@ -76,18 +42,20 @@ enum MiscRecordId {
   CLOUD_RECOVERY_STATUS = "cloud-recovery-status",
   IDENTIFIERS_PENDING_CREATION = "identifiers-pending-creation",
   MULTISIG_IDENTIFIERS_PENDING_CREATION = "multisig-identifiers-pending-creation",
-  IS_SETUP_PROFILE = "is-setup-profile",
+  APP_FIRST_INSTALL = "app-first-install",
+  INDIVIDUAL_FIRST_CREATE = "individual-first-create",
   BIOMETRICS_SETUP = "biometrics-setup",
-  PROFILE_HISTORIES = "profile-histories",
-  PENDING_JOIN_GROUP_METADATA = "pending-join-group-metadata",
-  SEED_PHRASE_VERIFIED = "seed-phrase-verified",
-  CRITICAL_ACTION_STATE = "critical-action-state",
 }
 
-export type CriticalActionState = {
-  actionCount: number;
-  deadline: string; // ISO date string
-};
+interface ConnectionShortDetails {
+  id: string;
+  label: string;
+  createdAtUTC: string;
+  status: ConnectionStatus;
+  logo?: string;
+  oobi?: string;
+  groupId?: string;
+}
 
 type ConnectionNoteDetails = {
   id: string;
@@ -109,57 +77,6 @@ type JSONValue =
   | { [x: string]: JSONValue }
   | JSONArray;
 
-// Define types for the 'a' property in ExnMessage
-interface ExnMessageA {
-  m?: string;
-  i?: string;
-  s?: string;
-  a?: Record<string, unknown>;
-  oobiUrl?: string;
-  smids: string[];
-  gid: string;
-  t?: string;
-  st?: string;
-  c?: string[];
-  l?: {
-    t: string;
-    a: string;
-  };
-  d?: string;
-  r?: string;
-  exn?: unknown;
-}
-
-// Define types for the 'e' property in ExnMessage
-interface ExnMessageE {
-  acdc?: {
-    d: string;
-    i: string;
-    s: string;
-    ri: string;
-    a: {
-      d: string;
-      i: string;
-      dt: string;
-      attendeeName?: string;
-      [key: string]: unknown;
-    };
-  };
-  iss?: {
-    t: string;
-    d: string;
-    i: string;
-    s: string;
-    dt: string;
-  };
-  d?: string;
-  icp: {
-    i: string;
-  };
-  exn: unknown;
-  [key: string]: unknown;
-}
-
 type ExnMessage = {
   exn: {
     v: string;
@@ -170,8 +87,8 @@ type ExnMessage = {
     dt: string;
     r: string;
     q: JSONValue;
-    a: ExnMessageA;
-    e: ExnMessageE;
+    a: any;
+    e: any;
     rp: string;
   };
   pathed: {
@@ -182,36 +99,13 @@ type ExnMessage = {
   };
 };
 
-// Type guard to check if ExnMessageE has acdc
-function exnHasAcdc(
-  e: ExnMessageE
-): e is ExnMessageE & { acdc: NonNullable<ExnMessageE["acdc"]> } {
-  return e.acdc !== undefined && e.acdc !== null;
-}
-
 type ConnectionNoteProps = Pick<ConnectionNoteDetails, "title" | "message">;
 
-interface ConnectionDetailsExtras {
+interface ConnectionDetails extends ConnectionShortDetails {
   serviceEndpoints: string[];
   notes: ConnectionNoteDetails[];
   historyItems: ConnectionHistoryItem[];
 }
-
-interface RegularConnectionDetailsFull
-  extends ConnectionShortDetailsBase,
-    ConnectionDetailsExtras {
-  identifier: string;
-}
-
-interface MultisigConnectionDetailsFull
-  extends ConnectionShortDetailsBase,
-    ConnectionDetailsExtras {
-  groupId: string;
-}
-
-type ConnectionDetails =
-  | RegularConnectionDetailsFull
-  | MultisigConnectionDetailsFull;
 
 interface NotificationRpy {
   a: {
@@ -241,7 +135,7 @@ type OobiScan =
   | {
       type: OobiType.MULTI_SIG_INITIATOR;
       groupId: string;
-      connection: MultisigConnectionDetails;
+      connection: ConnectionShortDetails;
     };
 
 interface AgentServicesProps {
@@ -266,42 +160,27 @@ enum CreationStatus {
 }
 
 export const OOBI_RE =
-  /^\/oobi\/(?<cid>[^/]+)(?:\/(?:(?<role>agent|witness|controller|mailbox)\/)?(?<eid>[^/?]+))?$/i;
+  /^\/oobi\/(?<cid>[^/]+)\/(?<role>[^/]+)(?:\/(?<eid>[^/]+))?$/i;
+export const OOBI_AGENT_ONLY_RE =
+  /^\/oobi\/(?<cid>[^/]+)\/agent(?:\/(?<eid>[^/]+))?$/i;
 export const DOOBI_RE = /^\/oobi\/(?<said>[^/]+)$/i;
 export const WOOBI_RE = /^\/\.well-known\/keri\/oobi\/(?<cid>[^/]+)$/;
 
-// Common error messages
-export const SIGNIFY_CLIENT_MANAGER_NOT_INITIALIZED =
-  "Signify client manager not initialized";
-
-export {
-  ConnectionStatus,
-  MiscRecordId,
-  OobiType,
-  CreationStatus,
-  isRegularConnectionDetails,
-  isMultisigConnectionDetails,
-  exnHasAcdc,
-};
+export { ConnectionStatus, MiscRecordId, OobiType, CreationStatus };
 
 export type {
-  AgentServicesProps,
-  AgentUrls,
-  AuthorizationRequestExn,
-  BranAndMnemonic,
-  ConnectionShortDetailsBase,
-  RegularConnectionDetails,
-  MultisigConnectionDetails,
+  ConnectionShortDetails,
   ConnectionDetails,
-  RegularConnectionDetailsFull,
-  MultisigConnectionDetailsFull,
-  ConnectionHistoryItem,
   ConnectionNoteDetails,
   ConnectionNoteProps,
-  ConnectionShortDetails,
-  ExnMessage,
-  JSONObject,
-  JSONValue,
-  NotificationRpy,
+  ConnectionHistoryItem,
   OobiScan,
+  AgentServicesProps,
+  AgentUrls,
+  BranAndMnemonic,
+  ExnMessage,
+  NotificationRpy,
+  AuthorizationRequestExn,
+  JSONValue,
+  JSONObject,
 };

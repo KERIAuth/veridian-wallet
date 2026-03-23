@@ -52,11 +52,11 @@ interface PeerConnectionError {
 }
 
 interface PeerConnection {
-  meerkatId: string;
-  selectedAid: string;
+  id: string;
   name?: string;
   url?: string;
   iconB64?: string;
+  selectedAid?: string;
   createdAt?: string;
 }
 

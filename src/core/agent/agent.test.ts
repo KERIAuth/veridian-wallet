@@ -17,8 +17,7 @@ import { KeyStoreKeys, SecureStorage } from "../storage";
 import { CoreEventEmitter } from "./event";
 import { EventTypes } from "./event.types";
 import { PeerConnection } from "../cardano/walletConnect/peerConnection";
-import { BasicRecord, BasicStorage, CredentialMetadataRecord } from "./records";
-import { DELETED_IDENTIFIER_THEME } from "../utils/habName";
+import { IdentifierService } from "./services";
 
 jest.mock("signify-ts", () => ({
   SignifyClient: jest.fn(),
@@ -67,7 +66,6 @@ const mockBasicStorageService = {
   save: jest.fn(),
   update: jest.fn(),
   createOrUpdateBasicRecord: jest.fn(),
-  findById: jest.fn(),
 };
 
 const mockConnectionService = {
@@ -78,7 +76,6 @@ const mockConnectionService = {
 const mockIdentifierService = {
   processIdentifiersPendingCreation: jest.fn(),
   removeIdentifiersPendingDeletion: jest.fn(),
-  processIdentifiersPendingUpdate: jest.fn(),
   syncKeriaIdentifiers: jest.fn(),
 };
 const mockCredentialService = {
@@ -94,11 +91,10 @@ const mockKeriaNotificationService = {
 const mockIdentifierStorage = {
   getAllIdentifiers: getAllIdentifiersMock,
 };
-
 const mockCredentialStorage = {
   getAllCredentialMetadata: getAllCredentialsMock,
 };
-const mockContactStorage = {
+const mockConnectionStorage = {
   getAll: getAllConnectionsMock,
 };
 const mockNotificationStorage = {
@@ -170,19 +166,6 @@ describe("KERIA connectivity", () => {
     expect(mockSignifyClient.connect).not.toHaveBeenCalled();
   });
 
-  test("a 503 (keria down) from the provisioning service should manifest itself as a connectivity error to KERIA", async () => {
-    (signifyReady as jest.Mock).mockResolvedValueOnce(true);
-    mockSignifyClient.boot.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-    });
-
-    await expect(agent.bootAndConnect(mockAgentUrls)).rejects.toThrowError(
-      Agent.KERIA_BOOT_FAILED_BAD_NETWORK
-    );
-    expect(mockSignifyClient.connect).not.toHaveBeenCalled();
-  });
-
   test("should throw an connection error if connect fetch failing", async () => {
     (signifyReady as jest.Mock).mockResolvedValueOnce(true);
     mockSignifyClient.boot.mockResolvedValueOnce({ ok: true });
@@ -198,11 +181,11 @@ describe("KERIA connectivity", () => {
     expect(mockSignifyClient.connect).toHaveBeenCalled();
   });
 
-  test("should throw KERIA_NOT_BOOTED error if connect fails with 'agent does not exist' after booting", async () => {
+  test("should throw an not booted error if connect fails after booting", async () => {
     (signifyReady as jest.Mock).mockResolvedValueOnce(true);
     mockSignifyClient.boot.mockResolvedValueOnce({ ok: true });
     mockSignifyClient.connect.mockRejectedValueOnce(
-      new Error("agent does not exist for controller")
+      new Error("Error - 404: agent does not exist for controller")
     );
 
     await expect(agent.bootAndConnect(mockAgentUrls)).rejects.toThrowError(
@@ -259,24 +242,7 @@ describe("KERIA connectivity", () => {
     expect(SecureStorage.get).toBeCalledWith(KeyStoreKeys.SIGNIFY_BRAN);
     expect(mockSignifyClient.boot).toHaveBeenCalled();
     expect(mockSignifyClient.connect).toHaveBeenCalled();
-    expect(mockBasicStorageService.createOrUpdateBasicRecord).toBeCalledTimes(
-      3
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.KERIA_BOOT_URL })
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.KERIA_CONNECT_URL })
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.CRITICAL_ACTION_STATE })
-    );
+    expect(mockBasicStorageService.save).toBeCalledTimes(2);
     expect(Agent.isOnline).toBe(true);
     expect(mockAgentServicesProps.eventEmitter.emit).toBeCalledWith({
       type: EventTypes.KeriaStatusChanged,
@@ -294,7 +260,6 @@ describe("KERIA connectivity", () => {
     });
     mockSignifyClient.connect.mockResolvedValueOnce(true);
     SecureStorage.get = jest.fn().mockResolvedValueOnce(mockGetBranValue);
-
     await agent.bootAndConnect(mockAgentUrls);
 
     expect(signifyReady).toHaveBeenCalled();
@@ -307,24 +272,7 @@ describe("KERIA connectivity", () => {
     expect(SecureStorage.get).toBeCalledWith(KeyStoreKeys.SIGNIFY_BRAN);
     expect(mockSignifyClient.boot).toHaveBeenCalled();
     expect(mockSignifyClient.connect).toHaveBeenCalled();
-    expect(mockBasicStorageService.createOrUpdateBasicRecord).toBeCalledTimes(
-      3
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.KERIA_BOOT_URL })
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.KERIA_CONNECT_URL })
-    );
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ id: MiscRecordId.CRITICAL_ACTION_STATE })
-    );
+    expect(mockBasicStorageService.save).toBeCalledTimes(2);
     expect(Agent.isOnline).toBe(true);
     expect(mockAgentServicesProps.eventEmitter.emit).toBeCalledWith({
       type: EventTypes.KeriaStatusChanged,
@@ -342,259 +290,6 @@ describe("KERIA connectivity", () => {
     expect(signifyReady).not.toHaveBeenCalled();
     expect(mockSignifyClient.boot).not.toHaveBeenCalled();
     expect(mockSignifyClient.connect).not.toHaveBeenCalled();
-  });
-
-  test("should discover connect URL and boot successfully with boot URL only", async () => {
-    const mockConnectUrl = "http://127.0.0.1:3901";
-    const mockBootUrl = "http://127.0.0.1:3903/boot/abc123";
-
-    // Mock fetch for connect URL discovery
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({ connectUrl: mockConnectUrl }),
-    });
-
-    (signifyReady as jest.Mock).mockResolvedValueOnce(true);
-    mockSignifyClient.boot.mockResolvedValueOnce({ ok: true });
-    mockSignifyClient.connect.mockResolvedValueOnce(true);
-    SecureStorage.get = jest.fn().mockResolvedValueOnce(mockGetBranValue);
-    mockConnectionService.removeConnectionsPendingDeletion = jest
-      .fn()
-      .mockReturnValue(["id1", "id2"]);
-    mockConnectionService.resolvePendingConnections = jest
-      .fn()
-      .mockReturnValue(undefined);
-    mockIdentifierService.removeIdentifiersPendingDeletion = jest
-      .fn()
-      .mockReturnValue(undefined);
-    mockIdentifierService.processIdentifiersPendingCreation = jest
-      .fn()
-      .mockReturnValue(undefined);
-    mockCredentialService.removeCredentialsPendingDeletion = jest
-      .fn()
-      .mockReturnValue(undefined);
-
-    await agent.bootAndConnect(mockBootUrl);
-
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:3903/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    expect(signifyReady).toHaveBeenCalled();
-    expect(SignifyClient).toHaveBeenCalledWith(
-      mockConnectUrl,
-      mockGetBranValue,
-      Tier.low,
-      mockBootUrl
-    );
-    expect(mockSignifyClient.boot).toHaveBeenCalled();
-    expect(mockSignifyClient.connect).toHaveBeenCalled();
-    expect(Agent.isOnline).toBe(true);
-  });
-
-  test("should throw error when connect URL discovery fails", async () => {
-    const mockBootUrl = "http://127.0.0.1:3903/boot/abc123";
-
-    // Mock fetch to fail
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      statusText: "Not Found",
-    });
-
-    (signifyReady as jest.Mock).mockResolvedValueOnce(true);
-
-    await expect(agent.bootAndConnect(mockBootUrl)).rejects.toThrowError(
-      `${Agent.CONNECT_URL_DISCOVERY_FAILED} (404)`
-    );
-
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:3903/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    expect(mockSignifyClient.boot).not.toHaveBeenCalled();
-    expect(mockSignifyClient.connect).not.toHaveBeenCalled();
-  });
-
-  test("should throw error when connect URL discovery returns invalid response", async () => {
-    const mockBootUrl = "http://127.0.0.1:3903/boot/abc123";
-
-    // Mock fetch with invalid response
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({ invalidField: "value" }),
-    });
-
-    (signifyReady as jest.Mock).mockResolvedValueOnce(true);
-
-    await expect(agent.bootAndConnect(mockBootUrl)).rejects.toThrowError(
-      Agent.CONNECT_URL_NOT_FOUND
-    );
-
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:3903/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    expect(mockSignifyClient.boot).not.toHaveBeenCalled();
-    expect(mockSignifyClient.connect).not.toHaveBeenCalled();
-  });
-
-  test("should throw network error when connect URL discovery fetch fails", async () => {
-    const mockBootUrl = "http://127.0.0.1:3903/boot/abc123";
-
-    // Mock fetch to throw network error
-    global.fetch = jest
-      .fn()
-      .mockRejectedValueOnce(new Error("Failed to fetch"));
-
-    (signifyReady as jest.Mock).mockResolvedValueOnce(true);
-
-    await expect(agent.bootAndConnect(mockBootUrl)).rejects.toThrowError(
-      Agent.CONNECT_URL_DISCOVERY_BAD_NETWORK
-    );
-
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:3903/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    expect(mockSignifyClient.boot).not.toHaveBeenCalled();
-    expect(mockSignifyClient.connect).not.toHaveBeenCalled();
-  });
-});
-
-describe("Connect URL Discovery", () => {
-  let agent: Agent;
-
-  beforeEach(() => {
-    agent = Agent.agent;
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test("should discover connect URL successfully", async () => {
-    const mockBootUrl = "https://boot.keria.com/boot/abc123";
-    const mockConnectUrl = "https://keria.com:3901";
-
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({ connectUrl: mockConnectUrl }),
-    });
-
-    const result = await agent.discoverConnectUrl(mockBootUrl);
-
-    expect(result).toBe(mockConnectUrl);
-    expect(fetch).toHaveBeenCalledWith("https://boot.keria.com/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-  });
-
-  test("should pretend https:// if missing", async () => {
-    const mockBootUrl = "www.google.com";
-    const mockConnectUrl = "https://keria.com:3901";
-
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({ connectUrl: mockConnectUrl }),
-    });
-
-    const result = await agent.discoverConnectUrl(mockBootUrl);
-
-    expect(result).toBe(mockConnectUrl);
-    expect(fetch).toHaveBeenCalledWith("https://www.google.com/connect", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-  });
-
-  test("should handle different URL formats correctly", async () => {
-    const testCases = [
-      {
-        bootUrl: "http://localhost:9030/agent/uuid123/boot",
-        expectedEndpoint: "http://localhost:9030/connect",
-      },
-      {
-        bootUrl: "https://boot.keria.com/agent/xyz789/boot",
-        expectedEndpoint: "https://boot.keria.com/connect",
-      },
-      {
-        bootUrl: "http://127.0.0.1:3903/boot",
-        expectedEndpoint: "http://127.0.0.1:3903/connect",
-      },
-    ];
-
-    for (const testCase of testCases) {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: jest
-          .fn()
-          .mockResolvedValueOnce({ connectUrl: "http://connect.url" }),
-      });
-
-      await agent.discoverConnectUrl(testCase.bootUrl);
-
-      expect(fetch).toHaveBeenCalledWith(testCase.expectedEndpoint, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      });
-
-      jest.clearAllMocks();
-    }
-  });
-
-  test("should throw error when fetch fails", async () => {
-    const mockBootUrl = "https://boot.keria.com/boot/abc123";
-
-    global.fetch = jest
-      .fn()
-      .mockRejectedValueOnce(new Error("Failed to fetch"));
-
-    await expect(agent.discoverConnectUrl(mockBootUrl)).rejects.toThrowError(
-      Agent.CONNECT_URL_DISCOVERY_BAD_NETWORK
-    );
-  });
-
-  test("should throw error when response is not ok", async () => {
-    const mockBootUrl = "https://boot.keria.com/boot/abc123";
-
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-    });
-
-    await expect(agent.discoverConnectUrl(mockBootUrl)).rejects.toThrowError(
-      `${Agent.CONNECT_URL_DISCOVERY_FAILED} (500)`
-    );
-  });
-
-  test("should throw error when connectUrl is missing from response", async () => {
-    const mockBootUrl = "https://boot.keria.com/boot/abc123";
-
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({ someOtherField: "value" }),
-    });
-
-    await expect(agent.discoverConnectUrl(mockBootUrl)).rejects.toThrowError(
-      Agent.CONNECT_URL_NOT_FOUND
-    );
   });
 });
 
@@ -693,11 +388,11 @@ describe("Recovery of DB from cloud sync", () => {
     expect(SecureStorage.set).not.toHaveBeenCalled();
   });
 
-  test("should throw KERIA_NOT_BOOTED error if agent does not exist during recovery", async () => {
+  test("should throw KERIA_NOT_BOOTED error if agent is not booted", async () => {
     (mnemonicToEntropy as jest.Mock).mockReturnValueOnce(mockEntropy);
     (mnemonicToEntropy as jest.Mock).mockReturnValueOnce(mockEntropy);
     mockSignifyClient.connect.mockRejectedValueOnce(
-      new Error("agent does not exist for controller")
+      new Error("Error - 404: agent does not exist for controller")
     );
 
     await expect(
@@ -753,7 +448,7 @@ describe("Agent setup and wiping", () => {
     (agent as any).keriaNotificationService = mockKeriaNotificationService;
     (agent as any).identifierStorage = mockIdentifierStorage;
     (agent as any).credentialStorage = mockCredentialStorage;
-    (agent as any).contactStorage = mockContactStorage;
+    (agent as any).connectionStorage = mockConnectionStorage;
     (agent as any).notificationStorage = mockNotificationStorage;
 
     mockAgentUrls = {
@@ -774,12 +469,12 @@ describe("Agent setup and wiping", () => {
     getAllConnectionsMock.mockResolvedValue([{ id: "connection-id" }]);
     getAllNotificationsMock.mockResolvedValue([{ id: "note-id" }]);
 
-    await agent.deleteWallet();
+    await Agent.agent.deleteAccount();
 
     expect(PeerConnection.peerConnection.disconnectDApp).not.toBeCalled();
     expect(stopPollingMock).toBeCalled();
     expect(updateIdentifierMock).toBeCalledWith("identifier", {
-      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-my-salt:my-identifier`,
+      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}-my-salt:my-identifier`,
     });
     expect(deleteCredentialMock).toBeCalledWith("credential-id");
     expect(deleteContactMock).toBeCalledWith("connection-id");
@@ -797,7 +492,7 @@ describe("Agent setup and wiping", () => {
     getAllConnectionsMock.mockResolvedValue([]);
     getAllNotificationsMock.mockResolvedValue([]);
 
-    await agent.deleteWallet();
+    await agent.deleteAccount();
 
     expect(PeerConnection.peerConnection.disconnectDApp).toBeCalledWith(
       "meerkat-id",
@@ -806,301 +501,5 @@ describe("Agent setup and wiping", () => {
     expect(stopPollingMock).toBeCalled();
     expect(wipeSessionMock).toBeCalledWith("idw");
     expect(SecureStorage.wipe).toBeCalled();
-  });
-
-  test("can wipe local database to start fresh", async () => {
-    (agent as any).storageSession = { wipe: wipeSessionMock };
-    (agent as any).markAgentStatus = jest.fn();
-
-    await agent.wipeLocalDatabase();
-
-    expect(stopPollingMock).toBeCalled();
-    expect(wipeSessionMock).toBeCalledWith("idw");
-    expect(SecureStorage.wipe).toBeCalled();
-    expect((agent as any).markAgentStatus).toBeCalledWith(false);
-  });
-
-  test("deleting wallet resets agent instance", async () => {
-    const firstInstance = Agent.agent;
-    await firstInstance.deleteWallet();
-    const secondInstance = Agent.agent;
-    expect(firstInstance).not.toBe(secondInstance);
-  });
-});
-
-describe("Seed Phrase Verification", () => {
-  let agent: Agent;
-
-  beforeEach(() => {
-    agent = Agent.agent;
-    (agent as any).basicStorageService = mockBasicStorageService;
-    (agent as any).agentServicesProps = mockAgentServicesProps;
-    (agent as any).seedPhraseVerifiedCache = undefined;
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test("isSeedPhraseVerified should return false when record does not exist", async () => {
-    mockBasicStorageService.findById.mockResolvedValue(null);
-
-    const result = await agent.isSeedPhraseVerified();
-
-    expect(result).toBe(false);
-    expect(mockBasicStorageService.findById).toHaveBeenCalledWith(
-      MiscRecordId.SEED_PHRASE_VERIFIED
-    );
-  });
-
-  test("isSeedPhraseVerified should return false when verified is false", async () => {
-    mockBasicStorageService.findById.mockResolvedValue(
-      new BasicRecord({
-        id: MiscRecordId.SEED_PHRASE_VERIFIED,
-        content: { verified: false },
-      })
-    );
-
-    const result = await agent.isSeedPhraseVerified();
-
-    expect(result).toBe(false);
-  });
-
-  test("isSeedPhraseVerified should return true when verified is true", async () => {
-    mockBasicStorageService.findById.mockResolvedValue(
-      new BasicRecord({
-        id: MiscRecordId.SEED_PHRASE_VERIFIED,
-        content: { verified: true },
-      })
-    );
-
-    const result = await agent.isSeedPhraseVerified();
-
-    expect(result).toBe(true);
-  });
-
-  test("markSeedPhraseAsVerified should save the correct record", async () => {
-    await agent.markSeedPhraseAsVerified();
-
-    expect(
-      mockBasicStorageService.createOrUpdateBasicRecord
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: MiscRecordId.SEED_PHRASE_VERIFIED,
-        content: { verified: true },
-      })
-    );
-  });
-});
-
-describe("Critical Action Tracking", () => {
-  let agent: Agent;
-
-  beforeEach(() => {
-    agent = Agent.agent;
-    (agent as any).basicStorageService = mockBasicStorageService;
-    (agent as any).agentServicesProps = mockAgentServicesProps;
-    (agent as any).seedPhraseVerifiedCache = undefined;
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe("isVerificationEnforced", () => {
-    test("isVerificationEnforced should return false if seed phrase is verified", async () => {
-      // Mock seed phrase verified = true
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.SEED_PHRASE_VERIFIED,
-              content: { verified: true },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      const result = await agent.isVerificationEnforced();
-      expect(result).toBe(false);
-    });
-
-    test("should return false if critical action limit not reached", async () => {
-      // Mock seed phrase verified = false
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(null);
-        }
-        if (id === MiscRecordId.CRITICAL_ACTION_STATE) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.CRITICAL_ACTION_STATE,
-              content: {
-                actionCount: Agent.CRITICAL_ACTION_LIMIT - 1,
-                deadline: new Date(Date.now() + 100000).toISOString(),
-              },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      const result = await agent.isVerificationEnforced();
-      expect(result).toBe(false);
-    });
-
-    test("should return false if critical action limit reached but deadline not passed", async () => {
-      // Mock seed phrase verified = false
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(null);
-        }
-        if (id === MiscRecordId.CRITICAL_ACTION_STATE) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.CRITICAL_ACTION_STATE,
-              content: {
-                actionCount: Agent.CRITICAL_ACTION_LIMIT,
-                deadline: new Date(Date.now() + 100000).toISOString(), // Future deadline
-              },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      const result = await agent.isVerificationEnforced();
-      expect(result).toBe(false);
-    });
-
-    test("should return true if critical action limit reached and deadline passed", async () => {
-      // Mock seed phrase verified = false
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(null);
-        }
-        if (id === MiscRecordId.CRITICAL_ACTION_STATE) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.CRITICAL_ACTION_STATE,
-              content: {
-                actionCount: Agent.CRITICAL_ACTION_LIMIT,
-                deadline: new Date(Date.now() - 1000).toISOString(), // Past deadline
-              },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      const result = await agent.isVerificationEnforced();
-      expect(result).toBe(true);
-    });
-  });
-
-  describe("recordCriticalAction", () => {
-    test("should not increment count if seed phrase is verified", async () => {
-      // Mock seed phrase verified = true
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.SEED_PHRASE_VERIFIED,
-              content: { verified: true },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      await agent.recordCriticalAction();
-
-      expect(
-        mockBasicStorageService.createOrUpdateBasicRecord
-      ).not.toHaveBeenCalled();
-    });
-
-    test("should increment count if seed phrase not verified", async () => {
-      // Mock seed phrase verified = false
-      // Mock existing state
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(null);
-        }
-        if (id === MiscRecordId.CRITICAL_ACTION_STATE) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.CRITICAL_ACTION_STATE,
-              content: {
-                actionCount: 0,
-                deadline: new Date().toISOString(),
-              },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      await agent.recordCriticalAction();
-
-      expect(
-        mockBasicStorageService.createOrUpdateBasicRecord
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: MiscRecordId.CRITICAL_ACTION_STATE,
-          content: expect.objectContaining({
-            actionCount: 1,
-          }),
-        })
-      );
-    });
-
-    test("should reduce deadline if limit reached", async () => {
-      const futureDate = new Date(
-        Date.now() + Agent.VERIFICATION_TIME_LIMIT_MS
-      );
-      // Mock seed phrase verified = false
-      mockBasicStorageService.findById.mockImplementation((id) => {
-        if (id === MiscRecordId.SEED_PHRASE_VERIFIED) {
-          return Promise.resolve(null);
-        }
-        if (id === MiscRecordId.CRITICAL_ACTION_STATE) {
-          return Promise.resolve(
-            new BasicRecord({
-              id: MiscRecordId.CRITICAL_ACTION_STATE,
-              content: {
-                actionCount: Agent.CRITICAL_ACTION_LIMIT - 1, // One less than limit
-                deadline: futureDate.toISOString(),
-              },
-            })
-          );
-        }
-        return Promise.resolve(null);
-      });
-
-      await agent.recordCriticalAction();
-
-      // Expect deadline to be reduced to approx 1 day from now
-      expect(
-        mockBasicStorageService.createOrUpdateBasicRecord
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: MiscRecordId.CRITICAL_ACTION_STATE,
-          content: expect.objectContaining({
-            actionCount: Agent.CRITICAL_ACTION_LIMIT,
-          }),
-        })
-      );
-
-      const callArgs = (
-        mockBasicStorageService.createOrUpdateBasicRecord as jest.Mock
-      ).mock.calls[0][0];
-      const newDeadline = new Date(callArgs.content.deadline).getTime();
-      const expectedDeadline = Date.now() + Agent.REDUCED_TIME_LIMIT_MS;
-
-      // Allow small delta for execution time
-      expect(Math.abs(newDeadline - expectedDeadline)).toBeLessThan(5000);
-    });
   });
 });

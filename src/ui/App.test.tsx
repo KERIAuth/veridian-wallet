@@ -1,25 +1,9 @@
-jest.mock("@capacitor/local-notifications", () => ({
-  LocalNotifications: {
-    requestPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    schedule: jest.fn(),
-    addListener: jest.fn(),
-    removeAllListeners: jest.fn(),
-    cancel: jest.fn(),
-    getPending: jest.fn(() => Promise.resolve({ notifications: [] })),
-    getDeliveredNotifications: jest.fn(() =>
-      Promise.resolve({ notifications: [] })
-    ),
-    checkPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    createChannel: jest.fn(() => Promise.resolve()),
-  },
-}));
-
 import { Style, StyleOptions } from "@capacitor/status-bar";
-import { BiometryType } from "@capgo/capacitor-native-biometric";
 import { act, render, waitFor } from "@testing-library/react";
-import { startFreeRASP } from "capacitor-freerasp";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
+import configureStore from "redux-mock-store";
+import { startFreeRASP } from "capacitor-freerasp";
 import { IdentifierService } from "../core/agent/services";
 import Eng_Trans from "../locales/en/en.json";
 import { TabsRoutePath } from "../routes/paths";
@@ -28,16 +12,14 @@ import {
   showGenericError,
   showNoWitnessAlert,
 } from "../store/reducers/stateCache";
-import { InitializationPhase } from "../store/reducers/stateCache/stateCache.types";
-import { useBiometricAuth } from "../ui/hooks/useBiometricsHook";
-import { filteredIdentifierFix } from "./__fixtures__/filteredIdentifierFix";
 import { App } from "./App";
+import { OperationType } from "./globals/types";
 import {
   ANDROID_MIN_VERSION,
   IOS_MIN_VERSION,
   WEBVIEW_MIN_VERSION,
 } from "./globals/constants";
-import { makeTestStore } from "./utils/makeTestStore";
+import { InitializationPhase } from "../store/reducers/stateCache/stateCache.types";
 
 jest.mock("capacitor-freerasp", () => ({
   startFreeRASP: jest.fn(),
@@ -50,8 +32,6 @@ const setBackgroundColorMock = jest.fn();
 jest.mock("../core/agent/agent", () => ({
   Agent: {
     agent: {
-      isVerificationEnforced: jest.fn(),
-      devPreload: jest.fn(),
       start: jest.fn(),
       setupLocalDependencies: () => mockInitDatabase(),
       markAgentStatus: jest.fn(),
@@ -61,7 +41,6 @@ jest.mock("../core/agent/agent", () => ({
           mnemonic: "",
         })
       ),
-      isSeedPhraseVerified: jest.fn(() => true),
       identifiers: {
         getIdentifiers: jest.fn().mockResolvedValue([]),
         syncKeriaIdentifiers: jest.fn(),
@@ -75,7 +54,6 @@ jest.mock("../core/agent/agent", () => ({
         getConnections: jest.fn().mockResolvedValue([]),
         getMultisigConnections: jest.fn().mockResolvedValue([]),
         onConnectionStateChanged: jest.fn(),
-        onConnectionInvalid: jest.fn(),
         getConnectionShortDetails: jest.fn(),
         isConnectionRequestSent: jest.fn(),
         isConnectionResponseReceived: jest.fn(),
@@ -113,9 +91,9 @@ jest.mock("../core/agent/agent", () => ({
         onRemoveNotification: jest.fn(),
       },
       onKeriaStatusStateChanged: jest.fn(),
-      peerConnectionPair: {
-        getPeerConnection: jest.fn(),
-        getAllPeerConnectionAccount: jest.fn().mockResolvedValue([]),
+      peerConnectionMetadataStorage: {
+        getAllPeerConnectionMetadata: jest.fn(),
+        getPeerConnectionMetadata: jest.fn(),
       },
       basicStorage: {
         findById: jest.fn(),
@@ -140,6 +118,10 @@ jest.mock("../core/configuration/configurationService", () => ({
           enabled: true,
         },
       },
+      features: {
+        cut: [],
+        customContent: [],
+      },
     },
   },
 }));
@@ -159,30 +141,6 @@ jest.mock("@capacitor/status-bar", () => ({
   StatusBar: {
     setStyle: (params: StyleOptions) => setStyleMock(params),
     setBackgroundColor: () => setBackgroundColorMock(),
-  },
-}));
-
-jest.mock("@capacitor/local-notifications", () => ({
-  LocalNotifications: {
-    requestPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    schedule: jest.fn(),
-    addListener: jest.fn(),
-    removeAllListeners: jest.fn(),
-    removeAllDeliveredNotifications: jest.fn(),
-    cancel: jest.fn(),
-    getPending: jest.fn(() => Promise.resolve({ notifications: [] })),
-    getDeliveredNotifications: jest.fn(() =>
-      Promise.resolve({ notifications: [] })
-    ),
-    checkPermissions: jest.fn(() => Promise.resolve({ display: "granted" })),
-    createChannel: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-jest.mock("@capacitor/app", () => ({
-  App: {
-    addListener: jest.fn(() => Promise.resolve({ remove: jest.fn() })),
-    getState: jest.fn(() => Promise.resolve({ isActive: true })),
   },
 }));
 
@@ -208,7 +166,6 @@ jest.mock("@capacitor/core", () => {
     ...jest.requireActual("@capacitor/core"),
     Capacitor: {
       isNativePlatform: () => isNativeMock(),
-      getPlatform: jest.fn(() => "web"),
     },
   };
 });
@@ -222,45 +179,6 @@ jest.mock("@capacitor/keyboard", () => ({
   },
 }));
 
-jest.mock("@capgo/capacitor-native-biometric", () => ({
-  NativeBiometric: {
-    isAvailable: jest.fn(() =>
-      Promise.resolve({
-        isAvailable: true,
-        biometryType: "fingerprint",
-        authenticationStrength: 1, // STRONG
-        deviceIsSecure: true,
-        strongBiometryIsAvailable: true,
-      })
-    ),
-    verifyIdentity: jest.fn(() => Promise.resolve()),
-    getCredentials: jest.fn(() => Promise.reject(new Error("No credentials"))),
-    setCredentials: jest.fn(() => Promise.resolve()),
-    deleteCredentials: jest.fn(() => Promise.resolve()),
-  },
-  BiometryType: {
-    FINGERPRINT: "fingerprint",
-    FACE_ID: "faceId",
-    TOUCH_ID: "touchId",
-    IRIS_AUTHENTICATION: "iris",
-    MULTIPLE: "multiple",
-    NONE: "none",
-  },
-  AuthenticationStrength: {
-    NONE: 0,
-    STRONG: 1,
-    WEAK: 2,
-  },
-  BiometricAuthError: {
-    USER_CANCEL: 1,
-    USER_TEMPORARY_LOCKOUT: 2,
-    USER_LOCKOUT: 3,
-    BIOMETRICS_UNAVAILABLE: 4,
-    UNKNOWN_ERROR: 5,
-    BIOMETRICS_NOT_ENROLLED: 6,
-  },
-}));
-
 jest.mock("@capacitor-community/privacy-screen", () => ({
   PrivacyScreen: {
     enable: jest.fn(),
@@ -268,38 +186,14 @@ jest.mock("@capacitor-community/privacy-screen", () => ({
   },
 }));
 
-jest.mock("../ui/hooks/useBiometricsHook", () => {
-  const actualCapgoBiometric = jest.requireActual(
-    "@capgo/capacitor-native-biometric"
-  );
-  return {
-    useBiometricAuth: jest.fn(() => ({
-      biometricInfo: {
-        isAvailable: false,
-        biometryType: actualCapgoBiometric.BiometryType.NONE,
-        authenticationStrength:
-          actualCapgoBiometric.AuthenticationStrength.NONE,
-        deviceIsSecure: false,
-        strongBiometryIsAvailable: false,
-      },
-      setupBiometrics: jest.fn(),
-      handleBiometricAuth: jest.fn(),
-      checkBiometrics: jest.fn(),
-      remainingLockoutSeconds: 30,
-      lockoutEndTime: null,
-    })),
-    BIOMETRIC_SERVER_KEY: actualCapgoBiometric.BIOMETRIC_SERVER_KEY,
-    BiometricAuthOutcome: actualCapgoBiometric.BiometricAuthOutcome,
-    BiometryError: actualCapgoBiometric.BiometryError,
-  };
-});
-
+const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const initialState = {
   stateCache: {
-    routes: [TabsRoutePath.CREDENTIALS],
+    routes: [TabsRoutePath.IDENTIFIERS],
     authentication: {
       loggedIn: true,
+      userName: "",
       time: Date.now(),
       passcodeIsSet: true,
       loginAttempt: {
@@ -307,28 +201,37 @@ const initialState = {
         lockedUntil: Date.now(),
       },
     },
-    currentProfile: {
-      identity: filteredIdentifierFix[0].id,
-      connections: [],
-      multisigConnections: [],
-      peerConnections: [],
-      credentials: [],
-      archivedCredentials: [],
-    },
     toastMsgs: [],
+    showConnections: false,
+    currentOperation: OperationType.IDLE,
     queueIncomingRequest: {
       isProcessing: false,
       queues: [],
       isPaused: false,
     },
   },
-  profilesCache: {
-    profiles: {},
-    defaultProfile: undefined,
-    connectedDApp: null,
-    pendingDAppConnection: null,
-    isConnectingToDApp: false,
-    showDAppConnect: false,
+  seedPhraseCache: {
+    seedPhrase: "",
+    bran: "",
+  },
+  identifiersCache: {
+    identifiers: {},
+    favourites: [],
+    multiSigGroup: {
+      groupId: "",
+      connections: [],
+    },
+  },
+  credsCache: { creds: [], favourites: [] },
+  credsArchivedCache: { creds: [] },
+  connectionsCache: {
+    connections: {},
+    multisigConnections: {},
+  },
+  walletConnectionsCache: {
+    walletConnections: [],
+    connectedWallet: null,
+    pendingConnection: null,
   },
   viewTypeCache: {
     identifier: {
@@ -343,10 +246,17 @@ const initialState = {
   biometricsCache: {
     enabled: false,
   },
+  ssiAgentCache: {
+    bootUrl: "",
+    connectUrl: "",
+  },
+  notificationsCache: {
+    notifications: [],
+  },
 };
 
 const storeMocked = {
-  ...makeTestStore(initialState),
+  ...mockStore(initialState),
   dispatch: dispatchMock,
 };
 
@@ -368,23 +278,6 @@ describe("App", () => {
     };
 
     getDeviceInfo.mockImplementation(() => Promise.resolve(deviceInfo));
-
-    // Reset useBiometricAuth mock before each test
-    (useBiometricAuth as jest.Mock).mockReset();
-    (useBiometricAuth as jest.Mock).mockReturnValue({
-      biometricInfo: {
-        isAvailable: true,
-        biometryType: "fingerprint",
-        authenticationStrength: 1, // STRONG
-        deviceIsSecure: true,
-        strongBiometryIsAvailable: true,
-      },
-      setupBiometrics: jest.fn(),
-      handleBiometricAuth: jest.fn(),
-      checkBiometrics: jest.fn(),
-      remainingLockoutSeconds: 30,
-      lockoutEndTime: null,
-    });
   });
 
   test("Mobile header hidden when app not in preview mode", async () => {
@@ -457,13 +350,13 @@ describe("App", () => {
         ...initialState.stateCache,
         isOnline: false,
         initializationPhase: InitializationPhase.PHASE_TWO,
-        currentProfileId: "Account1",
         authentication: {
           passcodeIsSet: true,
           seedPhraseIsSet: false,
           passwordIsSet: false,
           passwordIsSkipped: true,
           loggedIn: true,
+          userName: "",
           time: 0,
           ssiAgentIsSet: true,
           ssiAgentUrl: "http://keria.com",
@@ -477,7 +370,7 @@ describe("App", () => {
     };
 
     const storeMocked = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: dispatchMock,
     };
 
@@ -499,13 +392,13 @@ describe("App", () => {
         ...initialState.stateCache,
         isOnline: false,
         initializationPhase: InitializationPhase.PHASE_ONE,
-        currentProfileId: "Account1",
         authentication: {
           passcodeIsSet: true,
           seedPhraseIsSet: false,
           passwordIsSet: false,
           passwordIsSkipped: true,
           loggedIn: true,
+          userName: "",
           time: 0,
           ssiAgentIsSet: true,
           ssiAgentUrl: "http://keria.com",
@@ -519,18 +412,18 @@ describe("App", () => {
     };
 
     const storeMocked = {
-      ...makeTestStore(state),
+      ...mockStore(state),
       dispatch: dispatchMock,
     };
 
-    const { getAllByTestId } = render(
+    const { getByTestId } = render(
       <Provider store={storeMocked}>
         <App />
       </Provider>
     );
 
     await waitFor(() => {
-      expect(getAllByTestId("loading-page")[0]).toBeVisible();
+      expect(getByTestId("loading-page")).toBeVisible();
     });
   });
 
@@ -583,21 +476,13 @@ describe("App", () => {
 
     spy.mockClear();
   });
-});
-
-describe("Witness availability", () => {
-  test("No witness availability", async () => {
-    getAvailableWitnessesMock.mockRejectedValue(
-      new Error(IdentifierService.INSUFFICIENT_WITNESSES_AVAILABLE)
-    );
-
+  test("It renders SetUserName modal", async () => {
     const initialState = {
       stateCache: {
-        isOnline: true,
         routes: [{ path: TabsRoutePath.ROOT }],
-        currentProfileId: "Account1",
         authentication: {
           loggedIn: true,
+          userName: "",
           time: Date.now(),
           passcodeIsSet: true,
           seedPhraseIsSet: true,
@@ -622,13 +507,24 @@ describe("Witness availability", () => {
         seedPhrase: "",
         bran: "",
       },
-      profilesCache: {
-        profiles: {},
-        defaultProfile: undefined,
-        connectedDApp: null,
-        pendingDAppConnection: null,
-        isConnectingToDApp: false,
-        showDAppConnect: false,
+      identifiersCache: {
+        identifiers: {},
+        favourites: [],
+        multiSigGroup: {
+          groupId: "",
+          connections: [],
+        },
+      },
+      credsCache: { creds: [], favourites: [] },
+      credsArchivedCache: { creds: [] },
+      connectionsCache: {
+        connections: {},
+        multisigConnections: {},
+      },
+      walletConnectionsCache: {
+        walletConnections: [],
+        connectedWallet: null,
+        pendingConnection: null,
       },
       viewTypeCache: {
         identifier: {
@@ -643,16 +539,122 @@ describe("Witness availability", () => {
       biometricsCache: {
         enabled: false,
       },
+      ssiAgentCache: {
+        bootUrl: "",
+        connectUrl: "",
+      },
+      notificationsCache: {
+        notifications: [],
+      },
     };
 
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
+      dispatch: dispatchMock,
+    };
+
+    const { getByText } = render(
+      <Provider store={storeMocked}>
+        <MemoryRouter initialEntries={[TabsRoutePath.IDENTIFIERS]}>
+          <App />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText(Eng_Trans.inputrequest.title.username)
+      ).toBeInTheDocument();
+    });
+  });
+});
+
+describe("Witness availability", () => {
+  test("No witness availability", async () => {
+    getAvailableWitnessesMock.mockRejectedValue(
+      new Error(IdentifierService.INSUFFICIENT_WITNESSES_AVAILABLE)
+    );
+
+    const initialState = {
+      stateCache: {
+        isOnline: true,
+        routes: [{ path: TabsRoutePath.ROOT }],
+        authentication: {
+          loggedIn: true,
+          userName: "",
+          time: Date.now(),
+          passcodeIsSet: true,
+          seedPhraseIsSet: true,
+          passwordIsSet: false,
+          passwordIsSkipped: true,
+          ssiAgentIsSet: true,
+          ssiAgentUrl: "http://keria.com",
+          recoveryWalletProgress: false,
+          loginAttempt: {
+            attempts: 0,
+            lockedUntil: Date.now(),
+          },
+        },
+        toastMsgs: [],
+        queueIncomingRequest: {
+          isProcessing: false,
+          queues: [],
+          isPaused: false,
+        },
+      },
+      seedPhraseCache: {
+        seedPhrase: "",
+        bran: "",
+      },
+      identifiersCache: {
+        identifiers: [],
+        favourites: [],
+        multiSigGroup: {
+          groupId: "",
+          connections: [],
+        },
+      },
+      credsCache: { creds: [], favourites: [] },
+      credsArchivedCache: { creds: [] },
+      connectionsCache: {
+        connections: {},
+        multisigConnections: {},
+      },
+      walletConnectionsCache: {
+        walletConnections: [],
+        connectedWallet: null,
+        pendingConnection: null,
+      },
+      viewTypeCache: {
+        identifier: {
+          viewType: null,
+          favouriteIndex: 0,
+        },
+        credential: {
+          viewType: null,
+          favouriteIndex: 0,
+        },
+      },
+      biometricsCache: {
+        enabled: false,
+      },
+      ssiAgentCache: {
+        bootUrl: "",
+        connectUrl: "",
+      },
+      notificationsCache: {
+        notifications: [],
+      },
+    };
+
+    const storeMocked = {
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
     render(
       <Provider store={storeMocked}>
-        <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
+        <MemoryRouter initialEntries={[TabsRoutePath.IDENTIFIERS]}>
           <App />
         </MemoryRouter>
       </Provider>
@@ -672,9 +674,9 @@ describe("Witness availability", () => {
       stateCache: {
         isOnline: true,
         routes: [{ path: TabsRoutePath.ROOT }],
-        currentProfileId: "Account1",
         authentication: {
           loggedIn: true,
+          userName: "",
           time: Date.now(),
           passcodeIsSet: true,
           seedPhraseIsSet: true,
@@ -699,15 +701,30 @@ describe("Witness availability", () => {
         seedPhrase: "",
         bran: "",
       },
-      profilesCache: {
-        profiles: {},
-        defaultProfile: undefined,
-        connectedDApp: null,
-        pendingDAppConnection: null,
-        isConnectingToDApp: false,
-        showDAppConnect: false,
+      identifiersCache: {
+        identifiers: [],
+        favourites: [],
+        multiSigGroup: {
+          groupId: "",
+          connections: [],
+        },
+      },
+      credsCache: { creds: [], favourites: [] },
+      credsArchivedCache: { creds: [] },
+      connectionsCache: {
+        connections: {},
+        multisigConnections: {},
+      },
+      walletConnectionsCache: {
+        walletConnections: [],
+        connectedWallet: null,
+        pendingConnection: null,
       },
       viewTypeCache: {
+        identifier: {
+          viewType: null,
+          favouriteIndex: 0,
+        },
         credential: {
           viewType: null,
           favouriteIndex: 0,
@@ -716,16 +733,23 @@ describe("Witness availability", () => {
       biometricsCache: {
         enabled: false,
       },
+      ssiAgentCache: {
+        bootUrl: "",
+        connectUrl: "",
+      },
+      notificationsCache: {
+        notifications: [],
+      },
     };
 
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
     render(
       <Provider store={storeMocked}>
-        <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
+        <MemoryRouter initialEntries={[TabsRoutePath.IDENTIFIERS]}>
           <App />
         </MemoryRouter>
       </Provider>
@@ -743,18 +767,6 @@ describe("System copatibility alert", () => {
     mockInitDatabase.mockClear();
     getPlatformsMock.mockImplementation(() => ["android"]);
     getAvailableWitnessesMock.mockClear();
-
-    const deviceInfo = {
-      platform: "ios",
-      osVersion: "18.0",
-      model: "",
-      operatingSystem: "ios",
-      manufacturer: "",
-      isVirtual: false,
-      webViewVersion: "131.0.6778.260",
-    };
-
-    getDeviceInfo.mockImplementation(() => Promise.resolve(deviceInfo));
   });
 
   afterEach(() => {
@@ -884,7 +896,7 @@ describe("System threat alert", () => {
 
     await waitFor(() => {
       expect(startFreeRASPMock).toHaveBeenCalled();
-      expect(getByText(Eng_Trans.systemthreats.title)).toBeVisible();
+      expect(getByText("Threats Detected")).toBeVisible();
     });
   });
 
@@ -910,17 +922,18 @@ describe("System threat alert", () => {
     });
 
     await waitFor(() => {
-      expect(getByText(Eng_Trans.systemthreats.title)).toBeVisible();
+      expect(getByText("Threats Detected")).toBeVisible();
       expect(getByText(Eng_Trans.systemthreats.rules.simulator)).toBeVisible();
     });
   });
 
-  test("Catches a threat", async () => {
+  test("Catches a threat after renders SetUserName modal", async () => {
     const initialState = {
       stateCache: {
         routes: [{ path: TabsRoutePath.ROOT }],
         authentication: {
           loggedIn: true,
+          userName: "",
           time: Date.now(),
           passcodeIsSet: true,
           seedPhraseIsSet: true,
@@ -945,15 +958,30 @@ describe("System threat alert", () => {
         seedPhrase: "",
         bran: "",
       },
-      profilesCache: {
-        profiles: {},
-        defaultProfile: undefined,
-        connectedDApp: null,
-        pendingDAppConnection: null,
-        isConnectingToDApp: false,
-        showDAppConnect: false,
+      identifiersCache: {
+        identifiers: {},
+        favourites: [],
+        multiSigGroup: {
+          groupId: "",
+          connections: [],
+        },
+      },
+      credsCache: { creds: [], favourites: [] },
+      credsArchivedCache: { creds: [] },
+      connectionsCache: {
+        connections: {},
+        multisigConnections: {},
+      },
+      walletConnectionsCache: {
+        walletConnections: [],
+        connectedWallet: null,
+        pendingConnection: null,
       },
       viewTypeCache: {
+        identifier: {
+          viewType: null,
+          favouriteIndex: 0,
+        },
         credential: {
           viewType: null,
           favouriteIndex: 0,
@@ -962,10 +990,17 @@ describe("System threat alert", () => {
       biometricsCache: {
         enabled: false,
       },
+      ssiAgentCache: {
+        bootUrl: "",
+        connectUrl: "",
+      },
+      notificationsCache: {
+        notifications: [],
+      },
     };
 
     const storeMocked = {
-      ...makeTestStore(initialState),
+      ...mockStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -974,7 +1009,7 @@ describe("System threat alert", () => {
 
     const { getByText } = render(
       <Provider store={storeMocked}>
-        <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
+        <MemoryRouter initialEntries={[TabsRoutePath.IDENTIFIERS]}>
           <App />
         </MemoryRouter>
       </Provider>
@@ -982,6 +1017,9 @@ describe("System threat alert", () => {
 
     await waitFor(() => {
       expect(startFreeRASPMock).toHaveBeenCalled();
+      expect(
+        getByText(Eng_Trans.inputrequest.title.username)
+      ).toBeInTheDocument();
     });
 
     await act(async () => {
@@ -991,7 +1029,7 @@ describe("System threat alert", () => {
     });
 
     await waitFor(() => {
-      expect(getByText(Eng_Trans.systemthreats.title)).toBeVisible();
+      expect(getByText("Threats Detected")).toBeVisible();
       expect(
         getByText(Eng_Trans.systemthreats.rules.privilegedaccess)
       ).toBeVisible();

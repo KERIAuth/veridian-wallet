@@ -1,17 +1,12 @@
 import { Operation, Salter, SignifyClient } from "signify-ts";
-import {
-  CredentialMetadataRecord,
-  NotificationStorage,
-  OperationPendingRecordType,
-} from "../records";
+import { CredentialMetadataRecord, NotificationStorage } from "../records";
 import { CredentialShortDetails } from "./credentialService.types";
 import { Agent } from "../agent";
 import { NotificationRoute } from "./keriaNotificationService.types";
-import { OperationPendingStorage } from "../records/operationPendingStorage";
 
 async function waitAndGetDoneOp(
   client: SignifyClient,
-  op: Operation,
+  op: any,
   timeout = 15000,
   interval = 250
 ): Promise<Operation> {
@@ -39,12 +34,12 @@ function getCredentialShortDetails(
 }
 
 const OnlineOnly = (
-  _target: unknown,
+  _target: any,
   _propertyKey: string,
   descriptor: PropertyDescriptor
 ) => {
   const originalMethod = descriptor.value;
-  descriptor.value = async function (...args: unknown[]) {
+  descriptor.value = async function (...args: any[]) {
     if (!Agent.agent.getKeriaOnlineStatus()) {
       throw new Error(Agent.KERIA_CONNECTION_BROKEN);
     }
@@ -70,32 +65,12 @@ const OnlineOnly = (
   };
 };
 
-const SeedPhraseVerified = (
-  _target: unknown,
-  _propertyKey: string,
-  descriptor: PropertyDescriptor
-) => {
-  const originalMethod = descriptor.value;
-  descriptor.value = async function (...args: unknown[]) {
-    if (await Agent.agent.isVerificationEnforced()) {
-      throw new Error(Agent.SEED_PHRASE_NOT_VERIFIED);
-    }
-    // Call the original method
-    const result = await originalMethod.apply(this, args);
-    await Agent.agent.recordCriticalAction();
-    return result;
-  };
-};
-
 export const deleteNotificationRecordById = async (
   client: SignifyClient,
   notificationStorage: NotificationStorage,
   id: string,
-  route: NotificationRoute,
-  operationPendingStorage: OperationPendingStorage
+  route: NotificationRoute
 ): Promise<void> => {
-  const notificationRecord = await notificationStorage.findExpectedById(id);
-
   if (!/^\/local/.test(route)) {
     await client
       .notifications()
@@ -107,46 +82,8 @@ export const deleteNotificationRecordById = async (
         }
       });
   }
-
-  if (notificationRecord?.linkedRequest?.current) {
-    await cleanupPendingOperations(
-      operationPendingStorage,
-      notificationRecord.linkedRequest.current
-    );
-  }
-
   await notificationStorage.deleteById(id);
 };
-
-async function cleanupPendingOperations(
-  operationPendingStorage: OperationPendingStorage,
-  linkedRequestCurrent: string
-): Promise<void> {
-  // WARNING: If new operation types are added that support linked requests, they MUST be added here.
-  const pendingOperations = await operationPendingStorage.findAllByQuery({
-    $or: [
-      {
-        id: `${OperationPendingRecordType.ExchangeReceiveCredential}.${linkedRequestCurrent}`,
-      },
-      {
-        id: `${OperationPendingRecordType.ExchangeOfferCredential}.${linkedRequestCurrent}`,
-      },
-      {
-        id: `${OperationPendingRecordType.ExchangePresentCredential}.${linkedRequestCurrent}`,
-      },
-    ],
-  });
-
-  if (pendingOperations.length === 0) {
-    return;
-  }
-
-  const deletePromises = pendingOperations.map(async (operation) => {
-    await operationPendingStorage.deleteById(operation.id);
-  });
-
-  await Promise.all(deletePromises);
-}
 
 function randomSalt(): string {
   return new Salter({}).qb64;
@@ -169,7 +106,6 @@ function isNetworkError(error: Error): boolean {
 
 export {
   OnlineOnly,
-  SeedPhraseVerified,
   waitAndGetDoneOp,
   getCredentialShortDetails,
   randomSalt,

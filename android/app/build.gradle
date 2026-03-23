@@ -1,7 +1,6 @@
 apply plugin: 'com.android.application'
 
 android {
-    ndkVersion "28.0.12077973" // Use latest stable r28+
     namespace "org.cardanofoundation.idw"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
@@ -9,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.2.0"
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -56,10 +55,4 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}
-
-configurations.all {
-    resolutionStrategy {
-        force 'androidx.camera:camera-core:1.4.0'
-    }
 }

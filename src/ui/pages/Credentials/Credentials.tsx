@@ -4,33 +4,42 @@ import {
   IonLabel,
   useIonViewWillEnter,
 } from "@ionic/react";
-import { archiveOutline } from "ionicons/icons";
+import { t } from "i18next";
+import { peopleOutline } from "ionicons/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent } from "../../../core/agent/agent";
+import { MiscRecordId } from "../../../core/agent/agent.types";
+import { BasicRecord } from "../../../core/agent/records";
 import {
   CredentialShortDetails,
   CredentialStatus,
 } from "../../../core/agent/services/credentialService.types";
+import { IdentifierType } from "../../../core/agent/services/identifier.types";
 import { i18n } from "../../../i18n";
 import { TabsRoutePath } from "../../../routes/paths";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import {
   getCredsArchivedCache,
-  getCredsCache,
-  getCurrentProfile,
   setCredsArchivedCache,
+} from "../../../store/reducers/credsArchivedCache";
+import {
+  getCredentialsFilters,
+  getCredsCache,
+  getFavouritesCredsCache,
+  setCredentialsFilters,
   setCredsCache,
-} from "../../../store/reducers/profileCache";
+} from "../../../store/reducers/credsCache";
 import {
   setCurrentRoute,
   setToastMsg,
+  showConnections,
 } from "../../../store/reducers/stateCache";
-import { getFavouritesCredsCache } from "../../../store/reducers/viewTypeCache";
 import { ArchivedCredentials } from "../../components/ArchivedCredentials";
-import { Avatar } from "../../components/Avatar";
-import { AvatarProps } from "../../components/Avatar/Avatar.types";
 import { CardSlider } from "../../components/CardSlider";
 import { CardsPlaceholder } from "../../components/CardsPlaceholder";
+import { FilterChip } from "../../components/FilterChip/FilterChip";
+import { AllowedChipFilter } from "../../components/FilterChip/FilterChip.types";
+import { FilteredItemsPlaceholder } from "../../components/FilteredItemsPlaceholder";
 import { TabLayout } from "../../components/layout/TabLayout";
 import { ListHeader } from "../../components/ListHeader";
 import { RemovePendingAlert } from "../../components/RemovePendingAlert";
@@ -38,49 +47,73 @@ import {
   CardList as CredentialCardList,
   SwitchCardView,
 } from "../../components/SwitchCardView";
-import { ToastMsgType } from "../../globals/types";
+import { CardType, ToastMsgType } from "../../globals/types";
 import { useOnlineStatusEffect } from "../../hooks";
 import { showError } from "../../utils/error";
 import { combineClassNames } from "../../utils/style";
-import { Profiles } from "../Profiles";
+import { StartAnimationSource } from "../Identifiers/Identifiers.types";
 import "./Credentials.scss";
-import { StartAnimationSource } from "./Credentials.types";
+import { CredentialsFilters } from "./Credentials.types";
 
 const CLEAR_STATE_DELAY = 1000;
+
+const AdditionalButtons = ({
+  handleConnections,
+}: {
+  handleConnections: () => void;
+}) => {
+  return (
+    <>
+      <IonButton
+        shape="round"
+        className="connections-button"
+        data-testid="connections-button"
+        onClick={handleConnections}
+      >
+        <IonIcon
+          slot="icon-only"
+          icon={peopleOutline}
+          color="primary"
+        />
+      </IonButton>
+    </>
+  );
+};
 
 const Credentials = () => {
   const pageId = "credentials-tab";
   const dispatch = useAppDispatch();
   const credsCache = useAppSelector(getCredsCache);
   const archivedCreds = useAppSelector(getCredsArchivedCache);
+  const credentialsFiltersCache = useAppSelector(getCredentialsFilters);
   const favouriteCredentialsCache = useAppSelector(getFavouritesCredsCache);
   const [archivedCredentialsIsOpen, setArchivedCredentialsIsOpen] =
     useState(false);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [navAnimation, setNavAnimation] =
     useState<StartAnimationSource>("none");
-  const [openProfiles, setOpenProfiles] = useState(false);
   const favouriteContainerElement = useRef<HTMLDivElement>(null);
   const [deletedPendingItem, setDeletePendingItem] =
     useState<CredentialShortDetails | null>(null);
   const [openDeletePendingAlert, setOpenDeletePendingAlert] = useState(false);
-  const currentProfile = useAppSelector(getCurrentProfile);
+  const [individualCredentials, setIndividualCredentials] = useState<
+    CredentialShortDetails[]
+  >([]);
+  const [groupCredentials, setGroupCredentials] = useState<
+    CredentialShortDetails[]
+  >([]);
+  const selectedFilter = credentialsFiltersCache ?? CredentialsFilters.All;
 
-  const profileCreds = useMemo(
-    () => currentProfile?.credentials ?? [],
-    [currentProfile?.credentials]
-  );
-  const profileArchivedCreds = currentProfile?.archivedCredentials ?? [];
-  const revokedCreds = profileCreds.filter(
+  const revokedCreds = credsCache.filter(
     (item) => item.status === CredentialStatus.REVOKED
   );
-  const pendingCreds = profileCreds.filter(
+  const pendingCreds = credsCache.filter(
     (item) => item.status === CredentialStatus.PENDING
   );
   const confirmedCreds = useMemo(
     () =>
-      profileCreds.filter((item) => item.status === CredentialStatus.CONFIRMED),
-    [profileCreds]
+      credsCache.filter((item) => item.status === CredentialStatus.CONFIRMED),
+    [credsCache]
   );
 
   const fetchArchivedCreds = useCallback(async () => {
@@ -97,7 +130,7 @@ const Credentials = () => {
     return found ? found.time : null;
   };
 
-  const favouriteCredentials = profileCreds.filter((cred) =>
+  const favouriteCredentials = credsCache.filter((cred) =>
     favouriteCredentialsCache?.some((fav) => fav.id === cred.id)
   );
 
@@ -114,9 +147,23 @@ const Credentials = () => {
 
   useEffect(() => {
     setShowPlaceholder(confirmedCreds.length + pendingCreds.length === 0);
+    setIndividualCredentials(
+      confirmedCreds.filter(
+        (cred) => cred.identifierType !== IdentifierType.Group
+      )
+    );
+    setGroupCredentials(
+      confirmedCreds.filter(
+        (cred) => cred.identifierType !== IdentifierType.Individual
+      )
+    );
   }, [confirmedCreds, credsCache, pendingCreds.length]);
 
   useOnlineStatusEffect(fetchArchivedCreds);
+
+  const handleConnections = () => {
+    dispatch(showConnections(true));
+  };
 
   useIonViewWillEnter(() => {
     dispatch(setCurrentRoute({ path: TabsRoutePath.CREDENTIALS }));
@@ -152,7 +199,6 @@ const Credentials = () => {
   const ArchivedCredentialsButton = () => {
     return (
       <div
-        data-testid="archive-button-container"
         className={`archived-credentials-button-container${
           archivedCreds?.length > 0 || revokedCreds.length > 0
             ? " visible"
@@ -165,7 +211,6 @@ const Credentials = () => {
           data-testid="cred-archived-revoked-button"
           onClick={() => setArchivedCredentialsIsOpen(true)}
         >
-          <IonIcon icon={archiveOutline} />
           <IonLabel color="secondary">
             {i18n.t("tabs.credentials.tab.viewarchived")}
           </IonLabel>
@@ -204,21 +249,34 @@ const Credentials = () => {
     }
   };
 
-  const handleAvatarClick = () => {
-    setOpenProfiles(true);
-  };
+  const filterOptions = [
+    {
+      filter: CredentialsFilters.All,
+      label: i18n.t("tabs.credentials.tab.filters.all"),
+    },
+    {
+      filter: CredentialsFilters.Individual,
+      label: i18n.t("tabs.credentials.tab.filters.individual"),
+    },
+    {
+      filter: CredentialsFilters.Group,
+      label: i18n.t("tabs.credentials.tab.filters.group"),
+    },
+  ];
 
-  const AdditionalButtons = ({
-    handleAvatarClick,
-  }: {
-    handleAvatarClick: AvatarProps["handleAvatarClick"];
-  }) => {
-    return (
-      <Avatar
-        id={currentProfile?.identity.id || ""}
-        handleAvatarClick={handleAvatarClick}
-      />
-    );
+  const handleSelectFilter = (filter: AllowedChipFilter) => {
+    Agent.agent.basicStorage
+      .createOrUpdateBasicRecord(
+        new BasicRecord({
+          id: MiscRecordId.APP_CRED_SELECTED_FILTER,
+          content: {
+            filter: filter,
+          },
+        })
+      )
+      .then(() => {
+        dispatch(setCredentialsFilters(filter as CredentialsFilters));
+      });
   };
 
   return (
@@ -229,7 +287,7 @@ const Credentials = () => {
         customClass={tabClasses}
         title={`${i18n.t("tabs.credentials.tab.title")}`}
         additionalButtons={
-          <AdditionalButtons handleAvatarClick={handleAvatarClick} />
+          <AdditionalButtons handleConnections={handleConnections} />
         }
         placeholder={
           showPlaceholder && (
@@ -242,60 +300,83 @@ const Credentials = () => {
           )
         }
       >
-        <div className="cred-container">
-          {!showPlaceholder && (
-            <>
-              <div>
-                {favouriteCredentials.length > 0 && (
-                  <div
-                    ref={favouriteContainerElement}
-                    className="credentials-tab-content-block credential-favourite-cards"
-                    data-testid="favourite-container-element"
-                  >
-                    <CardSlider
-                      title={`${i18n.t("tabs.credentials.tab.favourites")}`}
-                      name="favs"
-                      cardsData={sortedFavouriteCredentials}
-                      onShowCardDetails={() =>
-                        handleShowNavAnimation("favourite")
-                      }
-                    />
-                  </div>
-                )}
-                {!!confirmedCreds.length && (
-                  <SwitchCardView
-                    className="credentials-tab-content-block credential-cards"
-                    cardsData={confirmedCreds}
-                    onShowCardDetails={() => handleShowNavAnimation("cards")}
-                    title={`${i18n.t("tabs.credentials.tab.allcreds")}`}
-                    name="allcreds"
-                  />
-                )}
-                {!!pendingCreds.length && (
-                  <div className="credetial-tab-content-block pending-container">
-                    <ListHeader
-                      title={`${i18n.t("tabs.credentials.tab.pendingcred")}`}
-                    />
-                    <CredentialCardList
-                      cardsData={pendingCreds}
-                      testId="pending-creds-list"
-                      onCardClick={(cred) => {
-                        setDeletePendingItem(cred as CredentialShortDetails);
-                        setOpenDeletePendingAlert(true);
-                      }}
-                    />
-                  </div>
-                )}
+        {!showPlaceholder && (
+          <>
+            {favouriteCredentials.length > 0 && (
+              <div
+                ref={favouriteContainerElement}
+                className="credentials-tab-content-block credential-favourite-cards"
+                data-testid="favourite-container-element"
+              >
+                <CardSlider
+                  title={`${i18n.t("tabs.credentials.tab.favourites")}`}
+                  name="favs"
+                  cardType={CardType.CREDENTIALS}
+                  cardsData={sortedFavouriteCredentials}
+                  onShowCardDetails={() => handleShowNavAnimation("favourite")}
+                />
               </div>
-              <ArchivedCredentialsButton />
-            </>
-          )}
-        </div>
+            )}
+            {!!confirmedCreds.length && (
+              <SwitchCardView
+                className="credentials-tab-content-block credential-cards"
+                cardTypes={CardType.CREDENTIALS}
+                cardsData={
+                  selectedFilter === CredentialsFilters.All
+                    ? confirmedCreds
+                    : selectedFilter === CredentialsFilters.Individual
+                      ? individualCredentials
+                      : groupCredentials
+                }
+                onShowCardDetails={() => handleShowNavAnimation("cards")}
+                title={`${i18n.t("tabs.credentials.tab.allcreds")}`}
+                name="allcreds"
+                filters={
+                  <div className="credentials-tab-chips">
+                    {filterOptions.map((option) => (
+                      <FilterChip
+                        key={option.filter}
+                        filter={option.filter}
+                        label={option.label}
+                        isActive={option.filter === selectedFilter}
+                        onClick={handleSelectFilter}
+                      />
+                    ))}
+                  </div>
+                }
+                placeholder={
+                  <FilteredItemsPlaceholder
+                    placeholderText={t(
+                      "tabs.credentials.tab.filters.placeholder",
+                      {
+                        type: selectedFilter,
+                      }
+                    )}
+                    testId={pageId}
+                  />
+                }
+              />
+            )}
+            {!!pendingCreds.length && (
+              <div className="credetial-tab-content-block pending-container">
+                <ListHeader
+                  title={`${i18n.t("tabs.credentials.tab.pendingcred")}`}
+                />
+                <CredentialCardList
+                  cardsData={pendingCreds}
+                  cardTypes={CardType.CREDENTIALS}
+                  testId="pending-creds-list"
+                  onCardClick={(cred) => {
+                    setDeletePendingItem(cred as CredentialShortDetails);
+                    setOpenDeletePendingAlert(true);
+                  }}
+                />
+              </div>
+            )}
+            <ArchivedCredentialsButton />
+          </>
+        )}
       </TabLayout>
-      <Profiles
-        isOpen={openProfiles}
-        setIsOpen={setOpenProfiles}
-      />
       <RemovePendingAlert
         pageId={pageId}
         openFirstCheck={openDeletePendingAlert}
@@ -308,7 +389,7 @@ const Credentials = () => {
       />
       <ArchivedCredentials
         revokedCreds={revokedCreds}
-        archivedCreds={profileArchivedCreds}
+        archivedCreds={archivedCreds}
         archivedCredentialsIsOpen={archivedCredentialsIsOpen}
         setArchivedCredentialsIsOpen={handleArchivedCredentialsDisplayChange}
       />

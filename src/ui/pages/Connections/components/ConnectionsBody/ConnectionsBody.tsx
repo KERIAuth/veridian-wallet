@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import {
   IonCol,
+  IonContent,
   IonGrid,
   IonItemDivider,
   IonItemGroup,
@@ -86,12 +87,12 @@ const ConnectionsBody = ({
       className={classes}
       ref={container}
     >
-      <div className="connections-list">
-        {!search ? (
-          <IonGrid>
-            <IonRow>
-              <IonCol size="12">
-                {mappedConnections.map((alphabeticGroup, index) => {
+      <IonContent className="connections-list">
+        <IonGrid>
+          <IonRow>
+            <IonCol size="12">
+              {!search &&
+                mappedConnections.map((alphabeticGroup, index) => {
                   return (
                     <IonItemGroup
                       className="connections-list-alphabetic-block"
@@ -99,34 +100,28 @@ const ConnectionsBody = ({
                       key={index}
                     >
                       <IonItemDivider id={alphabeticGroup.key}>
-                        <IonLabel
-                          data-testid={`connections-list-alphabetic-${alphabeticGroup.key}`}
-                        >
-                          {alphabeticGroup.key}
-                        </IonLabel>
+                        <IonLabel>{alphabeticGroup.key}</IonLabel>
                       </IonItemDivider>
                       <AlphabeticList
                         items={Array.from(alphabeticGroup.value)}
-                        handleShowConnectionDetails={(item) => {
-                          handleShowConnectionDetails(item);
-                        }}
+                        handleShowConnectionDetails={
+                          handleShowConnectionDetails
+                        }
                       />
                     </IonItemGroup>
                   );
                 })}
-              </IonCol>
-            </IonRow>
-          </IonGrid>
-        ) : (
-          <SearchConnectionContent
-            keyword={search}
-            mappedConnections={mappedConnections}
-            onItemClick={(item) => {
-              handleShowConnectionDetails(item);
-            }}
-          />
-        )}
-      </div>
+              {search && (
+                <SearchConnectionContent
+                  keyword={search}
+                  mappedConnections={mappedConnections}
+                  onItemClick={handleShowConnectionDetails}
+                />
+              )}
+            </IonCol>
+          </IonRow>
+        </IonGrid>
+      </IonContent>
       {!search && <AlphabetSelector />}
     </div>
   );

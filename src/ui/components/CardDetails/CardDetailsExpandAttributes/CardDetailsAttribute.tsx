@@ -56,7 +56,6 @@ const CardDetailsAttribute = ({
         info={nativeAttribute}
         testId={`attribute-${key}`}
         className={detailItemsClass}
-        mask={false}
         {...restItemProps}
       />
     );
@@ -75,6 +74,7 @@ const CardDetailsAttribute = ({
         className="accordion nested-attribute"
         toggleIconSlot="start"
         toggleIcon={chevronForwardOutline}
+        value={`${deepLevel}`}
       >
         <IonItem
           className="accordion-header"

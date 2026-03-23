@@ -1,24 +1,29 @@
 import { IonButton, IonIcon, IonInput, IonLabel } from "@ionic/react";
 import { IonReactMemoryRouter } from "@ionic/react-router";
-import { fireEvent, render, waitFor } from "@testing-library/react";
-import { createMemoryHistory } from "history";
+import { ionFireEvent } from "@ionic/react-test-utils";
+import {
+  fireEvent,
+  queryByText,
+  render,
+  waitFor,
+} from "@testing-library/react";
 import { act } from "react";
+import { createMemoryHistory } from "history";
 import { Provider } from "react-redux";
 import { MemoryRouter, Route } from "react-router-dom";
-import { MiscRecordId } from "../../../core/agent/agent.types";
-import { BasicRecord } from "../../../core/agent/records";
+import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { RoutePath } from "../../../routes";
 import { TabsRoutePath } from "../../../routes/paths";
 import {
-  setAuthentication,
+  setCurrentOperation,
   setToastMsg,
 } from "../../../store/reducers/stateCache";
 import { CustomInputProps } from "../../components/CustomInput/CustomInput.types";
-import { ToastMsgType } from "../../globals/types";
-import { makeTestStore } from "../../utils/makeTestStore";
+import { OperationType, ToastMsgType } from "../../globals/types";
 import { CreatePassword } from "./CreatePassword";
-import { Agent } from "../../../core/agent/agent";
+import { BasicRecord } from "../../../core/agent/records";
+import { MiscRecordId } from "../../../core/agent/agent.types";
 
 jest.mock("../../components/CustomInput", () => ({
   CustomInput: (props: CustomInputProps) => {
@@ -67,7 +72,6 @@ jest.mock("../../components/CustomInput", () => ({
 const createOrUpdateBasicRecordMock = jest.fn((_: unknown) =>
   Promise.resolve(true)
 );
-const verifySecretMock = jest.fn().mockResolvedValue(false);
 jest.mock("../../../core/agent/agent", () => ({
   Agent: {
     agent: {
@@ -78,7 +82,7 @@ jest.mock("../../../core/agent/agent", () => ({
           createOrUpdateBasicRecordMock(arg),
       },
       auth: {
-        verifySecret: () => verifySecretMock(),
+        verifySecret: jest.fn().mockResolvedValue(true),
         storeSecret: jest.fn(),
       },
     },
@@ -110,9 +114,10 @@ describe("Create Password Page", () => {
       },
     };
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     const storeMocked = {
-      ...makeTestStore(initialStateNoPassword),
+      ...mockStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
 
@@ -179,6 +184,7 @@ describe("Create Password Page", () => {
     });
     test("User Action: Skip on setup page", async () => {
       const handleClear = jest.fn();
+      const setPasswordIsSet = jest.fn();
 
       const history = createMemoryHistory();
       history.push(RoutePath.CREATE_PASSWORD);
@@ -189,7 +195,10 @@ describe("Create Password Page", () => {
           history={history}
         >
           <Provider store={storeMocked}>
-            <CreatePassword handleClear={handleClear} />
+            <CreatePassword
+              handleClear={handleClear}
+              setPasswordIsSet={setPasswordIsSet}
+            />
           </Provider>
         </IonReactMemoryRouter>
       );
@@ -241,6 +250,7 @@ describe("Create Password Page", () => {
 
     test("Submit password", async () => {
       const handleClear = jest.fn();
+      const setPasswordIsSet = jest.fn();
 
       const history = createMemoryHistory();
       history.push(RoutePath.CREATE_PASSWORD);
@@ -248,7 +258,10 @@ describe("Create Password Page", () => {
       const { getByTestId, getByText } = render(
         <IonReactMemoryRouter history={history}>
           <Provider store={storeMocked}>
-            <CreatePassword handleClear={handleClear} />
+            <CreatePassword
+              handleClear={handleClear}
+              setPasswordIsSet={setPasswordIsSet}
+            />
           </Provider>
         </IonReactMemoryRouter>
       );
@@ -266,19 +279,21 @@ describe("Create Password Page", () => {
       const hintInput = getByTestId("create-hint-input");
 
       act(() => {
-        fireEvent.change(input, { target: { value: "Passsssss1@" } });
-        fireEvent.change(confirmInput, { target: { value: "Passsssss1@" } });
-        fireEvent.change(hintInput, { target: { value: "hint" } });
+        ionFireEvent.ionInput(input, "Passsssss1@");
+        ionFireEvent.ionInput(confirmInput, "Passsssss1@");
+        ionFireEvent.ionInput(hintInput, "hint");
       });
 
       const submitButton = getByTestId("primary-button-create-password");
 
       act(() => {
-        fireEvent.click(submitButton);
+        ionFireEvent.click(submitButton);
       });
 
       await waitFor(() => {
-        expect(dispatchMock).toBeCalled();
+        expect(dispatchMock).toBeCalledWith(
+          setCurrentOperation(OperationType.IDLE)
+        );
       });
     });
   });
@@ -286,7 +301,7 @@ describe("Create Password Page", () => {
   describe("Renders Create Password page when manage password", () => {
     const initialStateWithPassword = {
       stateCache: {
-        routes: [{ path: TabsRoutePath.CREDENTIALS }],
+        routes: [{ path: TabsRoutePath.MENU }],
         authentication: {
           loggedIn: true,
           time: Date.now(),
@@ -297,18 +312,21 @@ describe("Create Password Page", () => {
       },
     };
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     const storeMocked = {
-      ...makeTestStore(initialStateWithPassword),
+      ...mockStore(initialStateWithPassword),
       dispatch: dispatchMock,
     };
 
     test("User Action: Change", async () => {
       const handleClear = jest.fn();
+      const setPasswordIsSet = jest.fn();
       const { getByTestId, queryByTestId } = render(
         <Provider store={storeMocked}>
           <CreatePassword
             handleClear={handleClear}
+            setPasswordIsSet={setPasswordIsSet}
             userAction={{
               current: "change",
             }}
@@ -331,7 +349,7 @@ describe("Create Password Page", () => {
       ).toHaveTextContent(EN_TRANSLATIONS.createpassword.change);
       expect(getByTestId("create-password-top-paragraph")).toBeInTheDocument();
       expect(getByTestId("create-password-top-paragraph")).toHaveTextContent(
-        EN_TRANSLATIONS.forgotauth.newpassword.description
+        EN_TRANSLATIONS.createpassword.description
       );
 
       const input = getByTestId("create-password-input");
@@ -339,15 +357,15 @@ describe("Create Password Page", () => {
       const hintInput = getByTestId("create-hint-input");
 
       act(() => {
-        fireEvent.change(input, { target: { value: "Passsssss1@" } });
-        fireEvent.change(confirmInput, { target: { value: "Passsssss1@" } });
-        fireEvent.change(hintInput, { target: { value: "hint" } });
+        ionFireEvent.ionInput(input, "Passsssss1@");
+        ionFireEvent.ionInput(confirmInput, "Passsssss1@");
+        ionFireEvent.ionInput(hintInput, "hint");
       });
 
       const submitButton = getByTestId("primary-button-create-password");
 
       act(() => {
-        fireEvent.click(submitButton);
+        ionFireEvent.click(submitButton);
       });
 
       await waitFor(() => {
@@ -359,10 +377,12 @@ describe("Create Password Page", () => {
 
     test("User Action: enable", async () => {
       const handleClear = jest.fn();
+      const setPasswordIsSet = jest.fn();
       const { getByTestId, queryByTestId } = render(
         <Provider store={storeMocked}>
           <CreatePassword
             handleClear={handleClear}
+            setPasswordIsSet={setPasswordIsSet}
             userAction={{
               current: "enable",
             }}
@@ -392,87 +412,21 @@ describe("Create Password Page", () => {
       const hintInput = getByTestId("create-hint-input");
 
       act(() => {
-        fireEvent.change(input, { target: { value: "Passsssss1@" } });
-        fireEvent.change(confirmInput, { target: { value: "Passsssss1@" } });
-        fireEvent.change(hintInput, { target: { value: "hint" } });
+        ionFireEvent.ionInput(input, "Passsssss1@");
+        ionFireEvent.ionInput(confirmInput, "Passsssss1@");
+        ionFireEvent.ionInput(hintInput, "hint");
       });
 
       const submitButton = getByTestId("primary-button-create-password");
 
       act(() => {
-        fireEvent.click(submitButton);
+        ionFireEvent.click(submitButton);
       });
 
       await waitFor(() => {
-        expect(dispatchMock).toBeCalledWith(
-          setAuthentication({
-            ...initialStateWithPassword.stateCache.authentication,
-            passwordIsSet: true,
-          } as any)
-        );
         expect(dispatchMock).toBeCalledWith(
           setToastMsg(ToastMsgType.PASSWORD_CREATED)
         );
-      });
-    });
-
-    test("Prevent close when password is existing", async () => {
-      const initialStateWithPassword = {
-        stateCache: {
-          routes: [{ path: TabsRoutePath.CREDENTIALS }],
-          authentication: {
-            loggedIn: true,
-            time: Date.now(),
-            passcodeIsSet: true,
-            passwordIsSet: true,
-            passwordIsSkipped: false,
-          },
-        },
-      };
-
-      const dispatchMock = jest.fn();
-      const storeMocked = {
-        ...makeTestStore(initialStateWithPassword),
-        dispatch: dispatchMock,
-      };
-
-      const handleClear = jest.fn();
-      verifySecretMock.mockResolvedValue(true);
-      const { getByTestId, getByText } = render(
-        <Provider store={storeMocked}>
-          <CreatePassword
-            handleClear={handleClear}
-            userAction={{
-              current: "enable",
-            }}
-          />
-        </Provider>
-      );
-
-      const input = getByTestId("create-password-input");
-      const confirmInput = getByTestId("confirm-password-input");
-      const hintInput = getByTestId("create-hint-input");
-
-      act(() => {
-        fireEvent.change(input, { target: { value: "Passsssss1@" } });
-        fireEvent.change(confirmInput, { target: { value: "Passsssss1@" } });
-        fireEvent.change(hintInput, { target: { value: "hint" } });
-      });
-
-      const submitButton = getByTestId("primary-button-create-password");
-
-      act(() => {
-        fireEvent.click(submitButton);
-      });
-
-      await waitFor(() => {
-        expect(
-          getByText(
-            EN_TRANSLATIONS.settings.sections.security.managepassword.page.alert
-              .existingpassword
-          )
-        ).toBeVisible();
-        expect(handleClear).not.toBeCalled();
       });
     });
   });
@@ -492,18 +446,21 @@ describe("Create Password Page", () => {
       },
     };
 
+    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     const storeMocked = {
-      ...makeTestStore(initialStateNoPassword),
+      ...mockStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
 
     const handleClear = jest.fn();
+    const setPasswordIsSet = jest.fn();
     const { queryByText } = render(
       <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
         <Provider store={storeMocked}>
           <CreatePassword
             handleClear={handleClear}
+            setPasswordIsSet={setPasswordIsSet}
             userAction={{
               current: "enable",
             }}

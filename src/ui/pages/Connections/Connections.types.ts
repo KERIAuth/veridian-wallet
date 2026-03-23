@@ -1,7 +1,4 @@
-import {
-  ConnectionShortDetails,
-  RegularConnectionDetails,
-} from "../../../core/agent/agent.types";
+import { ConnectionShortDetails } from "../../../core/agent/agent.types";
 
 interface ConnectionsOptionRef {
   handleConnectModalButton: () => void;
@@ -13,9 +10,14 @@ interface ConnectionItemProps {
   handleShowConnectionDetails: (value: ConnectionShortDetails) => void;
 }
 
+interface ConnectionsComponentProps {
+  showConnections: boolean;
+  setShowConnections: (value: boolean) => void;
+}
+
 interface MappedConnections {
   key: string;
-  value: RegularConnectionDetails[];
+  value: ConnectionShortDetails[];
 }
 
 interface ConnectionRequestData {
@@ -23,7 +25,7 @@ interface ConnectionRequestData {
   goal_code: string;
   goal: string;
   handshake_protocols: string[];
-  requestattach: unknown[];
+  requestattach: any[];
   service: {
     id: string;
     type: string;
@@ -37,15 +39,10 @@ interface ConnectionRequestData {
   id: string;
 }
 
-interface ConnectionsComponentProps {
-  showConnections: boolean;
-  setShowConnections: (value: boolean) => void;
-}
-
 export type {
-  ConnectionItemProps,
-  ConnectionRequestData,
   ConnectionsOptionRef,
-  MappedConnections,
+  ConnectionItemProps,
   ConnectionsComponentProps,
+  MappedConnections,
+  ConnectionRequestData,
 };

@@ -6,13 +6,14 @@ import {
 } from "../../../core/agent/services/keriaNotificationService.types";
 import { TabsRoutePath } from "../../../routes/paths";
 import { useAppSelector } from "../../../store/hooks";
-import { getNotificationsCache } from "../../../store/reducers/profileCache";
+import { getNotificationsCache } from "../../../store/reducers/notificationsCache";
 import { useAppIonRouter } from "../../hooks";
+import { RemoteSignRequest } from "./components/RemoteSignRequest";
+import { RemoteMessage } from "./components/RemoteMessage";
 import { CredentialRequest } from "./components/CredentialRequest";
 import { MultiSigRequest } from "./components/MultiSigRequest";
 import { ReceiveCredential } from "./components/ReceiveCredential";
-import { RemoteMessage } from "./components/RemoteMessage";
-import { RemoteSignRequest } from "./components/RemoteSignRequest";
+import { RemoteConnectInstructions } from "./components/RemoteConnectInstructions";
 
 const NotificationDetails = () => {
   const pageId = "notification-details";
@@ -48,6 +49,8 @@ const NotificationDetails = () => {
       [NotificationRoute.MultiSigExn]: ReceiveCredential,
       [NotificationRoute.RemoteSignReq]: RemoteSignRequest,
       [NotificationRoute.HumanReadableMessage]: RemoteMessage,
+      [NotificationRoute.LocalSingletonConnectInstructions]:
+        RemoteConnectInstructions,
       [NotificationRoute.MultiSigRpy]: null,
       [NotificationRoute.ExnIpexOffer]: null,
       [NotificationRoute.ExnIpexAgree]: null,

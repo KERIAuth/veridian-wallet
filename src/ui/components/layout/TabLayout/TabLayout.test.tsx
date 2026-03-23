@@ -1,21 +1,21 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
+import { mockIonicReact } from "@ionic/react-test-utils";
 import { TabLayout } from "./TabLayout";
 
-const TabTitle = "Tab title";
+mockIonicReact();
+
 describe("Tab layout", () => {
   test("Render back button", async () => {
     const backButtonAction = jest.fn();
-    const { getByTestId, getByText } = render(
+    const { getByTestId } = render(
       <TabLayout
         header
         backButton
         backButtonAction={backButtonAction}
-        title={TabTitle}
       />
     );
 
     await waitFor(() => {
-      expect(getByText(TabTitle)).toBeVisible();
       expect(getByTestId("tab-back-button")).toBeVisible();
     });
 
@@ -25,17 +25,15 @@ describe("Tab layout", () => {
 
   test("Render done button", async () => {
     const doneAction = jest.fn();
-    const { getByTestId, getByText } = render(
+    const { getByTestId } = render(
       <TabLayout
         header
         doneLabel="done"
         doneAction={doneAction}
-        title={TabTitle}
       />
     );
 
     await waitFor(() => {
-      expect(getByText(TabTitle)).toBeVisible();
       expect(getByTestId("tab-done-button")).toBeVisible();
     });
 
@@ -45,18 +43,16 @@ describe("Tab layout", () => {
 
   test("Render action button", async () => {
     const actionButtonAction = jest.fn();
-    const { getByTestId, getByText } = render(
+    const { getByTestId } = render(
       <TabLayout
         header
         actionButton
         actionButtonLabel="Action button"
         actionButtonAction={actionButtonAction}
-        title={TabTitle}
       />
     );
 
     await waitFor(() => {
-      expect(getByText(TabTitle)).toBeVisible();
       expect(getByTestId("action-button")).toBeVisible();
     });
 

@@ -1,14 +1,19 @@
-import { ThunkAction } from "@reduxjs/toolkit";
-import { AnyAction } from "redux";
 import { ThunkDispatch } from "redux-thunk";
-import { DataProps } from "../routes/nextRoute/nextRoute.types";
+import { AnyAction } from "redux";
+import { ThunkAction } from "@reduxjs/toolkit";
 import { RootState } from "./index";
+import { DataProps } from "../routes/nextRoute/nextRoute.types";
 import { clearBiometricsCache } from "./reducers/biometricsCache";
-import { clearNotificationsPreferences } from "./reducers/notificationsPreferences/notificationsPreferences";
-import { clearDAppConnection, clearProfiles } from "./reducers/profileCache";
+import { clearConnectionsCache } from "./reducers/connectionsCache";
+import { clearCredArchivedCache } from "./reducers/credsArchivedCache";
+import { clearCredCache } from "./reducers/credsCache";
+import { clearIdentifierCache } from "./reducers/identifiersCache";
 import { clearSeedPhraseCache } from "./reducers/seedPhraseCache";
+import { clearSSIAgent } from "./reducers/ssiAgent";
 import { clearStateCache } from "./reducers/stateCache";
 import { clearViewTypeCache } from "./reducers/viewTypeCache";
+import { clearNotifications } from "./reducers/notificationsCache";
+import { clearWalletConnection } from "./reducers/walletConnectionsCache";
 
 const updateReduxState = (
   nextRoute: string,
@@ -16,7 +21,7 @@ const updateReduxState = (
   dispatch: ThunkDispatch<RootState, undefined, AnyAction>,
   functions: ((
     data: DataProps
-  ) => AnyAction | ThunkAction<void, RootState, undefined, AnyAction>)[]
+  ) => ThunkAction<void, RootState, undefined, AnyAction>)[]
 ) => {
   if (data.state) {
     data.state.nextRoute = nextRoute;
@@ -29,13 +34,17 @@ const updateReduxState = (
 };
 
 const CLEAR_STORE_ACTIONS = [
-  clearProfiles,
+  clearIdentifierCache,
+  clearCredArchivedCache,
+  clearCredCache,
+  clearConnectionsCache,
   clearBiometricsCache,
-  clearNotificationsPreferences,
   clearSeedPhraseCache,
+  clearSSIAgent,
   clearStateCache,
   clearViewTypeCache,
-  clearDAppConnection,
+  clearNotifications,
+  clearWalletConnection,
 ];
 
-export { CLEAR_STORE_ACTIONS, updateReduxState };
+export { updateReduxState, CLEAR_STORE_ACTIONS };

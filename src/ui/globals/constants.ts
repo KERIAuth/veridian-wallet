@@ -5,12 +5,11 @@ const DOUBLE_TAP_DELAY = 300;
 
 // Links
 const SUPPORT_EMAIL = "mailto:support@veridian.id";
-const WEBSITE_LINK = "https://www.veridian.id";
 const DOCUMENTATION_LINK = "https://docs.veridian.id/";
 const ONBOARDING_DOCUMENTATION_LINK =
-  "https://docs.veridian.id/onboarding#ssi-agent-details";
+  "https://docs.veridian.id/walletGuide/onboarding";
 const RECOVERY_DOCUMENTATION_LINK =
-  "https://docs.veridian.id/recovery#ssi-agent-details";
+  "https://docs.veridian.id/walletGuide/recovery";
 const FEDERAL_DATA_PROTECTION_LINK = "https://www.edoeb.admin.ch/de";
 const DATA_PROTECTION_AUTHORITIES_LINK =
   "https://ec.europa.eu/justice/article-29/structure/data-protection-authorities/index_en.htm";
@@ -20,7 +19,6 @@ const WEBVIEW_MIN_VERSION = 79;
 const IOS_MIN_VERSION = 18;
 
 export {
-  WEBSITE_LINK,
   DISPLAY_NAME_LENGTH,
   SEED_PHRASE_SUGGESTIONS,
   MAX_FAVOURITES,

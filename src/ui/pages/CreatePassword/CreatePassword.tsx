@@ -1,36 +1,32 @@
-import { IonIcon } from "@ionic/react";
-import { lockClosedOutline } from "ionicons/icons";
 import { useRef, useState } from "react";
 import { Agent } from "../../../core/agent/agent";
 import { MiscRecordId } from "../../../core/agent/agent.types";
 import { BasicRecord } from "../../../core/agent/records";
-import { KeyStoreKeys, SecureStorage } from "../../../core/storage";
 import { i18n } from "../../../i18n";
 import { RoutePath } from "../../../routes";
 import { getNextRoute } from "../../../routes/nextRoute";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import {
   getStateCache,
-  setAuthentication,
+  setCurrentOperation,
   setToastMsg,
 } from "../../../store/reducers/stateCache";
 import { updateReduxState } from "../../../store/utils";
 import { Alert } from "../../components/Alert";
-import { PageFooter } from "../../components/PageFooter";
 import { PageHeader } from "../../components/PageHeader";
 import { PasswordModule } from "../../components/PasswordModule";
 import { PasswordModuleRef } from "../../components/PasswordModule/PasswordModule.types";
-import { ResponsivePageLayout } from "../../components/layout/ResponsivePageLayout";
-import { ToastMsgType } from "../../globals/types";
+import { ScrollablePageLayout } from "../../components/layout/ScrollablePageLayout";
+import { OperationType, ToastMsgType } from "../../globals/types";
 import { useAppIonRouter } from "../../hooks";
 import { showError } from "../../utils/error";
 import "./CreatePassword.scss";
 import { CreatePasswordProps } from "./CreatePassword.types";
+import { SetupPassword } from "./components";
 
 const CreatePassword = ({
   handleClear,
-  showSkip = false,
-  isSetting = false,
+  setPasswordIsSet,
   userAction,
 }: CreatePasswordProps) => {
   const pageId = "create-password";
@@ -41,74 +37,48 @@ const CreatePassword = ({
   const [alertCancelIsOpen, setAlertCancelIsOpen] = useState(false);
   const isOnboarding = stateCache.routes[0]?.path === RoutePath.CREATE_PASSWORD;
   const [step, setStep] = useState(isOnboarding ? 0 : 1);
-  const [validPassword, setValidPassword] = useState(false);
 
   const handleContinue = async (skipped: boolean) => {
-    try {
-      if (skipped) {
-        await SecureStorage.delete(KeyStoreKeys.APP_OP_PASSWORD);
-        await Agent.agent.basicStorage
-          .createOrUpdateBasicRecord(
-            new BasicRecord({
-              id: MiscRecordId.APP_PASSWORD_SKIPPED,
-              content: { value: skipped },
-            })
-          )
-          .catch((e) => {
-            showError("Unable to skip set password", e, dispatch);
-          });
-      } else {
-        const result = await passwordModuleRef.current?.savePassword();
-        if (!result) {
-          return;
-        }
-      }
-
-      if (!isOnboarding) {
-        dispatch(
-          setAuthentication({
-            ...stateCache.authentication,
-            passwordIsSet: true,
+    if (skipped) {
+      await Agent.agent.basicStorage
+        .createOrUpdateBasicRecord(
+          new BasicRecord({
+            id: MiscRecordId.APP_PASSWORD_SKIPPED,
+            content: { value: skipped },
           })
-        );
-        userAction?.current === "change" &&
-          dispatch(setToastMsg(ToastMsgType.PASSWORD_UPDATED));
-        userAction?.current === "enable" &&
-          dispatch(
-            setToastMsg(
-              isSetting
-                ? ToastMsgType.PASSWORD_SETTING_UPDATE
-                : ToastMsgType.PASSWORD_CREATED
-            )
-          );
-        handleClear();
-      } else {
-        const { nextPath, updateRedux } = getNextRoute(
-          RoutePath.CREATE_PASSWORD,
-          {
-            store: { stateCache },
-            state: { skipped },
-          }
-        );
+        )
+        .catch((e) => {
+          showError("Unable to skip set password", e, dispatch);
+        });
+    }
 
-        updateReduxState(
-          nextPath.pathname,
-          {
-            store: { stateCache },
-            state: { skipped },
-          },
-          dispatch,
-          updateRedux
-        );
-        ionRouter.push(nextPath.pathname, "forward", "push");
-      }
-    } catch (e) {
-      showError(
-        "Unable to set password",
-        e,
-        dispatch,
-        isSetting ? ToastMsgType.PASSWORD_SETTING_UPDATE_FAIL : undefined
+    if (!isOnboarding) {
+      setPasswordIsSet(true);
+      userAction?.current === "change" &&
+        dispatch(setToastMsg(ToastMsgType.PASSWORD_UPDATED));
+      userAction?.current === "enable" &&
+        dispatch(setToastMsg(ToastMsgType.PASSWORD_CREATED));
+      handleClear();
+    } else {
+      const { nextPath, updateRedux } = getNextRoute(
+        RoutePath.CREATE_PASSWORD,
+        {
+          store: { stateCache },
+          state: { skipped },
+        }
       );
+
+      updateReduxState(
+        nextPath.pathname,
+        {
+          store: { stateCache },
+          state: { skipped },
+        },
+        dispatch,
+        updateRedux
+      );
+      dispatch(setCurrentOperation(OperationType.IDLE));
+      ionRouter.push(nextPath.pathname, "forward", "push");
     }
   };
 
@@ -118,24 +88,18 @@ const CreatePassword = ({
     setAlertCancelIsOpen(true);
   };
 
-  const progressBarValue = stateCache.authentication.recoveryWalletProgress
-    ? 0.5
-    : 0.66;
+  const isShowProgresBar = step !== 0 && isOnboarding;
 
-  const subTitle =
-    userAction?.current == "change"
-      ? i18n.t("forgotauth.newpassword.description")
-      : i18n.t("createpassword.description");
   return (
     <>
-      <ResponsivePageLayout
+      <ScrollablePageLayout
         pageId={pageId}
         customClass={isOnboarding ? "has-header-skip" : undefined}
         header={
           <PageHeader
             currentPath={isOnboarding ? RoutePath.CREATE_PASSWORD : undefined}
-            progressBar={isOnboarding}
-            progressBarValue={progressBarValue}
+            progressBar={isShowProgresBar}
+            progressBarValue={0.4}
             progressBarBuffer={1}
             closeButton={!isOnboarding}
             closeButtonAction={handleClear}
@@ -143,26 +107,23 @@ const CreatePassword = ({
             title={
               !isOnboarding
                 ? `${i18n.t(
-                    userAction?.current === "change"
-                      ? "createpassword.change"
-                      : "createpassword.title"
-                  )}`
+                  userAction?.current === "change"
+                    ? "createpassword.change"
+                    : "createpassword.title"
+                )}`
                 : undefined
             }
-            actionButton={isOnboarding || showSkip}
+            actionButton={isShowProgresBar}
             actionButtonLabel={`${i18n.t("createpassword.button.skip")}`}
             actionButtonAction={handleSkip}
           />
         }
       >
         {step === 0 ? (
-          <div className="setup-password">
-            <div className="page-info">
-              <IonIcon icon={lockClosedOutline} />
-              <h1>{i18n.t("createpassword.setuppassword.title")}</h1>
-              <p>{i18n.t("createpassword.setuppassword.description")}</p>
-            </div>
-          </div>
+          <SetupPassword
+            onSetupPasswordClick={handleSetupPassword}
+            onSkipClick={handleSkip}
+          />
         ) : (
           <PasswordModule
             ref={passwordModuleRef}
@@ -170,30 +131,11 @@ const CreatePassword = ({
             title={
               isOnboarding ? `${i18n.t("createpassword.title")}` : undefined
             }
-            description={`${subTitle}`}
-            onValidationChange={setValidPassword}
+            description={`${i18n.t("createpassword.description")}`}
+            onCreateSuccess={handleContinue}
           />
         )}
-        {step === 0 ? (
-          <PageFooter
-            primaryButtonText={`${i18n.t(
-              "createpassword.setuppassword.button.enable"
-            )}`}
-            primaryButtonAction={handleSetupPassword}
-            tertiaryButtonText={`${i18n.t(
-              "createpassword.setuppassword.button.skip"
-            )}`}
-            tertiaryButtonAction={handleSkip}
-          />
-        ) : (
-          <PageFooter
-            pageId={pageId}
-            primaryButtonText={`${i18n.t("createpassword.button.continue")}`}
-            primaryButtonAction={() => handleContinue(false)}
-            primaryButtonDisabled={!validPassword}
-          />
-        )}
-      </ResponsivePageLayout>
+      </ScrollablePageLayout>
       <Alert
         isOpen={alertCancelIsOpen}
         setIsOpen={setAlertCancelIsOpen}

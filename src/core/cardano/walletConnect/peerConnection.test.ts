@@ -1,9 +1,11 @@
 import { IdentityWalletConnect } from "./identityWalletConnect";
 import { Agent } from "../../agent/agent";
-import { PeerConnectionPairRecord } from "../../agent/records";
+import {
+  PeerConnectionMetadataRecord,
+  PeerConnectionStorage,
+} from "../../agent/records";
 import { PeerConnection } from "./peerConnection";
 import { KeyStoreKeys, SecureStorage } from "../../storage";
-
 require("fake-indexeddb/auto");
 
 jest.mock("../../agent/agent", () => ({
@@ -19,10 +21,9 @@ jest.mock("../../agent/agent", () => ({
         updateIdentifier: jest.fn(),
       },
       getKeriaOnlineStatus: jest.fn(),
-      isSeedPhraseVerified: jest.fn().mockResolvedValue(true),
-      peerConnectionPair: {
-        getPeerConnection: jest.fn(),
-        createPeerConnectionPairRecord: jest.fn(),
+      peerConnectionMetadataStorage: {
+        createPeerConnectionMetadataRecord: jest.fn(),
+        getPeerConnectionMetadata: jest.fn(),
       },
     },
   },
@@ -86,31 +87,28 @@ describe("PeerConnection", () => {
 
   test("should connect with a DApp if there is not existing connection", async () => {
     const dAppIdentifier = "testDApp";
-    const accountId = "testAid";
-    const peerConnectionId = `${dAppIdentifier}:${accountId}`;
     Agent.agent.identifiers.getIdentifier = jest.fn().mockResolvedValue({
-      id: accountId,
+      id: "id",
     });
     Agent.agent.connections.getOobi = jest.fn().mockResolvedValue("test-oobi");
-    Agent.agent.peerConnectionPair.getPeerConnection = jest
+    Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata = jest
       .fn()
-      .mockResolvedValue(undefined);
+      .mockRejectedValue(
+        new Error(PeerConnectionStorage.PEER_CONNECTION_METADATA_RECORD_MISSING)
+      );
     const connectSpy = jest
       .spyOn(IdentityWalletConnect.prototype, "connect")
       .mockReturnValue("seed");
 
-    await peerConnection.start(accountId);
-    await peerConnection.connectWithDApp(peerConnectionId);
+    await peerConnection.start("testAid");
+    await peerConnection.connectWithDApp(dAppIdentifier);
     expect(
-      Agent.agent.peerConnectionPair.getPeerConnection
-    ).toHaveBeenCalledWith(peerConnectionId);
+      Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata
+    ).toHaveBeenCalledWith(dAppIdentifier);
     expect(
-      Agent.agent.peerConnectionPair.createPeerConnectionPairRecord
-    ).toHaveBeenCalledWith({
-      id: `${dAppIdentifier}:${accountId}`,
-      selectedAid: accountId,
-      iconB64: expect.any(String),
-    });
+      Agent.agent.peerConnectionMetadataStorage
+        .createPeerConnectionMetadataRecord
+    ).toHaveBeenCalled();
     expect(connectSpy).toHaveBeenCalledWith(dAppIdentifier);
     expect(SecureStorage.set).toHaveBeenCalledWith(
       KeyStoreKeys.MEERKAT_SEED,
@@ -120,22 +118,27 @@ describe("PeerConnection", () => {
 
   test("should connect with a DApp if there is an existing connection", async () => {
     const dAppIdentifier = "testDApp";
-    const accountId = "testAid";
-    const peerConnectionId = `${dAppIdentifier}:${accountId}`;
-    Agent.agent.peerConnectionPair.getPeerConnection = jest
+    Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata = jest
       .fn()
-      .mockResolvedValue({} as PeerConnectionPairRecord);
+      .mockResolvedValue({
+        id: "id",
+        name: "name",
+        url: "url",
+        selectedAid: "aid",
+        iconB64: "icon",
+      } as PeerConnectionMetadataRecord);
     const connectSpy = jest
       .spyOn(IdentityWalletConnect.prototype, "connect")
       .mockReturnValue("seed");
 
-    await peerConnection.start(accountId);
-    await peerConnection.connectWithDApp(peerConnectionId);
+    await peerConnection.start("testAid");
+    await peerConnection.connectWithDApp(dAppIdentifier);
     expect(
-      Agent.agent.peerConnectionPair.getPeerConnection
-    ).toHaveBeenCalledWith(peerConnectionId);
+      Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata
+    ).toHaveBeenCalledWith(dAppIdentifier);
     expect(
-      Agent.agent.peerConnectionPair.createPeerConnectionPairRecord
+      Agent.agent.peerConnectionMetadataStorage
+        .createPeerConnectionMetadataRecord
     ).not.toBeCalled();
     expect(connectSpy).toHaveBeenCalledWith(dAppIdentifier);
     expect(SecureStorage.set).toHaveBeenCalledWith(
@@ -146,9 +149,9 @@ describe("PeerConnection", () => {
 
   test("should throw an error if there is an error from getPeerConnectionMetadata", async () => {
     const dAppIdentifier = "testDApp";
-    Agent.agent.peerConnectionPair.getPeerConnection = jest
+    Agent.agent.peerConnectionMetadataStorage.getPeerConnectionMetadata = jest
       .fn()
-      .mockRejectedValue(new Error("error"));
+      .mockRejectedValueOnce(new Error("error"));
     const connectSpy = jest
       .spyOn(IdentityWalletConnect.prototype, "connect")
       .mockReturnValue("seed");

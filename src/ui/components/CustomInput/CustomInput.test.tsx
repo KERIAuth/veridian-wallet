@@ -1,3 +1,4 @@
+import { ionFireEvent } from "@ionic/react-test-utils";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { eyeOutline } from "ionicons/icons";
 import { act } from "react";
@@ -51,13 +52,13 @@ describe("Custom input", () => {
     );
 
     act(() => {
-      fireEvent(getByTestId("test-input"), new CustomEvent("ionFocus"));
+      ionFireEvent.ionFocus(getByTestId("test-input"));
     });
 
     expect(focus).toBeCalledWith(true);
 
     act(() => {
-      fireEvent(getByTestId("test-input"), new CustomEvent("ionBlur"));
+      ionFireEvent.ionBlur(getByTestId("test-input"));
     });
 
     expect(focus).toBeCalledWith(false);
@@ -76,12 +77,7 @@ describe("Custom input", () => {
     );
 
     act(() => {
-      fireEvent(
-        getByTestId("test-input"),
-        new CustomEvent("ionInput", {
-          detail: { value: "test" },
-        })
-      );
+      ionFireEvent.ionInput(getByTestId("test-input"), "test");
     });
 
     expect(onChangeMock).toBeCalled();

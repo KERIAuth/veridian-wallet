@@ -29,7 +29,7 @@ const SystemThreatAlert: React.FC<SystemThreatAlertProps> = ({ errors }) => {
         />
         <h2 className="title">
           {i18n.t("systemthreats.title", {
-            defaultValue: "Threats detected",
+            defaultValue: "Threats Detected",
           })}
         </h2>
         <p className="description">

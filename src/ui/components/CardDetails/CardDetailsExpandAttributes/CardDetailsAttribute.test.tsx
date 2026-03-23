@@ -4,7 +4,7 @@ import Eng_trans from "../../../../locales/en/en.json";
 import { store } from "../../../../store";
 import { CardDetailsAttribute } from "./CardDetailsAttribute";
 
-describe("Card Details Attribute", () => {
+describe("CardDetailsAttribute", () => {
   test("Render nested value", async () => {
     const { getAllByTestId, getByText } = render(
       <Provider store={store}>

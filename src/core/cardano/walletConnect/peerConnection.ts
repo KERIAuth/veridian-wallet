@@ -2,7 +2,7 @@ import { IConnectMessage } from "@fabianbormann/cardano-peer-connect/dist/src/ty
 import { ExperimentalContainer } from "@fabianbormann/cardano-peer-connect";
 import { IdentityWalletConnect } from "./identityWalletConnect";
 import packageInfo from "../../../../package.json";
-import FALLBACK_ICON_BASE64 from "../../../assets/fallback-icon-only";
+import ICON_BASE64 from "../../../assets/icon-only";
 import { KeyStoreKeys, SecureStorage } from "../../storage";
 import { CoreEventEmitter } from "../../agent/event";
 import {
@@ -14,7 +14,7 @@ import {
   PeerDisconnectedEvent,
 } from "./peerConnection.types";
 import { Agent } from "../../agent/agent";
-import { PeerConnectionPairStorage } from "../../agent/records";
+import { PeerConnectionStorage } from "../../agent/records";
 
 class PeerConnection {
   static readonly PEER_CONNECTION_START_PENDING =
@@ -23,7 +23,7 @@ class PeerConnection {
   private walletInfo = {
     address: "",
     name: "idw_p2p",
-    icon: FALLBACK_ICON_BASE64,
+    icon: ICON_BASE64,
     version: packageInfo.version,
     requestAutoconnect: true,
   };
@@ -107,17 +107,15 @@ class PeerConnection {
           ) {
             iconB64 = icon;
           }
-
-          const peerConnectionId = `${address}:${selectedAid}`;
-          await Agent.agent.peerConnectionPair.updatePeerConnectionAccount(
-            peerConnectionId,
+          await Agent.agent.peerConnectionMetadataStorage.updatePeerConnectionMetadata(
+            address,
             {
               name,
+              selectedAid,
               url,
-              iconB64,
+              iconB64: iconB64,
             }
           );
-
           this.eventEmitter.emit<PeerConnectedEvent>({
             type: PeerConnectionEventTypes.PeerConnected,
             payload: {
@@ -143,44 +141,42 @@ class PeerConnection {
 
     this.identityWalletConnect.setEnableExperimentalApi(
       new ExperimentalContainer<ExperimentalAPIFunctions>({
-        getKeriIdentifier: this.identityWalletConnect.getKeriIdentifier.bind(
-          this.identityWalletConnect
-        ),
-        signKeri: this.identityWalletConnect.signKeri.bind(
-          this.identityWalletConnect
-        ),
+        getKeriIdentifier: this.identityWalletConnect.getKeriIdentifier,
+        signKeri: this.identityWalletConnect.signKeri,
       })
     );
   }
 
-  async connectWithDApp(peerConnectionId: string) {
+  async connectWithDApp(dAppIdentifier: string) {
     if (this.identityWalletConnect === undefined) {
       throw new Error(PeerConnection.PEER_CONNECTION_START_PENDING);
     }
-
-    const [dAppIdentifier, connectingIdentifier] = peerConnectionId.split(":");
-
-    const existingPeerConnection = await Agent.agent.peerConnectionPair
-      .getPeerConnection(`${dAppIdentifier}:${connectingIdentifier}`)
-      .catch((error) => {
-        if (
-          error.message ===
-          PeerConnectionPairStorage.PEER_CONNECTION_ACCOUNT_RECORD_MISSING
-        ) {
-          return undefined;
-        } else {
-          throw error;
-        }
-      });
-
+    const existingPeerConnection =
+      await Agent.agent.peerConnectionMetadataStorage
+        .getPeerConnectionMetadata(dAppIdentifier)
+        .catch((error) => {
+          if (
+            error.message ===
+            PeerConnectionStorage.PEER_CONNECTION_METADATA_RECORD_MISSING
+          ) {
+            return undefined;
+          } else {
+            throw error;
+          }
+        });
     if (!existingPeerConnection) {
-      await Agent.agent.peerConnectionPair.createPeerConnectionPairRecord({
-        id: `${dAppIdentifier}:${connectingIdentifier}`,
-        selectedAid: connectingIdentifier,
-        iconB64: FALLBACK_ICON_BASE64,
-      });
+      const connectingIdentifier =
+        await this.identityWalletConnect.getKeriIdentifier();
+      await Agent.agent.peerConnectionMetadataStorage.createPeerConnectionMetadataRecord(
+        {
+          id: dAppIdentifier,
+          selectedAid: connectingIdentifier.id,
+          iconB64: ICON_BASE64,
+        }
+      );
     }
     const seed = this.identityWalletConnect.connect(dAppIdentifier);
+
     SecureStorage.set(KeyStoreKeys.MEERKAT_SEED, seed);
   }
 

@@ -3,7 +3,6 @@
 # dependencies
 node_modules
 keria
-signify-ts
 /.pnp
 .pnp.js
 
@@ -37,6 +36,5 @@ resources/android
 resources/ios
 
 services/credential-server/data/brans.json
-android/app/release/output-metadata.json
 
 .env*

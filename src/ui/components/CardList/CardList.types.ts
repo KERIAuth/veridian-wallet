@@ -2,7 +2,7 @@ import { ReactNode, MouseEvent as ReactMouseEvent } from "react";
 
 interface CardItem<T> {
   title: string;
-  subtitle?: string | ReactNode;
+  subtitle?: string;
   image?: string;
   startSlot?: ReactNode;
   id: string | number;
@@ -10,17 +10,15 @@ interface CardItem<T> {
 }
 
 interface CardItemProps<T> {
-  index: number;
   card: CardItem<T>;
-  hiddenImage?: boolean;
   onRenderCardAction?: (data: T) => ReactNode;
   onCardClick?: (data: T, e: ReactMouseEvent<HTMLElement, MouseEvent>) => void;
   onRenderEndSlot?: (data: T) => ReactNode;
-  onRenderStartSlot?: (data: T, index: number) => ReactNode;
+  onRenderStartSlot?: (data: T) => ReactNode;
 }
 
 interface CardListProps<T extends object = object>
-  extends Omit<CardItemProps<T>, "card" | "index"> {
+  extends Omit<CardItemProps<T>, "card"> {
   data: CardItem<T>[];
   lines?: "full" | "inset" | "none";
   className?: string;

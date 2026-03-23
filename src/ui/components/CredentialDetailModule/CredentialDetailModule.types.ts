@@ -1,4 +1,5 @@
 import { ACDCDetails } from "../../../core/agent/services/credentialService.types";
+import { MemberInfo } from "../../pages/NotificationDetails/components/CredentialRequest/CredentialRequest.types";
 import { NotificationDetailState } from "../../pages/NotificationDetails/NotificationDetails.types";
 import { HardwareBackButtonConfig } from "../PageHeader/PageHeader.types";
 
@@ -19,6 +20,7 @@ interface CredentialDetailModuleBaseProps {
   navAnimation?: boolean;
   hardwareBackButtonConfig?: HardwareBackButtonConfig;
   viewOnly?: boolean;
+  joinedCredRequestMembers?: MemberInfo[];
 }
 
 interface CredentialDetailModuleLightModeProps
@@ -43,9 +45,9 @@ type CredentialDetailModalProps = CredentialDetailModuleProps & {
 };
 
 export type {
-  CredentialDetailModalProps,
-  CredentialDetailModuleProps,
   CredHistory,
+  CredentialDetailModuleProps,
+  CredentialDetailModalProps,
 };
 
 export { BackReason };

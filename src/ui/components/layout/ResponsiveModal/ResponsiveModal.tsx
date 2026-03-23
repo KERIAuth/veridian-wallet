@@ -9,7 +9,6 @@ const ResponsiveModal = ({
   children,
   backdropDismiss,
   onDismiss,
-  onWillDismiss,
 }: ResponsiveModalProps) => {
   return (
     <IonModal
@@ -20,7 +19,6 @@ const ResponsiveModal = ({
       className={`responsive-modal ${customClasses}`}
       onDidDismiss={onDismiss}
       backdropDismiss={backdropDismiss}
-      onWillDismiss={onWillDismiss}
     >
       <div className={`responsive-modal-content ${componentId}-content`}>
         {children}

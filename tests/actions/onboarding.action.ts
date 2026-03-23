@@ -5,6 +5,7 @@ import {
   generateRecoveryPhraseOf,
   recoveryPhraseWords,
 } from "../steps-definitions/onboarding/verify-your-recovery-phrase.steps.js";
+import AlertModal from "../screen-objects/components/alert.modal.js";
 import Assert from "../helpers/assert.js";
 import CreatePasswordScreen from "../screen-objects/onboarding/create-password.screen.js";
 import OnboardingScreen from "../screen-objects/onboarding/onboarding.screen.js";
@@ -15,37 +16,27 @@ import WelcomeModal from "../screen-objects/components/welcome.modal.js";
 import { returnPassword } from "../helpers/generate";
 import BiometricScreen from "../screen-objects/onboarding/biometric.screen";
 import WelcomeMessageScreen from "../screen-objects/onboarding/welcome-message.screen";
-import TermsAndPrivacyScreen from "../screen-objects/onboarding/terms-and-privacy.screen.js";
 
 Given(/^user is onboarded with skipped password creation$/, async function () {
   if (await OnboardingScreen.getStartedButton.isExisting()) {
     await OnboardingScreen.tapOnGetStartedButton();
-
-    if (await TermsAndPrivacyScreen.isDisplayed()) {
-      await TermsAndPrivacyScreen.acceptTerms();
-    }
-
     await PasscodeScreen.enterPasscode(
       (this.passcode = await PasscodeScreen.createAndEnterRandomPasscode())
     );
-
-    await BiometricScreen.skipBiometric();
-
-    await CreatePasswordScreen.skipPassword();
-
+    if (await BiometricScreen.biometricTitleText.isExisting()) {
+      await BiometricScreen.setUpLaterButton.click();
+    }
+    if (await CreatePasswordScreen.pageInforTitle.isExisting()) {
+      await CreatePasswordScreen.setUpLaterButton.click();
+    }
+    await AlertModal.clickConfirmButtonOf(CreatePasswordScreen.alertModal);
     await generateRecoveryPhraseOf();
     await recoveryPhrase().select(recoveryPhraseWords);
     await VerifySeedPhraseScreen.verifyButton.click();
   } else {
     await PasscodeScreen.enterPasscodeSkip();
   }
-
   await SsiAgentDetailsScreen.tapOnValidatedButton();
-
-  if (await TermsAndPrivacyScreen.isDisplayed()) {
-    await TermsAndPrivacyScreen.acceptTerms();
-  }
-
   this.userName = faker.person.firstName();
   await WelcomeModal.nameInput.setValue(this.userName);
   await WelcomeModal.confirmButton.waitForClickable();
@@ -56,21 +47,15 @@ Given(/^user is onboarded with skipped password creation$/, async function () {
 Given(/^user is onboarded with a password creation$/, async function () {
   if (await OnboardingScreen.getStartedButton.isExisting()) {
     await OnboardingScreen.tapOnGetStartedButton();
-
-    if (await TermsAndPrivacyScreen.isDisplayed()) {
-      await TermsAndPrivacyScreen.acceptTerms();
-    }
-
     await PasscodeScreen.enterPasscode(
       (this.passcode = await PasscodeScreen.createAndEnterRandomPasscode())
     );
-
-    await BiometricScreen.skipBiometric();
-
+    if (await BiometricScreen.biometricTitleText.isExisting()) {
+      await BiometricScreen.setUpLaterButton.click();
+    }
     if (await CreatePasswordScreen.pageInforTitle.isExisting()) {
       await CreatePasswordScreen.addPasswordButton.click();
     }
-
     (global as any).generatedPassword = await returnPassword(10);
     await CreatePasswordScreen.createPasswordInput.addValue(
       (global as any).generatedPassword
@@ -88,13 +73,7 @@ Given(/^user is onboarded with a password creation$/, async function () {
   } else {
     await PasscodeScreen.enterPasscodeSkip();
   }
-
   await SsiAgentDetailsScreen.tapOnValidatedButton();
-
-  if (await TermsAndPrivacyScreen.isDisplayed()) {
-    await TermsAndPrivacyScreen.acceptTerms();
-  }
-
   this.userName = faker.person.firstName();
   await WelcomeModal.nameInput.setValue(this.userName);
   await WelcomeModal.confirmButton.waitForClickable();

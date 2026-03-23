@@ -1,34 +1,38 @@
 import { PayloadAction } from "@reduxjs/toolkit";
-import { ConnectionStatus } from "../../../core/agent/agent.types";
-import { PeerConnectionEventTypes } from "../../../core/cardano/walletConnect/peerConnection.types";
-import { RoutePath } from "../../../routes";
-import { RootState } from "../../index";
 import {
   AuthenticationCacheProps,
   CurrentRouteCacheProps,
-  dequeueIncomingRequest,
-  enqueueIncomingRequest,
   getAuthentication,
+  getCurrentOperation,
   getCurrentRoute,
   getStateCache,
   initialState,
-  login,
   logout,
   setAuthentication,
+  enqueueIncomingRequest,
+  setCurrentOperation,
   setCurrentRoute,
-  setIsOnline,
   setPauseQueueIncomingRequest,
-  setPendingJoinGroupMetadata,
   setQueueIncomingRequest,
-  showGenericError,
+  dequeueIncomingRequest,
   StateCacheProps,
   stateCacheSlice,
+  login,
+  setIsOnline,
+  showGenericError,
+  showConnections,
+  clearStateCache,
 } from "./stateCache";
+import { RootState } from "../../index";
+import { RoutePath } from "../../../routes";
+import { OperationType } from "../../../ui/globals/types";
 import {
   IncomingRequestProps,
   IncomingRequestType,
+  InitializationPhase,
   PeerConnectSigningEventRequest,
 } from "./stateCache.types";
+import { PeerConnectionEventTypes } from "../../../core/cardano/walletConnect/peerConnection.types";
 
 const signingRequest: PeerConnectSigningEventRequest = {
   type: IncomingRequestType.PEER_CONNECT_SIGN,
@@ -37,10 +41,11 @@ const signingRequest: PeerConnectSigningEventRequest = {
     payload: {
       identifier: "a",
       payload: "tosign",
-      approvalCallback: () => undefined,
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      approvalCallback: () => {},
     },
   },
-  peerConnection: { meerkatId: "connection" },
+  peerConnection: { id: "connection" },
 };
 
 const signingRequestB = { ...signingRequest };
@@ -61,6 +66,13 @@ describe("State Cache", () => {
     const nextState = stateCacheSlice.reducer(initialState, action);
 
     expect(nextState.showGenericError).toEqual(true);
+  });
+
+  test("should set showConnections", () => {
+    const action = showConnections(true);
+    const nextState = stateCacheSlice.reducer(initialState, action);
+
+    expect(nextState.showConnections).toEqual(true);
   });
 
   test("should set the current route cache", () => {
@@ -89,6 +101,7 @@ describe("State Cache", () => {
   test("should set the authentication cache", () => {
     const authentication: AuthenticationCacheProps = {
       loggedIn: false,
+      userName: "",
       time: 0,
       passcodeIsSet: false,
       seedPhraseIsSet: false,
@@ -126,6 +139,19 @@ describe("State Cache", () => {
     const nextState = stateCacheSlice.reducer(initialState, action);
     expect(nextState.authentication.loggedIn).toEqual(true);
     expect(nextState).not.toBe(initialState);
+  });
+
+  test("should set the currentOperation cache", () => {
+    const op = OperationType.SCAN_CONNECTION;
+    const action = setCurrentOperation(op);
+    const nextState = stateCacheSlice.reducer(initialState, action);
+
+    expect(nextState.currentOperation).toEqual(op);
+    expect(nextState).not.toBe(initialState);
+
+    const rootState = { stateCache: nextState } as RootState;
+    expect(getCurrentOperation(rootState)).toEqual(nextState.currentOperation);
+    expect(getStateCache(rootState)).toEqual(nextState);
   });
 
   test("should queue incoming request", () => {
@@ -192,57 +218,5 @@ describe("State Cache", () => {
     const nextState = stateCacheSlice.reducer(initialStateMock, action);
     expect(nextState.queueIncomingRequest.queues.length).toEqual(1);
     expect(nextState.queueIncomingRequest.isProcessing).toEqual(true);
-  });
-
-  test("should set pendingJoinGroupMetadata", () => {
-    const action = setPendingJoinGroupMetadata({
-      isPendingJoinGroup: true,
-      groupId: "test-group-id",
-      groupName: "Test Group",
-      initiatorName: "Frank",
-      connection: {
-        id: "ebfeb1ebc6f1c276ef71212ec20",
-        label: "Cambridge University",
-        createdAtUTC: "2017-01-14T19:23:24Z",
-        status: ConnectionStatus.PENDING,
-        contactId: "ebfeb1ebc6f1c276ef71212ec20",
-        oobi: "http://keria:3902/oobi/ELjvc_mLWOx7pI4fBh7lGUYofOAJUgUrMKnaoFGdvs86/agent/ENGnzDMWk8PlFbOoYCauLs1rDuQbvsIStxNzkjZPikSo?name=CF%20Credential%20Issuance",
-        groupId: "ECHG-cxboMQ78Hwlm2-w6OS3iU275bAKkqC1LjwICPyi",
-      },
-    });
-    const nextState = stateCacheSlice.reducer(initialState, action);
-
-    expect(nextState.pendingJoinGroupMetadata).toEqual({
-      isPendingJoinGroup: true,
-      groupId: "test-group-id",
-      groupName: "Test Group",
-      initiatorName: "Frank",
-      connection: {
-        id: "ebfeb1ebc6f1c276ef71212ec20",
-        label: "Cambridge University",
-        createdAtUTC: "2017-01-14T19:23:24Z",
-        status: ConnectionStatus.PENDING,
-        contactId: "ebfeb1ebc6f1c276ef71212ec20",
-        oobi: "http://keria:3902/oobi/ELjvc_mLWOx7pI4fBh7lGUYofOAJUgUrMKnaoFGdvs86/agent/ENGnzDMWk8PlFbOoYCauLs1rDuQbvsIStxNzkjZPikSo?name=CF%20Credential%20Issuance",
-        groupId: "ECHG-cxboMQ78Hwlm2-w6OS3iU275bAKkqC1LjwICPyi",
-      },
-    });
-
-    const rootState = { stateCache: nextState } as RootState;
-    expect(getStateCache(rootState).pendingJoinGroupMetadata).toEqual({
-      isPendingJoinGroup: true,
-      groupId: "test-group-id",
-      groupName: "Test Group",
-      initiatorName: "Frank",
-      connection: {
-        id: "ebfeb1ebc6f1c276ef71212ec20",
-        label: "Cambridge University",
-        createdAtUTC: "2017-01-14T19:23:24Z",
-        status: ConnectionStatus.PENDING,
-        contactId: "ebfeb1ebc6f1c276ef71212ec20",
-        oobi: "http://keria:3902/oobi/ELjvc_mLWOx7pI4fBh7lGUYofOAJUgUrMKnaoFGdvs86/agent/ENGnzDMWk8PlFbOoYCauLs1rDuQbvsIStxNzkjZPikSo?name=CF%20Credential%20Issuance",
-        groupId: "ECHG-cxboMQ78Hwlm2-w6OS3iU275bAKkqC1LjwICPyi",
-      },
-    });
   });
 });

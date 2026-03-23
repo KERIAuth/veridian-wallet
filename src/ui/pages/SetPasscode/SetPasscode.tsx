@@ -87,13 +87,9 @@ const SetPasscode = () => {
     ionRouter.push(backPath.pathname, "back", "pop");
   };
 
-  const description = isOnReenterPasscodeStep
-    ? i18n.t("setpasscode.reenterdescription")
+  const description = stateCache.authentication.recoveryWalletProgress
+    ? i18n.t("setpasscode.recoverydescription")
     : i18n.t("setpasscode.description");
-
-  const progressBarValue = stateCache.authentication.recoveryWalletProgress
-    ? 0.25
-    : 0.33;
 
   return (
     <ResponsivePageLayout
@@ -105,7 +101,7 @@ const SetPasscode = () => {
           closeButtonLabel={closeButtonLabel}
           currentPath={RoutePath.SET_PASSCODE}
           progressBar={true}
-          progressBarValue={progressBarValue}
+          progressBarValue={0.2}
           progressBarBuffer={1}
         />
       }
@@ -122,6 +118,7 @@ const SetPasscode = () => {
             originalPasscode,
           });
         }}
+        changePasscodeMode
       />
     </ResponsivePageLayout>
   );

@@ -26,7 +26,6 @@ const grantForIssuanceExnMessage = {
     t: "exn",
     d: "EJ1jbI8vTFCEloTfSsZkBpV0bUJnhGVyak5q-5IFIglL",
     i: "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
-    rp: "EJ84hiNC0ts71HARE1ZkcnYAFJP0s-RiLNyzupnk7edn",
     p: "",
     dt: "2024-07-30T04:19:55.801000+00:00",
     r: ExchangeRoute.IpexGrant,
@@ -35,14 +34,12 @@ const grantForIssuanceExnMessage = {
       m: "",
       i: "EE-gjeEni5eCdpFlBtG7s4wkv7LJ0JmWplCS4DNQwW2G",
       gid: "gid",
-      oobiUrl: "https://issuer.example/oobi",
     },
     e: {
       acdc: {
         d: "EAe_JgQ636ic-k34aUQMjDFPp6Zd350gEsQA6HePBU5W",
         i: "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
         s: "EBIFDhtSE0cM4nbTnaMqiV1vUIlcnbsqBMeVMmeGmXOu",
-        ri: "EOIj7V-rqu_Q9aGSmPfviBceEtRk1UZBN5H2P_L-Hhx5",
         a: {
           d: "ELHCh_X2aw7C-aYesOM4La23a5lsoNuJDuCsJuxwO2nq",
           i: "EE-gjeEni5eCdpFlBtG7s4wkv7LJ0JmWplCS4DNQwW2G",
@@ -238,47 +235,30 @@ const multisigExnGrant = {
     a: {
       i: "EJ84hiNC0ts71HARE1ZkcnYAFJP0s-RiLNyzupnk7edn",
       gid: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-      smids: ["EJ84hiNC0ts71HARE1ZkcnYAFJP0s-RiLNyzupnk7edn"],
     },
     e: {
-      acdc: {
-        d: "EEuFpvZ2G_YMm3smqbwZn4SWArxQOen7ZypVVfr6fVCT",
-        i: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-        s: "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao",
-        ri: "EGtWoXT4ahu5YnmGCAV8stolM-fgdqCu_eggQ46uSSoi",
-        a: {
-          d: "EEuFpvZ2G_YMm3smqbwZn4SWArxQOen7ZypVVfr6fVCT",
-          i: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-          dt: "2024-08-28T06:39:51.416000+00:00",
-        },
-      },
-      icp: {
-        i: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-      },
       exn: {
+        v: "KERI10JSON000178_",
+        t: "exn",
+        d: "EKa94ERqArLOvNf9AmItMJtsoGKZPVb3e_pEo_1D37qt",
         i: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-        r: ExchangeRoute.IpexGrant,
+        rp: "EJ84hiNC0ts71HARE1ZkcnYAFJP0s-RiLNyzupnk7edn",
         p: "EAe_JgQ636ic-k34aUQMjDFPp6Zd350gEsQA6HePBU5W",
+        dt: "2024-08-28T06:39:51.416000+00:00",
+        r: ExchangeRoute.IpexGrant,
+        q: {},
         a: {
           i: "EJ84hiNC0ts71HARE1ZkcnYAFJP0s-RiLNyzupnk7edn",
           m: "",
-          gid: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-          oobiUrl: "https://issuer.example/oobi",
         },
         e: {
-          acdc: {
-            i: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-            d: "EEuFpvZ2G_YMm3smqbwZn4SWArxQOen7ZypVVfr6fVCT",
-            s: "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao",
-          },
+          acdc: { d: "EEuFpvZ2G_YMm3smqbwZn4SWArxQOen7ZypVVfr6fVCT" },
         },
       },
       d: "EE8_Xc0ZUh_sUJLtmBpVSEr-RFS2mRUIpFyL-pmvtPvx",
     },
   },
-  pathed: {
-    exn: "d",
-  },
+  pathed: {},
 };
 
 const notificationMultisigRpyProp = {

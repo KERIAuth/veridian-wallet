@@ -1,9 +1,12 @@
 import { CredentialShortDetails } from "../../../core/agent/services/credentialService.types";
+import { IdentifierShortDetails } from "../../../core/agent/services/identifier.types";
+import { CardType } from "../../globals/types";
 
 interface CardProps {
   name: string;
   index: number;
-  cardData: CredentialShortDetails;
+  cardType: CardType;
+  cardData: IdentifierShortDetails | CredentialShortDetails;
   handleShowCardDetails: (index: number) => void;
   pickedCard: number | null;
 }
@@ -11,8 +14,9 @@ interface CardProps {
 interface CardSliderProps {
   title: string;
   name: string;
-  cardsData: CredentialShortDetails[];
+  cardType: CardType;
+  cardsData: IdentifierShortDetails[] | CredentialShortDetails[];
   onShowCardDetails?: () => void;
 }
 
-export type { CardProps, CardSliderProps };
+export type { CardSliderProps, CardProps };

@@ -56,15 +56,6 @@ class IdentifierStorage {
     );
   }
 
-  async getIdentifiersPendingUpdate(): Promise<IdentifierMetadataRecord[]> {
-    return this.storageService.findAllByQuery(
-      {
-        pendingUpdate: true,
-      },
-      IdentifierMetadataRecord
-    );
-  }
-
   async getAllIdentifiers(): Promise<IdentifierMetadataRecord[]> {
     return this.storageService.getAll(IdentifierMetadataRecord);
   }
@@ -79,9 +70,7 @@ class IdentifierStorage {
         | "creationStatus"
         | "isDeleted"
         | "groupMetadata"
-        | "groupUsername"
         | "pendingDeletion"
-        | "pendingUpdate"
       >
     >
   ): Promise<void> {
@@ -96,12 +85,8 @@ class IdentifierStorage {
       identifierMetadataRecord.isDeleted = metadata.isDeleted;
     if (metadata.groupMetadata !== undefined)
       identifierMetadataRecord.groupMetadata = metadata.groupMetadata;
-    if (metadata.groupUsername !== undefined)
-      identifierMetadataRecord.groupUsername = metadata.groupUsername;
     if (metadata.pendingDeletion !== undefined)
       identifierMetadataRecord.pendingDeletion = metadata.pendingDeletion;
-    if (metadata.pendingUpdate !== undefined)
-      identifierMetadataRecord.pendingUpdate = metadata.pendingUpdate;
     await this.storageService.update(identifierMetadataRecord);
   }
 

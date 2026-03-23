@@ -1,26 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App } from "@capacitor/app";
 import { getPlatforms } from "@ionic/react";
-import { useAppDispatch, useAppSelector } from "../../../../store/hooks";
-import {
-  getAuthentication,
-  getIsShowSeedPhrase,
-  logout,
-} from "../../../../store/reducers/stateCache";
+import { useAppDispatch } from "../../../../store/hooks";
+import { logout } from "../../../../store/reducers/stateCache";
 
-const BASE_TIMEOUT = process.env.NODE_ENV === "development" ? 3600000 : 60000; // 1h/1min
-
-const getTimeout = (isShowRecoveryPhrase?: boolean) =>
-  isShowRecoveryPhrase ? BASE_TIMEOUT * 3 : BASE_TIMEOUT;
+const timeout = process.env.NODE_ENV === "development" ? 3600000 : 60000; // 1h/1min
+const pauseTimeout = timeout / 2;
 
 const useActivityTimer = () => {
   const dispatch = useAppDispatch();
-  const isShowRecoveryPhrase = useAppSelector(getIsShowSeedPhrase);
-  const isLogin = useAppSelector(getAuthentication).loggedIn;
   const [pauseTimestamp, setPauseTimestamp] = useState(new Date().getTime());
   const timer = useRef<NodeJS.Timeout | null>(null);
-  const timeout = getTimeout(isShowRecoveryPhrase);
-  const pauseTimeout = timeout / 2;
 
   const clearTimer = () => {
     if (timer.current) {
@@ -28,12 +18,16 @@ const useActivityTimer = () => {
     }
   };
 
-  const handleActivity = useCallback(() => {
+  const setActivityTimer = () => {
     clearTimer();
     timer.current = setTimeout(() => {
       dispatch(logout());
     }, timeout);
-  }, [dispatch, timeout]);
+  };
+
+  const handleActivity = () => {
+    setActivityTimer();
+  };
 
   useEffect(() => {
     const platforms = getPlatforms();
@@ -56,11 +50,9 @@ const useActivityTimer = () => {
         clearTimer();
       };
     }
-  }, [dispatch, pauseTimeout, pauseTimestamp]);
+  }, [pauseTimestamp]);
 
   useEffect(() => {
-    if (!isLogin) return;
-
     const events = [
       "load",
       "mousemove",
@@ -71,22 +63,17 @@ const useActivityTimer = () => {
       "keydown",
       "scroll",
     ];
-
     events.forEach((event) => {
       window.addEventListener(event, handleActivity);
     });
-
-    handleActivity();
 
     return () => {
       events.forEach((event) => {
         window.removeEventListener(event, handleActivity);
       });
-
       clearTimer();
     };
-  }, [handleActivity, isLogin, isShowRecoveryPhrase]);
-
+  }, []);
   return {
     setPauseTimestamp,
   };

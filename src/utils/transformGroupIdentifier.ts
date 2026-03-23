@@ -17,9 +17,14 @@ export function transformGroupIdentifier(
       createdAtUTC: input.createdAtUTC,
       theme: input.theme,
       creationStatus: input.creationStatus,
-      groupMetadata: input.groupMemberPre ? undefined : input.groupMetadata,
+      groupMetadata: input.di
+        ? {
+          groupId: input.di,
+          groupInitiator: true,
+          groupCreated: false,
+        }
+        : undefined,
       groupMemberPre: input.groupMemberPre,
-      groupUsername: input.groupUsername ?? (input.di ? "" : undefined),
     },
   };
 

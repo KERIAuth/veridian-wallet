@@ -75,12 +75,6 @@ const VerifyPasscode = ({
   };
 
   const onClose = () => handleClearState(true);
-  const handleCloseForgotModal = (shouldCloseParent?: boolean) => {
-    setOpenRecoveryAuth(false);
-    if (shouldCloseParent) {
-      setIsOpen(false);
-    }
-  };
 
   return (
     <IonModal
@@ -130,8 +124,8 @@ const VerifyPasscode = ({
         />
         <PageFooter
           pageId={componentId}
-          tertiaryButtonText={`${i18n.t("verifypasscode.forgotten.button")}`}
-          tertiaryButtonAction={() => setAlertIsOpen(true)}
+          secondaryButtonText={`${i18n.t("verifypasscode.forgotten.button")}`}
+          secondaryButtonAction={() => setAlertIsOpen(true)}
         />
         <Alert
           isOpen={alertIsOpen}
@@ -144,7 +138,7 @@ const VerifyPasscode = ({
         />
         <ForgotAuthInfo
           isOpen={openRecoveryAuth}
-          onClose={handleCloseForgotModal}
+          onClose={() => setOpenRecoveryAuth(false)}
           type={ForgotType.Passcode}
         />
       </ResponsivePageLayout>

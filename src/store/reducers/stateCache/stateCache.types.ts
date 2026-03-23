@@ -1,11 +1,10 @@
 import { LensFacing } from "@capacitor-mlkit/barcode-scanning";
-import { MultisigConnectionDetails } from "../../../core/agent/agent.types";
 import { LoginAttempts } from "../../../core/agent/services/auth.types";
 import { PeerConnectSigningEvent } from "../../../core/cardano/walletConnect/peerConnection.types";
-import { ToastMsgType } from "../../../ui/globals/types";
-import { DAppConnection } from "../profileCache";
+import { OperationType, ToastMsgType } from "../../../ui/globals/types";
+import { ConnectionData } from "../walletConnectionsCache";
 
-interface PayloadData<T = unknown> {
+interface PayloadData<T = any> {
   [key: string]: T;
 }
 
@@ -16,6 +15,7 @@ interface CurrentRouteCacheProps {
 
 interface AuthenticationCacheProps {
   loggedIn: boolean;
+  userName: string;
   time: number;
   passcodeIsSet: boolean;
   seedPhraseIsSet: boolean;
@@ -36,7 +36,7 @@ enum IncomingRequestType {
 type PeerConnectSigningEventRequest = {
   type: IncomingRequestType.PEER_CONNECT_SIGN;
   signTransaction: PeerConnectSigningEvent;
-  peerConnection: DAppConnection;
+  peerConnection: ConnectionData;
 };
 
 type IncomingRequestProps = PeerConnectSigningEventRequest;
@@ -52,33 +52,22 @@ interface ToastStackItem {
   message: ToastMsgType;
 }
 
-interface PendingJoinGroupMetadata {
-  isPendingJoinGroup: boolean;
-  groupId: string;
-  groupName: string;
-  initiatorName: string | null;
-  connection: MultisigConnectionDetails;
-}
-
 interface StateCacheProps {
   initializationPhase: InitializationPhase;
   recoveryCompleteNoInterruption: boolean;
   isOnline: boolean;
   routes: CurrentRouteCacheProps[];
   authentication: AuthenticationCacheProps;
+  currentOperation: OperationType;
   queueIncomingRequest: QueueProps<IncomingRequestProps>;
   cameraDirection?: LensFacing;
   showGenericError?: boolean;
   showNoWitnessAlert?: boolean;
+  showConnections: boolean;
   toastMsgs: ToastStackItem[];
   forceInitApp?: number;
-  showLoading: GlobalLoadingType;
-  isSetupProfile?: boolean;
-  pendingJoinGroupMetadata: PendingJoinGroupMetadata | null;
-  showVerifySeedPhraseAlert?: boolean;
-  isSyncingData?: boolean;
-  isShowSeedPhraseScreen?: boolean;
-  isInBiometricProcess?: boolean;
+  showLoading?: boolean;
+  showWelcomePage?: boolean;
 }
 
 enum InitializationPhase {
@@ -87,13 +76,7 @@ enum InitializationPhase {
   PHASE_TWO = "PHASE_TWO",
 }
 
-enum GlobalLoadingType {
-  NONE = "NONE",
-  HIDEBG = "HIDE_BG",
-  SHOWBG = "SHOW_BG",
-}
-
-export { IncomingRequestType, InitializationPhase, GlobalLoadingType };
+export { IncomingRequestType, InitializationPhase };
 
 export type {
   AuthenticationCacheProps,
@@ -101,7 +84,6 @@ export type {
   IncomingRequestProps,
   PayloadData,
   PeerConnectSigningEventRequest,
-  PendingJoinGroupMetadata,
   QueueProps,
   StateCacheProps,
   ToastStackItem,

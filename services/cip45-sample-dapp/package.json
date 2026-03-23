@@ -25,11 +25,5 @@
     "typescript": "^5.7.3",
     "vite": "^6.2.2",
     "vite-plugin-node-polyfills": "^0.23.0"
-  },
-  "overrides": {
-    "axios": "^1.13.6",
-    "qs": "^6.15.0",
-    "js-yaml": "^4.1.1",
-    "flatted": "^3.4.0"
   }
 }
