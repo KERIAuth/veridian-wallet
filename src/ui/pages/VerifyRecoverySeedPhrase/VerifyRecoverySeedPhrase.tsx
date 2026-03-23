@@ -26,9 +26,6 @@ const VerifyRecoverySeedPhrase = () => {
   const handleNavigate = () => {
     const data: DataProps = {
       store: { stateCache },
-      state: {
-        currentOperation: stateCache.currentOperation,
-      },
     };
 
     const { nextPath, updateRedux } = getNextRoute(
@@ -48,7 +45,7 @@ const VerifyRecoverySeedPhrase = () => {
       header={
         <PageHeader
           progressBar={true}
-          progressBarValue={0.8}
+          progressBarValue={0.75}
           progressBarBuffer={1}
         />
       }

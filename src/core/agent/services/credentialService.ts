@@ -6,6 +6,7 @@ import {
   CredentialShortDetails,
   ACDCDetails,
   CredentialStatus,
+  KeriaCredential,
 } from "./credentialService.types";
 import { CredentialMetadataRecord } from "../records/credentialMetadataRecord";
 import { getCredentialShortDetails, OnlineOnly } from "./utils";
@@ -27,6 +28,10 @@ class CredentialService extends AgentService {
   static readonly CREDENTIAL_NOT_ARCHIVED = "Credential was not archived";
   static readonly CREDENTIAL_NOT_FOUND =
     "Credential with given SAID not found on KERIA";
+  static readonly CREDENTIAL_NOT_READY_ON_KERIA =
+    "Credential not yet available on KERIA";
+  private static readonly CREDENTIAL_FETCH_MAX_RETRIES = 3;
+  private static readonly CREDENTIAL_FETCH_RETRY_DELAY_MS = 2000;
 
   protected readonly credentialStorage: CredentialStorage;
   protected readonly notificationStorage!: NotificationStorage;
@@ -135,14 +140,24 @@ class CredentialService extends AgentService {
       .delete(id)
       .catch(async (error) => {
         const status = error.message.split(" - ")[1];
-        if (/404/gi.test(status)) {
-          return await this.credentialStorage.deleteCredentialMetadata(id);
-        } else {
+        if (!/404/gi.test(status)) {
           throw error;
         }
       });
 
     await this.credentialStorage.deleteCredentialMetadata(id);
+  }
+
+  async deleteAllCredentialsForIdentifier(identifierId: string): Promise<void> {
+    const credentialsToDelete =
+      await this.credentialStorage.getAllCredentialMetadata(
+        undefined,
+        identifierId
+      );
+
+    for (const credential of credentialsToDelete) {
+      await this.deleteCredential(credential.id);
+    }
   }
 
   async markCredentialPendingDeletion(id: string): Promise<void> {
@@ -195,14 +210,26 @@ class CredentialService extends AgentService {
   }
 
   async syncKeriaCredentials(): Promise<void> {
-    const cloudCredentials: any[] = [];
+    const identifiers = await this.identifierStorage.getIdentifierRecords();
+
+    if (identifiers.length === 0) {
+      return;
+    }
+
+    const localIdentifierIds = new Set(identifiers.map((id) => id.id));
+
+    const cloudCredentials: KeriaCredential[] = [];
     let returned = -1;
     let iteration = 0;
 
     while (returned !== 0) {
+      // Pagination must be sorted to ensure if KERIA parses new credentials the re-indexing is much less likely to interfere
       const result = await this.props.signifyClient.credentials().list({
         skip: iteration * 24,
-        limit: 24 + iteration * 24,
+        limit: 24,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - @TODO - foconnor: object[] type is incorrect in signify-ts, to correct to string[].
+        sort: ["-a-dt"],
       });
       cloudCredentials.push(...result);
 
@@ -210,11 +237,18 @@ class CredentialService extends AgentService {
       iteration += 1;
     }
 
+    // Filter credentials where we are the issuee (holder)
+    // @TODO Implement $or filter in KERIA to filter at source instead of in TypeScript
+    const localCredentialsFiltered = cloudCredentials.filter(
+      (credential: KeriaCredential) =>
+        localIdentifierIds.has(credential.sad.a.i)
+    );
+
     const localCredentials =
       await this.credentialStorage.getAllCredentialMetadata();
 
-    const unSyncedData = cloudCredentials.filter(
-      (credential: any) =>
+    const unSyncedData = localCredentialsFiltered.filter(
+      (credential: KeriaCredential) =>
         !localCredentials.find((item) => credential.sad.d === item.id)
     );
 
@@ -250,6 +284,7 @@ class CredentialService extends AgentService {
     }
   }
 
+  @OnlineOnly
   async markAcdc(
     credentialId: string,
     status: CredentialStatus.CONFIRMED | CredentialStatus.REVOKED
@@ -259,6 +294,14 @@ class CredentialService extends AgentService {
     );
     if (!metadata) {
       throw new Error(CredentialService.CREDENTIAL_MISSING_METADATA_ERROR_MSG);
+    }
+
+    // @TODO: The credential will only become available after the IPEX ADMIT has completed for a valid ACDC.
+    // It may never complete in cases like the GRANT message containing an invalid ACDC,
+    // so we should re-evaluate how to make this more robust in KERIA.
+    // For now `ensureCredentialAvailable` will make sure it stays in pending, which is OK for now.
+    if (status === CredentialStatus.CONFIRMED) {
+      await this.ensureCredentialAvailable(metadata.id);
     }
 
     metadata.status = status;
@@ -274,6 +317,40 @@ class CredentialService extends AgentService {
         credential: getCredentialShortDetails(metadata),
       },
     });
+  }
+
+  private async ensureCredentialAvailable(credentialId: string): Promise<void> {
+    let lastStatusMessage = "";
+    for (
+      let attempt = 1;
+      attempt <= CredentialService.CREDENTIAL_FETCH_MAX_RETRIES;
+      attempt++
+    ) {
+      try {
+        await this.props.signifyClient.credentials().get(credentialId);
+        return;
+      } catch (error) {
+        if (error instanceof Error) {
+          const statusMessage = error.message.split(" - ")[1] ?? "";
+          if (/^404/i.test(statusMessage)) {
+            lastStatusMessage = statusMessage;
+            if (attempt < CredentialService.CREDENTIAL_FETCH_MAX_RETRIES) {
+              await new Promise((resolve) =>
+                setTimeout(
+                  resolve,
+                  CredentialService.CREDENTIAL_FETCH_RETRY_DELAY_MS
+                )
+              );
+              continue;
+            }
+            throw new Error(
+              `${CredentialService.CREDENTIAL_NOT_READY_ON_KERIA} (${lastStatusMessage})`
+            );
+          }
+        }
+        throw error;
+      }
+    }
   }
 }
 

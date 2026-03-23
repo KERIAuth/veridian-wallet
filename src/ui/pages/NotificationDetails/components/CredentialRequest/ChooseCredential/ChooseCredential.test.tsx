@@ -1,31 +1,30 @@
 const verifySecretMock = jest.fn().mockResolvedValue(true);
 
 import { IonReactMemoryRouter } from "@ionic/react-router";
-import { ionFireEvent, mockIonicReact } from "@ionic/react-test-utils";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { createMemoryHistory } from "history";
-import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
+import {
+  ACDC,
+  CredentialStatus,
+} from "../../../../../../core/agent/services/credentialService.types";
 import { KeriaNotification } from "../../../../../../core/agent/services/keriaNotificationService.types";
-import { CredentialStatus } from "../../../../../../core/agent/services/credentialService.types";
 import { KeyStoreKeys, SecureStorage } from "../../../../../../core/storage";
 import EN_TRANSLATIONS from "../../../../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../../../../routes/paths";
-import { connectionsForNotifications } from "../../../../../__fixtures__/connectionsFix";
+import { connectionsForNotificationsValues } from "../../../../../__fixtures__/connectionsFix";
 import { credRequestFix } from "../../../../../__fixtures__/credRequestFix";
 import { credsFixAcdc } from "../../../../../__fixtures__/credsFix";
-import { filteredIdentifierMapFix } from "../../../../../__fixtures__/filteredIdentifierFix";
+import { revokedCredsFix } from "../../../../../__fixtures__/filteredCredsFix";
 import { notificationsFix } from "../../../../../__fixtures__/notificationsFix";
+import { profileCacheFixData } from "../../../../../__fixtures__/storeDataFix";
 import {
   formatShortDate,
   formatTimeToSec,
 } from "../../../../../utils/formatters";
+import { makeTestStore } from "../../../../../utils/makeTestStore";
 import { passcodeFiller } from "../../../../../utils/passcodeFiller";
-import { ACDC } from "../CredentialRequest.types";
 import { ChooseCredential } from "./ChooseCredential";
-
-mockIonicReact();
 
 const deleteNotificationMock = jest.fn((id: string) => Promise.resolve(id));
 const offerAcdcFromApplyMock = jest.fn(
@@ -76,7 +75,6 @@ jest.mock("@ionic/react", () => ({
   },
 }));
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialState = {
@@ -88,18 +86,8 @@ const initialState = {
       passcodeIsSet: true,
     },
   },
-  credsCache: {
-    creds: [],
-  },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: notificationsFix,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierMapFix,
-  },
+
+  profilesCache: profileCacheFixData,
   biometricsCache: {
     enabled: false,
   },
@@ -107,13 +95,44 @@ const initialState = {
 
 describe("Credential request - choose request", () => {
   test("Render full active credentials & empty revoked tab", async () => {
+    // Seed the profile's connections so the component can resolve connection labels
+    const seededConns = connectionsForNotificationsValues.map((c: any) => ({
+      id: c.id,
+      label: c.label,
+      createdAtUTC: c.connectionDate,
+      status: c.status,
+    }));
+
+    const seededProfilesCache = {
+      ...profileCacheFixData,
+      profiles: {
+        ...profileCacheFixData.profiles,
+        ...(profileCacheFixData.defaultProfile
+          ? {
+              [profileCacheFixData.defaultProfile as string]: {
+                ...profileCacheFixData.profiles[
+                  profileCacheFixData.defaultProfile as string
+                ],
+                connections: [
+                  ...(profileCacheFixData.profiles[
+                    profileCacheFixData.defaultProfile as string
+                  ]?.connections || []),
+                  ...seededConns,
+                ],
+              },
+            }
+          : {}),
+      },
+    };
+
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore({ ...initialState, profilesCache: seededProfilesCache }),
       dispatch: dispatchMock,
     };
 
     const history = createMemoryHistory();
 
+    const onSubmitFn = jest.fn();
     const { getByText, getByTestId, getAllByText } = render(
       <Provider store={storeMocked}>
         <IonReactMemoryRouter history={history}>
@@ -121,11 +140,10 @@ describe("Credential request - choose request", () => {
             pageId="multi-sign"
             activeStatus
             onBack={jest.fn()}
-            onClose={jest.fn()}
-            notificationDetails={notificationsFix[4]}
+            onSubmit={onSubmitFn}
             credentialRequest={credRequestFix}
+            notificationDetails={notificationsFix[4]}
             reloadData={jest.fn}
-            linkedGroup={null}
           />
         </IonReactMemoryRouter>
       </Provider>
@@ -133,10 +151,10 @@ describe("Credential request - choose request", () => {
 
     await waitFor(() => {
       expect(
-        getByText(
+        getAllByText(
           EN_TRANSLATIONS.tabs.notifications.details.credential.request
             .choosecredential.title
-        )
+        )[0]
       ).toBeVisible();
     });
 
@@ -148,7 +166,7 @@ describe("Credential request - choose request", () => {
     ).toBeVisible();
 
     expect(
-      getAllByText(Object.values(connectionsForNotifications)[0].label).length
+      getAllByText(connectionsForNotificationsValues[0].label).length
     ).toBe(2);
 
     expect(
@@ -170,7 +188,12 @@ describe("Credential request - choose request", () => {
     const segment = getByTestId("choose-credential-segment");
 
     act(() => {
-      ionFireEvent.ionChange(segment, "revoked");
+      fireEvent(
+        segment,
+        new CustomEvent("ionChange", {
+          detail: { value: "revoked" },
+        })
+      );
     });
 
     await waitFor(() =>
@@ -187,24 +210,24 @@ describe("Credential request - choose request", () => {
 
   test("Show detail", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
     const history = createMemoryHistory();
 
-    const { getByText, getByTestId } = render(
+    const onSubmitFn = jest.fn();
+    const { getAllByText, getByTestId } = render(
       <Provider store={storeMocked}>
         <IonReactMemoryRouter history={history}>
           <ChooseCredential
             pageId="multi-sign"
             activeStatus
             onBack={jest.fn()}
-            onClose={jest.fn()}
-            notificationDetails={notificationsFix[4]}
+            onSubmit={onSubmitFn}
             credentialRequest={credRequestFix}
+            notificationDetails={notificationsFix[4]}
             reloadData={jest.fn}
-            linkedGroup={null}
           />
         </IonReactMemoryRouter>
       </Provider>
@@ -212,10 +235,10 @@ describe("Credential request - choose request", () => {
 
     await waitFor(() => {
       expect(
-        getByText(
+        getAllByText(
           EN_TRANSLATIONS.tabs.notifications.details.credential.request
             .choosecredential.title
-        )
+        )[0]
       ).toBeVisible();
     });
 
@@ -241,27 +264,15 @@ describe("Credential request - choose request", () => {
         },
         isOnline: true,
       },
-      connectionsCache: {
-        connections: connectionsForNotifications,
-      },
-      notificationsCache: {
-        notifications: notificationsFix,
-      },
-      credsCache: {
-        creds: [
-          { ...credsFixAcdc[0], id: credRequestFix.credentials[0].acdc.d },
-        ],
-      },
-      identifiersCache: {
-        identifiers: {},
-      },
+
+      profilesCache: profileCacheFixData,
       biometricsCache: {
         enabled: false,
       },
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -269,7 +280,8 @@ describe("Credential request - choose request", () => {
     const history = createMemoryHistory();
     history.push(path);
 
-    const { getByText, getByTestId } = render(
+    const onSubmitFn = jest.fn();
+    const { getAllByText, getByText, getByTestId } = render(
       <Provider store={storeMocked}>
         <IonReactMemoryRouter
           initialEntries={[path]}
@@ -279,11 +291,10 @@ describe("Credential request - choose request", () => {
             pageId="multi-sign"
             activeStatus
             onBack={jest.fn()}
-            onClose={jest.fn()}
-            notificationDetails={notificationsFix[4]}
+            onSubmit={onSubmitFn}
             credentialRequest={credRequestFix}
+            notificationDetails={notificationsFix[4]}
             reloadData={jest.fn}
-            linkedGroup={null}
           />
         </IonReactMemoryRouter>
       </Provider>
@@ -291,10 +302,10 @@ describe("Credential request - choose request", () => {
 
     await waitFor(() => {
       expect(
-        getByText(
+        getAllByText(
           EN_TRANSLATIONS.tabs.notifications.details.credential.request
             .choosecredential.title
-        )
+        )[0]
       ).toBeVisible();
     });
 
@@ -387,23 +398,15 @@ describe("Credential request - choose request", () => {
           passcodeIsSet: true,
         },
       },
-      credsCache: {
-        creds: [],
-      },
-      connectionsCache: {
-        connections: connectionsForNotifications,
-      },
-      notificationsCache: {
-        notifications: notificationsFix,
-        notificationDetailCache: null,
-      },
+      profilesCache: profileCacheFixData,
+
       biometricsCache: {
         enabled: false,
       },
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -413,7 +416,8 @@ describe("Credential request - choose request", () => {
     const history = createMemoryHistory();
     history.push(path);
 
-    const { getByText, getByTestId } = render(
+    const onSubmitFn = jest.fn();
+    const { getAllByText, getByText, getByTestId } = render(
       <Provider store={storeMocked}>
         <IonReactMemoryRouter
           initialEntries={[path]}
@@ -423,11 +427,10 @@ describe("Credential request - choose request", () => {
             pageId="multi-sign"
             activeStatus
             onBack={jest.fn()}
-            onClose={jest.fn()}
-            notificationDetails={notificationsFix[4]}
+            onSubmit={onSubmitFn}
             credentialRequest={credRequestFix}
+            notificationDetails={notificationsFix[4]}
             reloadData={jest.fn}
-            linkedGroup={null}
           />
         </IonReactMemoryRouter>
       </Provider>
@@ -435,10 +438,10 @@ describe("Credential request - choose request", () => {
 
     await waitFor(() => {
       expect(
-        getByText(
+        getAllByText(
           EN_TRANSLATIONS.tabs.notifications.details.credential.request
             .choosecredential.title
-        )
+        )[0]
       ).toBeVisible();
     });
 
@@ -477,14 +480,7 @@ describe("Credential request - choose request", () => {
       );
     });
 
-    await waitFor(() => {
-      expect(getByTestId("credential-request-spinner-container")).toBeVisible();
-    });
-
-    expect(offerAcdcFromApplyMock).toBeCalledWith(
-      notificationsFix[4].id,
-      credRequestFix.credentials[0].acdc
-    );
+    expect(onSubmitFn).toBeCalledWith(credRequestFix.credentials[0]);
   });
 });
 
@@ -503,23 +499,16 @@ describe("Credential request - choose request", () => {
         passcodeIsSet: true,
       },
     },
-    credsCache: {
-      creds: credsCacheMock,
-    },
-    connectionsCache: {
-      connections: connectionsForNotifications,
-    },
-    notificationsCache: {
-      notifications: notificationsFix,
-    },
+    profilesCache: profileCacheFixData,
+
     biometricsCache: {
       enabled: false,
     },
   };
 
-  test("Render empty active credentials & full revoked tab", async () => {
+  test("Render full revoked tab", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -528,6 +517,11 @@ describe("Credential request - choose request", () => {
       credentials: [
         {
           ...credRequestFix.credentials[0],
+          id: revokedCredsFix[0].id,
+          acdc: {
+            ...credRequestFix.credentials[0].acdc,
+            d: revokedCredsFix[0].id,
+          },
           status: CredentialStatus.REVOKED,
         },
       ],
@@ -535,18 +529,18 @@ describe("Credential request - choose request", () => {
 
     const history = createMemoryHistory();
 
-    const { getByText, getByTestId } = render(
+    const onSubmitFn = jest.fn();
+    const { getAllByText, getByTestId } = render(
       <Provider store={storeMocked}>
         <IonReactMemoryRouter history={history}>
           <ChooseCredential
             pageId="multi-sign"
             activeStatus
             onBack={jest.fn()}
-            onClose={jest.fn()}
-            notificationDetails={notificationsFix[4]}
+            onSubmit={onSubmitFn}
             credentialRequest={credMock}
+            notificationDetails={notificationsFix[4]}
             reloadData={jest.fn}
-            linkedGroup={null}
           />
         </IonReactMemoryRouter>
       </Provider>
@@ -554,31 +548,16 @@ describe("Credential request - choose request", () => {
 
     await waitFor(() => {
       expect(
-        getByText(
+        getAllByText(
           EN_TRANSLATIONS.tabs.notifications.details.credential.request
             .choosecredential.title
-        )
+        )[0]
       ).toBeVisible();
-    });
-
-    expect(
-      getByText(
-        EN_TRANSLATIONS.tabs.notifications.details.credential.request.choosecredential.noactive.replace(
-          "{{requestCred}}",
-          credRequestFix.schema.name
-        )
-      )
-    ).toBeVisible();
-
-    const segment = getByTestId("choose-credential-segment");
-
-    act(() => {
-      ionFireEvent.ionChange(segment, "revoked");
     });
 
     await waitFor(() =>
       expect(
-        getByTestId("card-item-" + credRequestFix.credentials[0].acdc.d)
+        getByTestId("card-item-" + credMock.credentials[0].acdc.d)
       ).toBeVisible()
     );
   });

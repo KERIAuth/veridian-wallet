@@ -1,19 +1,21 @@
 const verifySecretMock = jest.fn();
 
 import { AnyAction, Store } from "@reduxjs/toolkit";
-import { fireEvent, getByText, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
 import { MemoryRouter, Route } from "react-router-dom";
-import configureStore from "redux-mock-store";
+
 import { Agent } from "../../../core/agent/agent";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
+import { connectionsFix } from "../../__fixtures__/connectionsFix";
 import { credsFixAcdc } from "../../__fixtures__/credsFix";
 import { TabsRoutePath } from "../../components/navigation/TabsMenu";
 import { CredentialDetails } from "../../pages/CredentialDetails";
-import { VerifyPasscode } from "./VerifyPasscode";
-import { connectionsMapFix } from "../../__fixtures__/connectionsFix";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
+import { VerifyPasscode } from "./VerifyPasscode";
+import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
 
 const path = TabsRoutePath.CREDENTIALS + "/" + credsFixAcdc[0].id;
 
@@ -64,38 +66,41 @@ const initialStateNoPassword = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
-  credsCache: { creds: credsFixAcdc },
-  credsArchivedCache: { creds: credsFixAcdc },
   biometricsCache: {
     enabled: false,
   },
-  notificationsCache: {
-    notificationDetailCache: null,
-  },
-  identifiersCache: {
-    identifiers: {},
-  },
-  connectionsCache: {
-    connections: connectionsMapFix,
+  profilesCache: {
+    ...profileCacheFixData,
+    profiles: {
+      ...profileCacheFixData.profiles,
+      ...(profileCacheFixData.defaultProfile
+        ? {
+            [profileCacheFixData.defaultProfile as string]: {
+              ...profileCacheFixData.profiles[
+                profileCacheFixData.defaultProfile as string
+              ],
+              connections: connectionsFix,
+            },
+          }
+        : {}),
+    },
   },
 };
 
 describe("Verify Passcode on Cards Details page", () => {
   let storeMocked: Store<unknown, AnyAction>;
   beforeEach(() => {
-    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...mockStore(initialStateNoPassword),
+      ...makeTestStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
   });
 
   test("Render passcode", async () => {
-    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...mockStore(initialStateNoPassword),
+      ...makeTestStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
 
@@ -117,10 +122,9 @@ describe("Verify Passcode on Cards Details page", () => {
   });
 
   test("Remove passcode", async () => {
-    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     storeMocked = {
-      ...mockStore(initialStateNoPassword),
+      ...makeTestStore(initialStateNoPassword),
       dispatch: dispatchMock,
     };
 
@@ -224,7 +228,7 @@ describe("Verify Passcode on Cards Details page", () => {
   test("Open forgot password modal", async () => {
     const closeFn = jest.fn();
 
-    const { getByTestId, getByText, getAllByText, queryByText } = render(
+    const { getByTestId, getByText, getAllByTestId, queryByText } = render(
       <Provider store={storeMocked}>
         <VerifyPasscode
           isOpen={true}
@@ -234,7 +238,7 @@ describe("Verify Passcode on Cards Details page", () => {
       </Provider>
     );
 
-    fireEvent.click(getByTestId("secondary-button-verify-passcode"));
+    fireEvent.click(getByTestId("tertiary-button-verify-passcode"));
 
     await waitFor(() => {
       expect(
@@ -250,16 +254,16 @@ describe("Verify Passcode on Cards Details page", () => {
       expect(getByTestId("forgot-auth-info-modal")).toBeVisible();
     });
 
-    fireEvent.click(getAllByText(EN_TRANSLATIONS.forgotauth.cancel)[0]);
+    fireEvent.click(
+      within(getByTestId("forgot-auth-info-modal")).getByTestId("close-button")
+    );
 
     await waitFor(() => {
-      expect(
-        queryByText(EN_TRANSLATIONS.forgotauth.newpasscode.title)
-      ).toBeNull();
+      expect(queryByText(EN_TRANSLATIONS.forgotauth.passcode.title)).toBeNull();
     });
   });
 
-  test("Open forgot password modal", async () => {
+  test("Close verify passcode modal", async () => {
     const closeFn = jest.fn();
 
     const { getByTestId } = render(

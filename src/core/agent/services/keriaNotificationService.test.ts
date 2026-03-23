@@ -48,7 +48,7 @@ import {
   getMultisigIdentifierResponse,
   getRequestMultisigIcp,
 } from "../../__fixtures__/agent/multiSigFixtures";
-import { IdentifierService } from "./identifierService";
+import { DELETED_IDENTIFIER_THEME } from "../../utils/habName";
 import { CredentialService } from "./credentialService";
 import { MultiSigRoute } from "./multiSig.types";
 import { remoteSignReqExn } from "../../__fixtures__/agent/identifierFixtures";
@@ -163,11 +163,27 @@ const notificationStorage = jest.mocked({
   deleteById: jest.fn(),
   update: jest.fn(),
   findById: jest.fn(),
+  findExpectedById: jest.fn().mockResolvedValue({
+    id: "test-notification",
+    a: { r: NotificationRoute.ExnIpexGrant },
+  }),
   findAllByQuery: jest.fn(),
   getAll: jest.fn(),
 });
 
-const connectionStorage = jest.mocked({
+const contactStorage = jest.mocked({
+  open: jest.fn(),
+  save: jest.fn(),
+  delete: jest.fn(),
+  deleteById: jest.fn(),
+  update: jest.fn(),
+  findById: jest.fn(),
+  findExpectedById: jest.fn(),
+  findAllByQuery: jest.fn(),
+  getAll: jest.fn(),
+});
+
+const connectionPairStorage = jest.mocked({
   open: jest.fn(),
   save: jest.fn(),
   delete: jest.fn(),
@@ -175,6 +191,7 @@ const connectionStorage = jest.mocked({
   update: jest.fn(),
   findById: jest.fn(),
   findAllByQuery: jest.fn(),
+  findByContactId: jest.fn(),
   getAll: jest.fn(),
 });
 
@@ -233,16 +250,19 @@ const connectionService = jest.mocked({
     serviceEndpoints: [
       "http://127.0.0.1:3902/oobi/EKSGUkKBfg5PG3nAvWZwY4pax2ZD-9LC7JpXeks7IKEj/agent/EKxIbNtsJytfgJjW_AkXV-XLTg_vSyPUMxuwkP7zbgbu",
     ],
+    notes: [],
     historyItems: [],
   }),
   shareIdentifier: jest.fn(),
+  markConnectionPendingDelete: jest.fn(),
 });
 const keriaNotificationService = new KeriaNotificationService(
   agentServicesProps,
   notificationStorage as any,
   identifierStorage as any,
   operationPendingStorage as any,
-  connectionStorage as any,
+  contactStorage as any,
+  connectionPairStorage as any,
   credentialStorage as any,
   basicStorage as any,
   multiSigs as any,
@@ -272,10 +292,16 @@ const DATETIME = new Date();
 describe("Signify notification service of agent", () => {
   beforeAll(async () => {
     await ready();
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
   });
 
   beforeEach(() => {
     jest.resetAllMocks();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     markNotificationMock.mockResolvedValue({ status: "done" });
     identifiersGetMock.mockResolvedValueOnce(hab);
   });
@@ -387,7 +413,6 @@ describe("Signify notification service of agent", () => {
       .fn()
       .mockReturnValue({ id: "id", createdAt: new Date(), content: {} });
     groupGetRequestMock.mockResolvedValue([{ exn: { a: { gid: "id" } } }]);
-    jest.useFakeTimers();
     admitMock.mockResolvedValue([{}, ["sigs"], "end"]);
     submitAdmitMock.mockResolvedValueOnce({
       name: "name",
@@ -458,11 +483,21 @@ describe("Signify notification service of agent", () => {
     );
 
     notificationStorage.deleteById = jest.fn();
+    notificationStorage.findExpectedById = jest.fn().mockResolvedValue({
+      id: "uuid",
+      a: { r: NotificationRoute.ExnIpexGrant },
+    });
+    const mockOperationPendingStorage = {
+      findAllByQuery: jest.fn(),
+      deleteById: jest.fn(),
+    } as any;
+
     await deleteNotificationRecordById(
       agentServicesProps.signifyClient,
       notificationStorage,
       id,
-      NotificationRoute.ExnIpexGrant
+      NotificationRoute.ExnIpexGrant,
+      mockOperationPendingStorage
     );
     expect(notificationStorage.deleteById).toBeCalledWith(id);
     expect(markNotificationMock).toBeCalledWith(id);
@@ -474,11 +509,21 @@ describe("Signify notification service of agent", () => {
       agentServicesProps.signifyClient
     );
     notificationStorage.deleteById = jest.fn();
+    notificationStorage.findExpectedById = jest.fn().mockResolvedValue({
+      id: "uuid",
+      a: { r: NotificationRoute.LocalAcdcRevoked },
+    });
+    const mockOperationPendingStorage = {
+      findAllByQuery: jest.fn(),
+      deleteById: jest.fn(),
+    } as any;
+
     await deleteNotificationRecordById(
       agentServicesProps.signifyClient,
       notificationStorage,
       id,
-      NotificationRoute.LocalAcdcRevoked
+      NotificationRoute.LocalAcdcRevoked,
+      mockOperationPendingStorage
     );
     expect(notificationStorage.deleteById).toBeCalledWith(id);
     expect(markNotificationMock).not.toBeCalled();
@@ -1119,6 +1164,7 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: grantExn.exn.i,
+      notes: [],
       historyItems: [
         { id: grantExn.exn.d, type: ConnectionHistoryType.CREDENTIAL_ISSUANCE },
       ],
@@ -1137,7 +1183,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       grantExn.exn.i,
-      true
+      true,
+      exchange.exn.rp
     );
     expect(markNotificationMock).toHaveBeenCalledWith(notif.i);
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1162,7 +1209,9 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: grantExn.exn.i,
+      notes: [],
       historyItems: [],
+      serviceEndpoints: [],
     });
 
     identifierStorage.getIdentifierMetadata.mockRejectedValueOnce(
@@ -1179,7 +1228,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       grantExn.exn.i,
-      true
+      true,
+      grantExn.exn.rp
     );
     expect(markNotificationMock).not.toHaveBeenCalled();
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1265,6 +1315,7 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: applyExn.exn.i,
+      notes: [],
       historyItems: [
         {
           id: applyExn.exn.d,
@@ -1287,7 +1338,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       applyExn.exn.i,
-      true
+      true,
+      applyExn.exn.rp
     );
     expect(markNotificationMock).toHaveBeenCalledWith(notif.i);
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1312,7 +1364,9 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: applyExn.exn.i,
+      notes: [],
       historyItems: [],
+      serviceEndpoints: [],
     });
 
     identifierStorage.getIdentifierMetadata.mockRejectedValueOnce(
@@ -1330,7 +1384,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       applyExn.exn.i,
-      true
+      true,
+      applyExn.exn.rp
     );
     expect(markNotificationMock).not.toHaveBeenCalled();
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1366,7 +1421,10 @@ describe("Signify notification service of agent", () => {
     );
     multiSigs.getMultisigParticipants.mockResolvedValue({
       ourIdentifier: { id: "our-id" },
-      multisigMembers: [{ aid: "member-aid" }],
+      multisigMembers: {
+        signing: [{ aid: "member-aid" }],
+        rotation: [],
+      },
     });
 
     await keriaNotificationService.processNotification(notif);
@@ -1422,6 +1480,7 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: exchange.exn.i,
+      notes: [],
       historyItems: [
         {
           id: agreeExn.exn.d,
@@ -1444,7 +1503,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       agreeExn.exn.i,
-      true
+      true,
+      agreeExn.exn.rp
     );
     expect(markNotificationMock).toHaveBeenCalledWith(notif.i);
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1469,7 +1529,9 @@ describe("Signify notification service of agent", () => {
 
     connectionService.getConnectionById.mockResolvedValue({
       id: agreeExn.exn.i,
+      notes: [],
       historyItems: [],
+      serviceEndpoints: [],
     });
 
     identifierStorage.getIdentifierMetadata.mockRejectedValueOnce(
@@ -1487,7 +1549,8 @@ describe("Signify notification service of agent", () => {
     });
     expect(connectionService.getConnectionById).toHaveBeenCalledWith(
       agreeExn.exn.i,
-      true
+      true,
+      agreeExn.exn.rp
     );
     expect(markNotificationMock).not.toHaveBeenCalled();
     expect(notificationStorage.save).not.toHaveBeenCalled();
@@ -1562,6 +1625,7 @@ describe("Signify notification service of agent", () => {
     credentialStorage.getCredentialMetadata.mockResolvedValue(null);
     connectionService.getConnectionById.mockResolvedValueOnce({
       id: multisigExnAdmitForIssuance.exn.i,
+      notes: [],
       historyItems: [],
       serviceEndpoints: [
         "http://127.0.0.1:3902/oobi/EKSGUkKBfg5PG3nAvWZwY4pax2ZD-9LC7JpXeks7IKEj/agent/EKxIbNtsJytfgJjW_AkXV-XLTg_vSyPUMxuwkP7zbgbu",
@@ -1757,7 +1821,7 @@ describe("Signify notification service of agent", () => {
       );
     identifiersGetMock.mockResolvedValue({
       ...getMultisigIdentifierResponse,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deleted`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deleted`,
     });
 
     await keriaNotificationService.processNotification(
@@ -1995,7 +2059,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2019,7 +2083,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2043,7 +2107,7 @@ describe("Signify notification service of agent", () => {
     identifiersGetMock.mockReset();
     identifiersGetMock.mockResolvedValue({
       ...hab,
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}:deletedIdentifier`,
+      name: `1.2.0.2:${DELETED_IDENTIFIER_THEME}-salt:deletedIdentifier`,
     });
 
     await keriaNotificationService.processNotification(
@@ -2054,66 +2118,6 @@ describe("Signify notification service of agent", () => {
       getRequestMultisigIcp.exn.a.smids[0]
     );
     expect(markNotificationMock).toBeCalledWith(notificationMultisigIcpProp.i);
-    expect(notificationStorage.save).not.toBeCalled();
-  });
-
-  test("Can create a singleton notification", async () => {
-    notificationStorage.findAllByQuery.mockResolvedValue([]);
-    await keriaNotificationService.createSingletonNotification(
-      NotificationRoute.LocalSingletonConnectInstructions
-    );
-    expect(notificationStorage.save).toBeCalledWith(
-      expect.objectContaining({
-        route: NotificationRoute.LocalSingletonConnectInstructions,
-        read: false,
-        connectionId: KeriaNotificationService.SINGLETON_PRE,
-        receivingPre: KeriaNotificationService.SINGLETON_PRE,
-        a: { r: NotificationRoute.LocalSingletonConnectInstructions },
-      })
-    );
-  });
-
-  test("Can create a singleton notification with more attributes", async () => {
-    notificationStorage.findAllByQuery.mockResolvedValue([]);
-    await keriaNotificationService.createSingletonNotification(
-      NotificationRoute.LocalSingletonConnectInstructions,
-      { field: 1 }
-    );
-    expect(notificationStorage.save).toBeCalledWith(
-      expect.objectContaining({
-        route: NotificationRoute.LocalSingletonConnectInstructions,
-        read: false,
-        connectionId: KeriaNotificationService.SINGLETON_PRE,
-        receivingPre: KeriaNotificationService.SINGLETON_PRE,
-        a: { r: NotificationRoute.LocalSingletonConnectInstructions, field: 1 },
-      })
-    );
-  });
-
-  test("Singleton notifications must have a singleton route", async () => {
-    expect(
-      keriaNotificationService.createSingletonNotification(
-        NotificationRoute.ExnIpexAgree
-      )
-    ).rejects.toThrowError(KeriaNotificationService.SINGLETON_ROUTE_REQUIRED);
-    expect(
-      keriaNotificationService.createSingletonNotification(
-        NotificationRoute.LocalAcdcRevoked
-      )
-    ).rejects.toThrowError(KeriaNotificationService.SINGLETON_ROUTE_REQUIRED);
-    expect(notificationStorage.save).not.toBeCalled();
-  });
-
-  test("Skip creation if singleton already exists", async () => {
-    notificationStorage.findAllByQuery.mockResolvedValue([
-      {
-        id: "id",
-        route: NotificationRoute.LocalSingletonConnectInstructions,
-      },
-    ]);
-    await keriaNotificationService.createSingletonNotification(
-      NotificationRoute.LocalSingletonConnectInstructions
-    );
     expect(notificationStorage.save).not.toBeCalled();
   });
 });
@@ -2145,18 +2149,22 @@ describe("Group IPEX presentation", () => {
           groupId: "group-id",
           groupInitiator: true,
           groupCreated: true,
+          proposedUsername: "",
         },
       },
-      multisigMembers: [
-        {
-          aid: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8",
-          ends: [],
-        },
-        {
-          aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
-          ends: [],
-        },
-      ],
+      multisigMembers: {
+        signing: [
+          {
+            aid: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_z8",
+            ends: [],
+          },
+          {
+            aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
+            ends: [],
+          },
+        ],
+        rotation: [],
+      },
     });
 
     notificationStorage.findAllByQuery = jest.fn().mockResolvedValue([
@@ -2247,6 +2255,7 @@ describe("Group IPEX presentation", () => {
 
     connectionService.getConnectionById.mockResolvedValueOnce({
       id: multisigExnOfferForPresenting.exn.i,
+      notes: [],
       historyItems: [],
       serviceEndpoints: [
         "http://127.0.0.1:3902/oobi/EKSGUkKBfg5PG3nAvWZwY4pax2ZD-9LC7JpXeks7IKEj/agent/EKxIbNtsJytfgJjW_AkXV-XLTg_vSyPUMxuwkP7zbgbu",
@@ -2324,6 +2333,7 @@ describe("Group IPEX presentation", () => {
 
     connectionService.getConnectionById.mockResolvedValueOnce({
       id: multisigExnGrant.exn.i,
+      notes: [],
       historyItems: [],
       serviceEndpoints: [
         "http://127.0.0.1:3902/oobi/EKSGUkKBfg5PG3nAvWZwY4pax2ZD-9LC7JpXeks7IKEj/agent/EKxIbNtsJytfgJjW_AkXV-XLTg_vSyPUMxuwkP7zbgbu",
@@ -2754,11 +2764,15 @@ describe("Remote signing", () => {
 describe("Failed notifications", () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    jest.useFakeTimers();
     identifiersGetMock.mockResolvedValueOnce(hab);
   });
 
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   test("Should create a new failed notification to basic record if processNotification throws any error", async () => {
-    jest.useFakeTimers();
     jest
       .spyOn(keriaNotificationService as any, "getKeriaOnlineStatus")
       .mockReturnValue(true);
@@ -2955,7 +2969,6 @@ describe("Failed notifications", () => {
   });
 
   test("Should retry failed notifications if more than 1 minute have passed", async () => {
-    jest.useFakeTimers();
     jest.spyOn(keriaNotificationService, "retryFailedNotifications");
     jest
       .spyOn(keriaNotificationService as any, "getKeriaOnlineStatus")
@@ -3015,6 +3028,14 @@ describe("Failed notifications", () => {
 });
 
 describe("Long running operation tracker", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     jest.resetAllMocks();
     Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
@@ -3103,7 +3124,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("Should handle long operations with type witness", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -3145,7 +3165,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("Completed group operations for deleted groups does not cause an error", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -3188,8 +3207,8 @@ describe("Long running operation tracker", () => {
     );
   });
 
-  test("Should handle long operations with type oobi", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
+  test("Can handle connection completion (OOBI resolution) for multiple profiles at once", async () => {
+    const oobiResolutionTime = Date.now();
     const operationMock = {
       metadata: {
         said: "said",
@@ -3198,18 +3217,31 @@ describe("Long running operation tracker", () => {
       done: true,
       response: {
         i: "id",
-        dt: new Date(),
+        dt: new Date(oobiResolutionTime),
       },
     };
     operationsGetMock.mockResolvedValue(operationMock);
-    const connectionMock = {
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce([
+      {
+        contactId: "idA",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
+        pendingDeletion: false,
+        alias: "CF Credential Issuance",
+      },
+      {
+        contactId: "idB",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+        pendingDeletion: false,
+        alias: "CF Credential Issuance",
+      },
+    ]);
+    contactStorage.findExpectedById.mockResolvedValue({
       id: "id",
-      creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
       alias: "CF Credential Issuance",
       oobi: "http://oobi.com/",
-    };
-    connectionStorage.findById.mockResolvedValueOnce(connectionMock);
+    });
     const operationRecord = {
       type: "OperationPendingRecord",
       id: "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
@@ -3219,101 +3251,103 @@ describe("Long running operation tracker", () => {
     } as OperationPendingRecord;
     contactGetMock.mockResolvedValueOnce(null);
 
-    await keriaNotificationService.processOperation(operationRecord);
-
-    expect(connectionService.shareIdentifier).not.toBeCalled();
-    expect(connectionStorage.update).toBeCalledWith({
-      id: connectionMock.id,
-      creationStatus: CreationStatus.COMPLETE,
-      createdAt: operationMock.response.dt,
-      alias: connectionMock.alias,
-      oobi: "http://oobi.com/",
-    });
-    expect(contactsUpdateMock).toBeCalledWith(connectionMock.id, {
-      alias: "CF Credential Issuance",
-      createdAt: operationMock.response.dt,
-      oobi: "http://oobi.com/",
-      sharedIdentifier: "",
-    });
-    expect(eventEmitter.emit).toHaveBeenNthCalledWith(1, {
-      type: EventTypes.ConnectionStateChanged,
-      payload: {
-        connectionId: "id",
-        status: ConnectionStatus.CONFIRMED,
-      },
-    });
-    expect(eventEmitter.emit).toHaveBeenNthCalledWith(2, {
-      type: EventTypes.OperationComplete,
-      payload: {
-        opType: operationRecord.recordType,
-        oid: "AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
-      },
-    });
-    expect(operationPendingStorage.deleteById).toBeCalledWith(
-      "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA"
-    );
-  });
-
-  test("Should handle long operations with type oobi and share specified identifier", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
-    const operationMock = {
-      metadata: {
-        said: "said",
-        oobi: "http://keria:3902/oobi/ELDjcyhsjppizfKQ_AvYeF4RuF1u0O6ya6OYUM6zLYH-/agent/EI4-oLA5XcrZepuB5mDrl3279EjbFtiDrz4im5Q4Ht0O?name=CF%20Credential%20Issuance",
-      },
-      done: true,
-      response: {
-        i: "id",
-        dt: new Date(),
-      },
-    };
-    operationsGetMock.mockResolvedValue(operationMock);
-    const connectionMock = {
-      id: "id",
-      creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
-      alias: "CF Credential Issuance",
-      oobi: "http://oobi.com/",
-      sharedIdentifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
-    };
-    connectionStorage.findById.mockResolvedValueOnce(connectionMock);
-    const operationRecord = {
-      type: "OperationPendingRecord",
-      id: "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
-      createdAt: new Date("2024-08-01T10:36:17.814Z"),
-      recordType: "oobi",
-      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
-    } as OperationPendingRecord;
-    contactGetMock.mockResolvedValueOnce(null);
-
+    jest.advanceTimersByTime(500);
     await keriaNotificationService.processOperation(operationRecord);
 
     expect(connectionService.shareIdentifier).toBeCalledWith(
-      connectionMock.id,
-      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9"
+      "idA",
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA"
     );
-    expect(connectionStorage.update).toBeCalledWith({
-      id: connectionMock.id,
-      creationStatus: CreationStatus.COMPLETE,
-      createdAt: operationMock.response.dt,
-      alias: connectionMock.alias,
-      oobi: "http://oobi.com/",
-      sharedIdentifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
-    });
-    expect(contactsUpdateMock).toBeCalledWith(connectionMock.id, {
+    expect(connectionService.shareIdentifier).toBeCalledWith(
+      "idB",
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB"
+    );
+    expect(connectionService.shareIdentifier).toBeCalledTimes(2);
+
+    // Extract the createdAt from the update calls to verify it matches KERIA update
+    const firstUpdateCall = (connectionPairStorage.update as jest.Mock).mock
+      .calls[0][0];
+    const secondUpdateCall = (connectionPairStorage.update as jest.Mock).mock
+      .calls[1][0];
+    const firstKeriaUpdateCall = (contactsUpdateMock as jest.Mock).mock
+      .calls[0][1];
+    const secondKeriaUpdateCall = (contactsUpdateMock as jest.Mock).mock
+      .calls[1][1];
+
+    expect(connectionPairStorage.update).toBeCalledWith(
+      expect.objectContaining({
+        contactId: "idA",
+        creationStatus: CreationStatus.COMPLETE,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
+        pendingDeletion: false,
+        createdAt:
+          firstKeriaUpdateCall[
+            "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:createdAt"
+          ],
+      })
+    );
+    expect(connectionPairStorage.update).toBeCalledWith(
+      expect.objectContaining({
+        contactId: "idB",
+        creationStatus: CreationStatus.COMPLETE,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+        pendingDeletion: false,
+        createdAt:
+          secondKeriaUpdateCall[
+            "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt"
+          ],
+      })
+    );
+    expect(connectionPairStorage.update).toBeCalledTimes(2);
+
+    // Verify that the createdAt in local storage matches the KERIA contact update
+    expect(firstUpdateCall.createdAt).toEqual(
+      firstKeriaUpdateCall[
+        "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:createdAt"
+      ]
+    );
+    expect(secondUpdateCall.createdAt).toEqual(
+      secondKeriaUpdateCall[
+        "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt"
+      ]
+    );
+
+    expect(contactsUpdateMock).toBeCalledWith("id", {
+      version: "1.2.0.1",
       alias: "CF Credential Issuance",
-      createdAt: operationMock.response.dt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:createdAt":
+        firstUpdateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA:alias":
+        "CF Credential Issuance",
       oobi: "http://oobi.com/",
-      sharedIdentifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
     });
+    expect(contactsUpdateMock).toBeCalledWith("id", {
+      version: "1.2.0.1",
+      alias: "CF Credential Issuance",
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt":
+        secondUpdateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:alias":
+        "CF Credential Issuance",
+      oobi: "http://oobi.com/",
+    });
+    expect(contactsUpdateMock).toBeCalledTimes(2);
     expect(eventEmitter.emit).toHaveBeenNthCalledWith(1, {
       type: EventTypes.ConnectionStateChanged,
       payload: {
-        connectionId: "id",
+        connectionId: "idA",
         status: ConnectionStatus.CONFIRMED,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
       },
     });
     expect(eventEmitter.emit).toHaveBeenNthCalledWith(2, {
+      type: EventTypes.ConnectionStateChanged,
+      payload: {
+        connectionId: "idB",
+        status: ConnectionStatus.CONFIRMED,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+      },
+    });
+    expect(eventEmitter.emit).toHaveBeenNthCalledWith(3, {
       type: EventTypes.OperationComplete,
       payload: {
         opType: operationRecord.recordType,
@@ -3325,8 +3359,8 @@ describe("Long running operation tracker", () => {
     );
   });
 
-  test("Should not update connection if it already exists", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
+  test("Should skip connection completion logic for already completed connection pairs", async () => {
+    const oobiResolutionTime = Date.now();
     const operationMock = {
       metadata: {
         said: "said",
@@ -3335,18 +3369,26 @@ describe("Long running operation tracker", () => {
       done: true,
       response: {
         i: "id",
-        dt: new Date(),
+        dt: new Date(oobiResolutionTime),
       },
     };
     operationsGetMock.mockResolvedValue(operationMock);
-    operationsGetMock.mockResolvedValue(operationMock);
-    const connectionMock = {
-      id: "id",
-      creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
-      alias: "CF Credential Issuance",
-    };
-    connectionStorage.findById.mockResolvedValueOnce(connectionMock);
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce([
+      {
+        contactId: "idA",
+        creationStatus: CreationStatus.COMPLETE,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pA",
+        pendingDeletion: false,
+        alias: "CF Credential Issuance",
+      },
+      {
+        contactId: "idB",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+        pendingDeletion: false,
+        alias: "CF Credential Issuance",
+      },
+    ]);
     const operationRecord = {
       type: "OperationPendingRecord",
       id: "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
@@ -3354,70 +3396,70 @@ describe("Long running operation tracker", () => {
       recordType: "oobi",
       updatedAt: new Date("2024-08-01T10:36:17.814Z"),
     } as OperationPendingRecord;
-    contactGetMock.mockResolvedValueOnce({
+    contactStorage.findExpectedById.mockResolvedValue({
+      id: "id",
+      alias: "CF Credential Issuance",
+      oobi: "http://oobi.com/",
+    });
+    contactGetMock.mockResolvedValue({
       alias: "alias",
       oobi: "oobi",
       id: "id",
       createdAt: new Date(),
     });
 
+    jest.advanceTimersByTime(500);
     await keriaNotificationService.processOperation(operationRecord);
 
-    expect(connectionStorage.update).toHaveBeenCalledWith(connectionMock);
-    expect(contactsUpdateMock).toBeCalledTimes(0);
-    expect(eventEmitter.emit).toHaveBeenCalledWith({
-      type: EventTypes.OperationComplete,
-      payload: {
-        opType: operationRecord.recordType,
-        oid: "AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
-      },
-    });
-    expect(operationPendingStorage.deleteById).toBeCalledWith(
-      "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA"
+    expect(connectionService.shareIdentifier).toBeCalledWith(
+      "idB",
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB"
     );
-  });
+    expect(connectionService.shareIdentifier).toBeCalledTimes(1); // Only once, not twice now
 
-  test("Should not update connection if it already exists", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
-    const operationMock = {
-      metadata: {
-        said: "said",
-        oobi: "http://keria:3902/oobi/ELDjcyhsjppizfKQ_AvYeF4RuF1u0O6ya6OYUM6zLYH-/agent/EI4-oLA5XcrZepuB5mDrl3279EjbFtiDrz4im5Q4Ht0O?name=CF%20Credential%20Issuance",
-      },
-      done: true,
-      response: {
-        i: "id",
-        dt: new Date(),
-      },
-    };
-    operationsGetMock.mockResolvedValue(operationMock);
-    operationsGetMock.mockResolvedValue(operationMock);
-    const connectionMock = {
-      id: "id",
-      creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
+    // Extract the createdAt to verify it matches between local storage and KERIA
+    const updateCall = (connectionPairStorage.update as jest.Mock).mock
+      .calls[0][0];
+    const keriaUpdateCall = (contactsUpdateMock as jest.Mock).mock.calls[0][1];
+
+    expect(connectionPairStorage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactId: "idB",
+        creationStatus: CreationStatus.COMPLETE,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+        pendingDeletion: false,
+        createdAt:
+          keriaUpdateCall[
+            "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt"
+          ],
+      })
+    );
+    expect(connectionPairStorage.update).toBeCalledTimes(1);
+
+    // Verify that the createdAt in local storage matches the KERIA contact update
+    expect(updateCall.createdAt).toEqual(
+      keriaUpdateCall["EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt"]
+    );
+
+    expect(contactsUpdateMock).toBeCalledWith("id", {
+      version: "1.2.0.1",
       alias: "CF Credential Issuance",
-    };
-    connectionStorage.findById.mockResolvedValueOnce(connectionMock);
-    const operationRecord = {
-      type: "OperationPendingRecord",
-      id: "oobi.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
-      createdAt: new Date("2024-08-01T10:36:17.814Z"),
-      recordType: "oobi",
-      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
-    } as OperationPendingRecord;
-    contactGetMock.mockResolvedValueOnce({
-      alias: "alias",
-      oobi: "oobi",
-      id: "id",
-      createdAt: new Date(),
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:createdAt":
+        updateCall.createdAt,
+      "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB:alias":
+        "CF Credential Issuance",
+      oobi: "http://oobi.com/",
     });
-
-    await keriaNotificationService.processOperation(operationRecord);
-
-    expect(connectionStorage.update).toHaveBeenCalledWith(connectionMock);
-    expect(contactsUpdateMock).toBeCalledTimes(0);
-    expect(eventEmitter.emit).toHaveBeenCalledWith({
+    expect(contactsUpdateMock).toBeCalledTimes(1);
+    expect(eventEmitter.emit).toHaveBeenNthCalledWith(1, {
+      type: EventTypes.ConnectionStateChanged,
+      payload: {
+        connectionId: "idB",
+        status: ConnectionStatus.CONFIRMED,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_pB",
+      },
+    });
+    expect(eventEmitter.emit).toHaveBeenNthCalledWith(2, {
       type: EventTypes.OperationComplete,
       payload: {
         opType: operationRecord.recordType,
@@ -3588,6 +3630,73 @@ describe("Long running operation tracker", () => {
     expect(markNotificationMock).toBeCalledWith("id");
     expect(operationPendingStorage.deleteById).toBeCalledWith(
       "exchange.receivecredential.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA"
+    );
+  });
+
+  test("Should return early if credential is not ready on KERIA when processing ExchangeReceiveCredential", async () => {
+    const credentialIdMock = "credentialId";
+    signifyClient
+      .exchanges()
+      .get.mockResolvedValueOnce({
+        exn: {
+          r: ExchangeRoute.IpexAdmit,
+          p: "p",
+        },
+      })
+      .mockResolvedValueOnce({
+        exn: {
+          r: ExchangeRoute.IpexGrant,
+          d: "d",
+          e: {
+            acdc: {
+              d: credentialIdMock,
+            },
+          },
+        },
+      });
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "exchange.receivecredential.AOCUvGbpidkplC7gAoJOxLgXX1P2j4xlWMbzk3gM8JzA",
+      createdAt: new Date("2024-08-01T10:36:17.814Z"),
+      recordType: "exchange.receivecredential",
+      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
+    } as OperationPendingRecord;
+    identifierStorage.getIdentifierMetadata = jest.fn().mockResolvedValue({
+      type: "IdentifierMetadataRecord",
+      id: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
+      displayName: "holder",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    notificationStorage.findAllByQuery.mockResolvedValue([
+      {
+        type: "NotificationRecord",
+        id: "id",
+        createdAt: new Date("2024-08-01T10:36:17.814Z"),
+        a: {
+          r: NotificationRoute.ExnIpexGrant,
+          d: "EIDUavcmyHBseNZAdAHR3SF8QMfX1kSJ3Ct0OqS0-HCW",
+        },
+        route: NotificationRoute.ExnIpexGrant,
+        read: true,
+        linkedRequest: { accepted: false },
+        connectionId: "EEFjBBDcUM2IWpNF7OclCme_bE76yKE3hzULLzTOFE8E",
+        updatedAt: new Date(),
+      },
+    ]);
+    credentialService.markAcdc.mockRejectedValueOnce(
+      new Error(`${CredentialService.CREDENTIAL_NOT_READY_ON_KERIA} (503)`)
+    );
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(credentialService.markAcdc).toBeCalledWith(
+      credentialIdMock,
+      CredentialStatus.CONFIRMED
+    );
+    expect(ipexCommunications.createLinkedIpexMessageRecord).not.toBeCalled();
+    expect(operationPendingStorage.deleteById).not.toBeCalledWith(
+      operationRecord.id
     );
   });
 
@@ -3877,18 +3986,22 @@ describe("Long running operation tracker", () => {
           groupId: "group-id",
           groupInitiator: true,
           groupCreated: true,
+          proposedUsername: "",
         },
       },
-      multisigMembers: [
-        {
-          aid: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
-          ends: [],
-        },
-        {
-          aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
-          ends: [],
-        },
-      ],
+      multisigMembers: {
+        signing: [
+          {
+            aid: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
+            ends: [],
+          },
+          {
+            aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
+            ends: [],
+          },
+        ],
+        rotation: [],
+      },
     });
 
     await keriaNotificationService.processOperation(operationRecord);
@@ -4000,7 +4113,6 @@ describe("Long running operation tracker", () => {
   });
 
   test("ExchangeReceiveCredential operations must have an exchange route of /ipex/admit", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const operationMock = {
       metadata: {
         said: "said",
@@ -4064,7 +4176,7 @@ describe("Long running operation tracker", () => {
 
     expect(operationsGetMock).not.toBeCalled();
     expect(setTimeout).toHaveBeenCalledWith(
-      keriaNotificationService.pollLongOperations,
+      expect.any(Function),
       KeriaNotificationService.POLL_KERIA_INTERVAL
     );
   });
@@ -4125,9 +4237,117 @@ describe("Long running operation tracker", () => {
 
     expect(basicStorage.createOrUpdateBasicRecord).toBeCalledTimes(2);
     expect(setTimeout).toHaveBeenCalledWith(
-      keriaNotificationService.pollNotifications,
+      expect.any(Function),
       KeriaNotificationService.POLL_KERIA_INTERVAL
     );
+  });
+
+  test("Should preserve this context when restarting pollNotifications after error", async () => {
+    /* eslint-disable no-console */
+    jest.spyOn(console, "error").mockImplementation();
+
+    let callCount = 0;
+    let capturedCallback: any = null;
+    let contextValid = false;
+
+    // Mock setTimeout to capture the callback
+    const originalSetTimeout = global.setTimeout;
+    global.setTimeout = jest.fn((callback: any, delay: number) => {
+      if (
+        delay === KeriaNotificationService.POLL_KERIA_INTERVAL &&
+        callCount === 1
+      ) {
+        capturedCallback = callback;
+        return 123 as any;
+      }
+      return originalSetTimeout(callback, 0) as any;
+    }) as any;
+
+    jest
+      .spyOn(keriaNotificationService as any, "_pollNotifications")
+      .mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error("Test error");
+        }
+        // On second call, check if we can access instance methods (verify 'this' context)
+        contextValid =
+          typeof keriaNotificationService.processNotification === "function" &&
+          typeof keriaNotificationService.processOperation === "function";
+      });
+
+    await keriaNotificationService.pollNotifications();
+
+    expect(callCount).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "Error at pollNotifications",
+      expect.any(Error)
+    );
+    expect(capturedCallback).not.toBeNull();
+
+    // Execute the captured callback to verify it has correct context
+    if (capturedCallback) {
+      await capturedCallback();
+      expect(callCount).toBe(2);
+      expect(contextValid).toBe(true);
+    }
+
+    global.setTimeout = originalSetTimeout;
+    /* eslint-enable no-console */
+  });
+
+  test("Should preserve this context when restarting pollLongOperations after error", async () => {
+    /* eslint-disable no-console */
+    jest.spyOn(console, "error").mockImplementation();
+
+    let callCount = 0;
+    let capturedCallback: any = null;
+    let contextValid = false;
+
+    // Mock setTimeout to capture the callback
+    const originalSetTimeout = global.setTimeout;
+    global.setTimeout = jest.fn((callback: any, delay: number) => {
+      if (
+        delay === KeriaNotificationService.POLL_KERIA_INTERVAL &&
+        callCount === 1
+      ) {
+        capturedCallback = callback;
+        return 123 as any;
+      }
+      return originalSetTimeout(callback, 0) as any;
+    }) as any;
+
+    jest
+      .spyOn(keriaNotificationService as any, "_pollLongOperations")
+      .mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error("Test error");
+        }
+        // On second call, check if we can access instance methods (verify 'this' context)
+        contextValid =
+          typeof keriaNotificationService.processNotification === "function" &&
+          typeof keriaNotificationService.processOperation === "function";
+      });
+
+    await keriaNotificationService.pollLongOperations();
+
+    expect(callCount).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "Error at pollLongOperations",
+      expect.any(Error)
+    );
+    expect(capturedCallback).not.toBeNull();
+
+    // Execute the captured callback to verify it has correct context
+    if (capturedCallback) {
+      await capturedCallback();
+      expect(callCount).toBe(2);
+      expect(contextValid).toBe(true);
+    }
+
+    global.setTimeout = originalSetTimeout;
+    /* eslint-enable no-console */
   });
 
   test("Should register callback for NotificationAdded event", () => {
@@ -4199,6 +4419,61 @@ describe("Long running operation tracker", () => {
       keriaNotificationService.processOperation(operationRecord)
     ).rejects.toThrow(errorMessage);
   });
+
+  test("Should mark connection pending delete and emit Invalid event if OOBI operation finishes without an Identifier", async () => {
+    const oobiUrl = "http://keria:3902/oobi/123456";
+    const contactId = "123456";
+
+    const operationMock = {
+      metadata: {
+        oobi: oobiUrl,
+      },
+      done: true,
+      response: {
+        // i is missing here
+        dt: new Date(),
+      },
+    };
+    operationsGetMock.mockResolvedValue(operationMock);
+    connectionPairStorage.findByContactId = jest
+      .fn()
+      .mockResolvedValue([
+        { identifier: "my-identifier-1" },
+        { identifier: "my-identifier-2" },
+      ]);
+
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "oobi.test-id",
+      recordType: "oobi",
+    } as OperationPendingRecord;
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(connectionService.markConnectionPendingDelete).toHaveBeenCalledTimes(
+      2
+    );
+    expect(
+      connectionService.markConnectionPendingDelete
+    ).toHaveBeenNthCalledWith(1, contactId, "my-identifier-1");
+    expect(
+      connectionService.markConnectionPendingDelete
+    ).toHaveBeenNthCalledWith(2, contactId, "my-identifier-2");
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.ConnectionInvalid,
+      payload: {
+        contactId,
+        identifier: "my-identifier-1",
+      },
+    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.ConnectionInvalid,
+      payload: {
+        contactId,
+        identifier: "my-identifier-2",
+      },
+    });
+  });
 });
 
 describe("Handling of failed long running operations", () => {
@@ -4261,20 +4536,23 @@ describe("Handling of failed long running operations", () => {
       recordType: "oobi",
       updatedAt: new Date("2024-08-01T10:36:17.814Z"),
     } as OperationPendingRecord;
-    connectionStorage.findById.mockResolvedValueOnce({
-      id: "id",
+    const connectionPairMock = {
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
       creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
-      alias: "CF Credential Issuance",
-      oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU/agent/EMXchkqpJKegnObFGUAt7Cqj9yggGNZIpc5PbS7Igwip?name=CF%20Credential%20Issuance",
-    });
+      identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+      pendingDeletion: false,
+    };
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce([
+      connectionPairMock,
+    ]);
 
     await keriaNotificationService.processOperation(operationRecord);
 
-    expect(connectionStorage.findById).toBeCalledWith(
-      "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU"
-    );
-    expect(connectionStorage.update).toBeCalledWith(
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+    expect(connectionPairStorage.update).toBeCalledWith(
       expect.objectContaining({
         creationStatus: CreationStatus.FAILED,
       })
@@ -4289,7 +4567,7 @@ describe("Handling of failed long running operations", () => {
     expect(operationPendingStorage.deleteById).toBeCalledWith(
       "AOCUvGbpidkplC7gA"
     );
-    expect(connectionStorage.update).not.toBeCalledWith(
+    expect(connectionPairStorage.update).not.toBeCalledWith(
       expect.objectContaining({
         creationStatus: CreationStatus.COMPLETE,
       })
@@ -4316,20 +4594,23 @@ describe("Handling of failed long running operations", () => {
       recordType: "oobi",
       updatedAt: new Date("2024-08-01T10:36:17.814Z"),
     } as OperationPendingRecord;
-    connectionStorage.findById.mockResolvedValueOnce({
-      id: "id",
+    const connectionPairMock = {
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
       creationStatus: CreationStatus.PENDING,
-      createdAt: new Date(),
-      alias: "CF Credential Issuance",
-      oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
-    });
+      identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+      pendingDeletion: false,
+    };
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce([
+      connectionPairMock,
+    ]);
 
     await keriaNotificationService.processOperation(operationRecord);
 
-    expect(connectionStorage.findById).toBeCalledWith(
-      "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU"
-    );
-    expect(connectionStorage.update).toBeCalledWith(
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+    expect(connectionPairStorage.update).toBeCalledWith(
       expect.objectContaining({
         creationStatus: CreationStatus.FAILED,
       })
@@ -4344,7 +4625,7 @@ describe("Handling of failed long running operations", () => {
     expect(operationPendingStorage.deleteById).toBeCalledWith(
       "AOCUvGbpidkplC7gA"
     );
-    expect(connectionStorage.update).not.toBeCalledWith(
+    expect(connectionPairStorage.update).not.toBeCalledWith(
       expect.objectContaining({
         creationStatus: CreationStatus.COMPLETE,
       })
@@ -4353,6 +4634,328 @@ describe("Handling of failed long running operations", () => {
       expect.objectContaining({
         type: EventTypes.OperationComplete,
       })
+    );
+  });
+
+  test("Should handle failed oobi operations with multiple connection pairs all meeting criteria", async () => {
+    operationsGetMock.mockResolvedValue({
+      done: true,
+      error: { code: 400 },
+      metadata: {
+        oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "AOCUvGbpidkplC7gA",
+      createdAt: new Date("2024-08-01T10:36:17.814Z"),
+      recordType: "oobi",
+      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
+    } as OperationPendingRecord;
+
+    // Multiple connection pairs, all with identifiers and not pending deletion
+    const connectionPairMocks = [
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EKuLLzTOFE8EjBBDcUM2IWpNF7OclCme_bE76yKE3hzU",
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EAnotherIdentifierForTesting123456789012345678",
+        pendingDeletion: false,
+      },
+    ];
+
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce(
+      connectionPairMocks
+    );
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+
+    // All three connection pairs should be updated to FAILED
+    expect(connectionPairStorage.update).toBeCalledTimes(3);
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.OperationFailed,
+      payload: {
+        opType: operationRecord.recordType,
+        oid: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    expect(operationPendingStorage.deleteById).toBeCalledWith(
+      "AOCUvGbpidkplC7gA"
+    );
+  });
+
+  test("Should handle failed oobi operations with multiple connection pairs, some without identifiers", async () => {
+    operationsGetMock.mockResolvedValue({
+      done: true,
+      error: { code: 400 },
+      metadata: {
+        oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "AOCUvGbpidkplC7gA",
+      createdAt: new Date("2024-08-01T10:36:17.814Z"),
+      recordType: "oobi",
+      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
+    } as OperationPendingRecord;
+
+    // Mix of connection pairs - some with identifiers, some without
+    const connectionPairMocks = [
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: null, // No identifier
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EAnotherIdentifierForTesting123456789012345678",
+        pendingDeletion: false,
+      },
+    ];
+
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce(
+      connectionPairMocks
+    );
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+
+    // Only 2 connection pairs should be updated (those with identifiers)
+    expect(connectionPairStorage.update).toBeCalledTimes(2);
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.OperationFailed,
+      payload: {
+        opType: operationRecord.recordType,
+        oid: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    expect(operationPendingStorage.deleteById).toBeCalledWith(
+      "AOCUvGbpidkplC7gA"
+    );
+  });
+
+  test("Should handle failed oobi operations with multiple connection pairs, some pending deletion", async () => {
+    operationsGetMock.mockResolvedValue({
+      done: true,
+      error: { code: 400 },
+      metadata: {
+        oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "AOCUvGbpidkplC7gA",
+      createdAt: new Date("2024-08-01T10:36:17.814Z"),
+      recordType: "oobi",
+      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
+    } as OperationPendingRecord;
+
+    // Mix of connection pairs - some pending deletion, some not
+    const connectionPairMocks = [
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EKuLLzTOFE8EjBBDcUM2IWpNF7OclCme_bE76yKE3hzU",
+        pendingDeletion: true, // Pending deletion
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EAnotherIdentifierForTesting123456789012345678",
+        pendingDeletion: false,
+      },
+    ];
+
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce(
+      connectionPairMocks
+    );
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+
+    // Only 2 connection pairs should be updated (those not pending deletion)
+    expect(connectionPairStorage.update).toBeCalledTimes(2);
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.OperationFailed,
+      payload: {
+        opType: operationRecord.recordType,
+        oid: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    expect(operationPendingStorage.deleteById).toBeCalledWith(
+      "AOCUvGbpidkplC7gA"
+    );
+  });
+
+  test("Should handle failed oobi operations with multiple connection pairs, mixed conditions", async () => {
+    operationsGetMock.mockResolvedValue({
+      done: true,
+      error: { code: 400 },
+      metadata: {
+        oobi: "http://keria.com/oobi/EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    const operationRecord = {
+      type: "OperationPendingRecord",
+      id: "AOCUvGbpidkplC7gA",
+      createdAt: new Date("2024-08-01T10:36:17.814Z"),
+      recordType: "oobi",
+      updatedAt: new Date("2024-08-01T10:36:17.814Z"),
+    } as OperationPendingRecord;
+
+    // Complex mix of connection pairs with various conditions
+    const connectionPairMocks = [
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EGrdtLIlSIQHF1gHhE7UVfs9yRF-EDhqtLT41pJlj_p9",
+        pendingDeletion: false, // Should be updated
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: null, // No identifier - should not be updated
+        pendingDeletion: false,
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EKuLLzTOFE8EjBBDcUM2IWpNF7OclCme_bE76yKE3hzU",
+        pendingDeletion: true, // Pending deletion - should not be updated
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: "EAnotherIdentifierForTesting123456789012345678",
+        pendingDeletion: false, // Should be updated
+      },
+      {
+        contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+        creationStatus: CreationStatus.PENDING,
+        identifier: undefined, // Undefined identifier - should not be updated
+        pendingDeletion: false,
+      },
+    ];
+
+    connectionPairStorage.findAllByQuery.mockResolvedValueOnce(
+      connectionPairMocks
+    );
+
+    await keriaNotificationService.processOperation(operationRecord);
+
+    expect(connectionPairStorage.findAllByQuery).toBeCalledWith({
+      contactId: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      creationStatus: CreationStatus.PENDING,
+    });
+
+    // Only 2 connection pairs should be updated (those with identifiers and not pending deletion)
+    expect(connectionPairStorage.update).toBeCalledTimes(2);
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+    expect(connectionPairStorage.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        creationStatus: CreationStatus.FAILED,
+      })
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith({
+      type: EventTypes.OperationFailed,
+      payload: {
+        opType: operationRecord.recordType,
+        oid: "EMoQKrOjmuOGgoqBuPB5goSZiEqjYNN5hb9sAt1HHVrU",
+      },
+    });
+    expect(operationPendingStorage.deleteById).toBeCalledWith(
+      "AOCUvGbpidkplC7gA"
     );
   });
 

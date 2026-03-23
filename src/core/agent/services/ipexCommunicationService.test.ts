@@ -35,6 +35,13 @@ import {
   credentialStateIssued,
   credentialStateRevoked,
   admitForIssuanceExnMessage,
+  schemaNoEdges,
+  schemaWithEdge,
+  schemaWithSaidifiedEdgeSection,
+  schemaWithMultipleEdges,
+  schemaWithASaidifiedEdge,
+  schemaWithEdgeGroup,
+  schemaWithEdgeWithoutSchemaSaid,
 } from "../../__fixtures__/agent/ipexCommunicationFixtures";
 import { NotificationRoute } from "./keriaNotificationService.types";
 import {
@@ -44,7 +51,7 @@ import {
 } from "../../__fixtures__/agent/multiSigFixtures";
 import {
   ConnectionHistoryType,
-  KeriaContactKeyPrefix,
+  KeriaContactKeyElement,
 } from "./connectionService.types";
 import { MultiSigRoute } from "./multiSig.types";
 import { NotificationRecord } from "../records";
@@ -280,7 +287,11 @@ const agentServicesProps = {
 jest.mock("../../../core/agent/agent", () => ({
   Agent: {
     MISSING_DATA_ON_KERIA: "Missing data error msg mock",
-    agent: {},
+    agent: {
+      isSeedPhraseVerified: jest.fn().mockResolvedValue(true),
+      isVerificationEnforced: jest.fn().mockResolvedValue(false),
+      recordCriticalAction: jest.fn(),
+    },
   },
 }));
 
@@ -290,6 +301,8 @@ const connections = jest.mocked({
     serviceEndpoints: [
       "http://127.0.0.1:3902/oobi/EKSGUkKBfg5PG3nAvWZwY4pax2ZD-9LC7JpXeks7IKEj/agent/EKxIbNtsJytfgJjW_AkXV-XLTg_vSyPUMxuwkP7zbgbu",
     ],
+    notes: [],
+    historyItems: [],
   }),
 });
 
@@ -303,17 +316,19 @@ const ipexCommunicationService = new IpexCommunicationService(
   connections as any
 );
 
-let originalFetch;
+let originalFetch: typeof global.fetch;
 beforeAll(() => {
   originalFetch = global.fetch;
   global.fetch = jest.fn().mockResolvedValue({
     text: () =>
-      "{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DGKzvhMMz2_MYhXyV5lGso_akvBYpGnOG5fTD299IsmO\"],\"nt\":\"1\",\"n\":[\"EBhg4MS4f4GZpuNZxk1D4mln9sv9l30rbtsk17AVOEmh\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-VAn-AABAADt-Cs8HoN9KBS5Kk23JCAaJzOl1InvbZ4FT0AQ0muKe6pSr8QvUJNNFTUImZg8XtBFqT75AY184rX3mKPKKgYI-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2025-01-21T13c24c58d219360p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"1\",\"p\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"a\":[{\"i\":\"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l\",\"s\":\"0\",\"d\":\"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l\"}]}-VAn-AABAADGIyEdPqQ4wJw6KWgFOF3guadzJYWTzy9EjDbxqnBEBmUIiGquNZvNtk--gDOYcOf_EsgIsmfZ8jwIvP0xICgL-EAB0AAAAAAAAAAAAAAAAAAAAAAB1AAG2025-01-21T13c24c59d693615p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"2\",\"p\":\"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL\",\"a\":[{\"i\":\"EMcWk38kBLvGdKH2b93HMujB_Xx5-ugwD-vrQJVVIJIl\",\"s\":\"0\",\"d\":\"EIlV2FfP39_0EOLUKDi2_ljF9FMty8OCp9myBepidVij\"}]}-VAn-AABAACDrd4dm-E3OT2IlRwu4A3M7OzLkOgsoYi2-FPfS9Tmwr3awoCP2R-718qVHHUPNCb0MsnzQ2rTqVnNEw0QLWUB-EAB0AAAAAAAAAAAAAAAAAAAAAAC1AAG2025-01-21T13c47c06d452176p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"3\",\"p\":\"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG\",\"a\":[{\"i\":\"EDR-8z0CviOyrntUK3pyabMTiIuKn0AXGhQvD0C12gkX\",\"s\":\"0\",\"d\":\"EGCPj1fDEsyLgRAXwDoD9qrX6lJkwxXfBx0XNoDHtMLl\"}]}-VAn-AABAAD6qIPXPrbqhKNPDRuU91_-EzQi01V53f1RFw0AV1sMe4JBjQmOdIwn4-FW88Lo-oht6e7C7sObbgk3-aJbQS4H-EAB0AAAAAAAAAAAAAAAAAAAAAAD1AAG2025-01-21T14c03c51d890362p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"4\",\"p\":\"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S\",\"a\":[{\"i\":\"EGsSqpbkJ-0SQnhyS-1FxNChZ7p1NV6yTXPPHIdyvjkZ\",\"s\":\"0\",\"d\":\"EMNJNkHlDqyrOHWbafUGPpHVrvvj5VbrCZML_ZgXk-Rk\"}]}-VAn-AABAAAVj_8Zldpds_naKbRyuIOef3RKABaF23AHjkEKfc_Gb2j1559uY6NA8BV6ZmCKQU1_mpJbLbtaBMes-Oub2yUL-EAB0AAAAAAAAAAAAAAAAAAAAAAE1AAG2025-01-21T14c11c23d141088p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EC0Gh5X0JGSEkhUllR5sINwapxeAzYoKOWwP9UU7KdLn\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"5\",\"p\":\"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx\",\"a\":[{\"i\":\"ENMi3aqTIgCSuXROeMywH7VFuUD1-ubK3EMlumKkRkc7\",\"s\":\"0\",\"d\":\"EKdvQCM1oSTgjcPezvOw2YanOe8Wdi6wkbViE6vHpEjg\"}]}-VAn-AABAABAaL6bwARu41XPQHGnHXuxmvPrIPP8vkghXhQbOTd07xdRZ5X2_kjMXu4UsHNyQcR7mNOht0kPeUPmafGx23EP-EAB0AAAAAAAAAAAAAAAAAAAAAAF1AAG2025-01-21T14c14c51d268032p00c00{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DGKzvhMMz2_MYhXyV5lGso_akvBYpGnOG5fTD299IsmO\"],\"nt\":\"1\",\"n\":[\"EBhg4MS4f4GZpuNZxk1D4mln9sv9l30rbtsk17AVOEmh\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-VAn-AABAADt-Cs8HoN9KBS5Kk23JCAaJzOl1InvbZ4FT0AQ0muKe6pSr8QvUJNNFTUImZg8XtBFqT75AY184rX3mKPKKgYI-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2025-01-21T13c24c58d219360p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"1\",\"p\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"a\":[{\"i\":\"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l\",\"s\":\"0\",\"d\":\"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l\"}]}-VAn-AABAADGIyEdPqQ4wJw6KWgFOF3guadzJYWTzy9EjDbxqnBEBmUIiGquNZvNtk--gDOYcOf_EsgIsmfZ8jwIvP0xICgL-EAB0AAAAAAAAAAAAAAAAAAAAAAB1AAG2025-01-21T13c24c59d693615p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"2\",\"p\":\"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL\",\"a\":[{\"i\":\"EMcWk38kBLvGdKH2b93HMujB_Xx5-ugwD-vrQJVVIJIl\",\"s\":\"0\",\"d\":\"EIlV2FfP39_0EOLUKDi2_ljF9FMty8OCp9myBepidVij\"}]}-VAn-AABAACDrd4dm-E3OT2IlRwu4A3M7OzLkOgsoYi2-FPfS9Tmwr3awoCP2R-718qVHHUPNCb0MsnzQ2rTqVnNEw0QLWUB-EAB0AAAAAAAAAAAAAAAAAAAAAAC1AAG2025-01-21T13c47c06d452176p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"3\",\"p\":\"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG\",\"a\":[{\"i\":\"EDR-8z0CviOyrntUK3pyabMTiIuKn0AXGhQvD0C12gkX\",\"s\":\"0\",\"d\":\"EGCPj1fDEsyLgRAXwDoD9qrX6lJkwxXfBx0XNoDHtMLl\"}]}-VAn-AABAAD6qIPXPrbqhKNPDRuU91_-EzQi01V53f1RFw0AV1sMe4JBjQmOdIwn4-FW88Lo-oht6e7C7sObbgk3-aJbQS4H-EAB0AAAAAAAAAAAAAAAAAAAAAAD1AAG2025-01-21T14c03c51d890362p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"4\",\"p\":\"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S\",\"a\":[{\"i\":\"EGsSqpbkJ-0SQnhyS-1FxNChZ7p1NV6yTXPPHIdyvjkZ\",\"s\":\"0\",\"d\":\"EMNJNkHlDqyrOHWbafUGPpHVrvvj5VbrCZML_ZgXk-Rk\"}]}-VAn-AABAAAVj_8Zldpds_naKbRyuIOef3RKABaF23AHjkEKfc_Gb2j1559uY6NA8BV6ZmCKQU1_mpJbLbtaBMes-Oub2yUL-EAB0AAAAAAAAAAAAAAAAAAAAAAE1AAG2025-01-21T14c11c23d141088p00c00{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EC0Gh5X0JGSEkhUllR5sINwapxeAzYoKOWwP9UU7KdLn\",\"i\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"s\":\"5\",\"p\":\"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx\",\"a\":[{\"i\":\"ENMi3aqTIgCSuXROeMywH7VFuUD1-ubK3EMlumKkRkc7\",\"s\":\"0\",\"d\":\"EKdvQCM1oSTgjcPezvOw2YanOe8Wdi6wkbViE6vHpEjg\"}]}-VAn-AABAABAaL6bwARu41XPQHGnHXuxmvPrIPP8vkghXhQbOTd07xdRZ5X2_kjMXu4UsHNyQcR7mNOht0kPeUPmafGx23EP-EAB0AAAAAAAAAAAAAAAAAAAAAAF1AAG2025-01-21T14c14c51d268032p00c00{\"v\":\"KERI10JSON0000f9_\",\"t\":\"rpy\",\"d\":\"ELrQF_D6YFL_2SU7RbDOrTYRtGj0v_GlOmi-YWVyChol\",\"dt\":\"2025-01-21T13:24:59.001000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"url\":\"http://127.0.0.1:3001\",\"scheme\":\"http\"}}-VA0-FABEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--80AAAAAAAAAAAAAAAAAAAAAAAEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8-AABAAA8QzT_XDXtB_5bK8P-dVrCZIlQ69WniFPWkGmGthK683v1E2ymGA7RlkXogXtIEHekVjdl0Tg5r6lr5aREjxcL{\"v\":\"KERI10JSON000113_\",\"t\":\"rpy\",\"d\":\"EA5z8Q3g-llvOK86bvE1QAceLb7g0FzcY9INn4Ch0Hu5\",\"dt\":\"2025-01-21T13:24:58.660000+00:00\",\"r\":\"/end/role/add\",\"a\":{\"cid\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\",\"role\":\"indexer\",\"eid\":\"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8\"}}-VA0-FABEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--80AAAAAAAAAAAAAAAAAAAAAAAEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8-AABAADCsrTysi5_3hhzgP9VUyilJIPE8x-8Yi-lNtyB28tbc0a_S3igdY_v0yLg14tTzOyQn9sv3rGZEt4ZKb4-xl8D",
+      '{"v":"KERI10JSON00012b_","t":"icp","d":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"0","kt":"1","k":["DGKzvhMMz2_MYhXyV5lGso_akvBYpGnOG5fTD299IsmO"],"nt":"1","n":["EBhg4MS4f4GZpuNZxk1D4mln9sv9l30rbtsk17AVOEmh"],"bt":"0","b":[],"c":[],"a":[]}-VAn-AABAADt-Cs8HoN9KBS5Kk23JCAaJzOl1InvbZ4FT0AQ0muKe6pSr8QvUJNNFTUImZg8XtBFqT75AY184rX3mKPKKgYI-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2025-01-21T13c24c58d219360p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"1","p":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","a":[{"i":"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l","s":"0","d":"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l"}]}-VAn-AABAADGIyEdPqQ4wJw6KWgFOF3guadzJYWTzy9EjDbxqnBEBmUIiGquNZvNtk--gDOYcOf_EsgIsmfZ8jwIvP0xICgL-EAB0AAAAAAAAAAAAAAAAAAAAAAB1AAG2025-01-21T13c24c59d693615p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"2","p":"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL","a":[{"i":"EMcWk38kBLvGdKH2b93HMujB_Xx5-ugwD-vrQJVVIJIl","s":"0","d":"EIlV2FfP39_0EOLUKDi2_ljF9FMty8OCp9myBepidVij"}]}-VAn-AABAACDrd4dm-E3OT2IlRwu4A3M7OzLkOgsoYi2-FPfS9Tmwr3awoCP2R-718qVHHUPNCb0MsnzQ2rTqVnNEw0QLWUB-EAB0AAAAAAAAAAAAAAAAAAAAAAC1AAG2025-01-21T13c47c06d452176p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"3","p":"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG","a":[{"i":"EDR-8z0CviOyrntUK3pyabMTiIuKn0AXGhQvD0C12gkX","s":"0","d":"EGCPj1fDEsyLgRAXwDoD9qrX6lJkwxXfBx0XNoDHtMLl"}]}-VAn-AABAAD6qIPXPrbqhKNPDRuU91_-EzQi01V53f1RFw0AV1sMe4JBjQmOdIwn4-FW88Lo-oht6e7C7sObbgk3-aJbQS4H-EAB0AAAAAAAAAAAAAAAAAAAAAAD1AAG2025-01-21T14c03c51d890362p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"4","p":"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S","a":[{"i":"EGsSqpbkJ-0SQnhyS-1FxNChZ7p1NV6yTXPPHIdyvjkZ","s":"0","d":"EMNJNkHlDqyrOHWbafUGPpHVrvvj5VbrCZML_ZgXk-Rk"}]}-VAn-AABAAAVj_8Zldpds_naKbRyuIOef3RKABaF23AHjkEKfc_Gb2j1559uY6NA8BV6ZmCKQU1_mpJbLbtaBMes-Oub2yUL-EAB0AAAAAAAAAAAAAAAAAAAAAAE1AAG2025-01-21T14c11c23d141088p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EC0Gh5X0JGSEkhUllR5sINwapxeAzYoKOWwP9UU7KdLn","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"5","p":"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx","a":[{"i":"ENMi3aqTIgCSuXROeMywH7VFuUD1-ubK3EMlumKkRkc7","s":"0","d":"EKdvQCM1oSTgjcPezvOw2YanOe8Wdi6wkbViE6vHpEjg"}]}-VAn-AABAABAaL6bwARu41XPQHGnHXuxmvPrIPP8vkghXhQbOTd07xdRZ5X2_kjMXu4UsHNyQcR7mNOht0kPeUPmafGx23EP-EAB0AAAAAAAAAAAAAAAAAAAAAAF1AAG2025-01-21T14c14c51d268032p00c00{"v":"KERI10JSON00012b_","t":"icp","d":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"0","kt":"1","k":["DGKzvhMMz2_MYhXyV5lGso_akvBYpGnOG5fTD299IsmO"],"nt":"1","n":["EBhg4MS4f4GZpuNZxk1D4mln9sv9l30rbtsk17AVOEmh"],"bt":"0","b":[],"c":[],"a":[]}-VAn-AABAADt-Cs8HoN9KBS5Kk23JCAaJzOl1InvbZ4FT0AQ0muKe6pSr8QvUJNNFTUImZg8XtBFqT75AY184rX3mKPKKgYI-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2025-01-21T13c24c58d219360p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"1","p":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","a":[{"i":"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l","s":"0","d":"EHm5kvOMHAdKkLBYazkUG54cyusm8d6SODrnJ2ZOP9-l"}]}-VAn-AABAADGIyEdPqQ4wJw6KWgFOF3guadzJYWTzy9EjDbxqnBEBmUIiGquNZvNtk--gDOYcOf_EsgIsmfZ8jwIvP0xICgL-EAB0AAAAAAAAAAAAAAAAAAAAAAB1AAG2025-01-21T13c24c59d693615p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"2","p":"EE_oRQa2Lq6g9C4jItfGPa9BMFsnmSPgS8_oB747-KHL","a":[{"i":"EMcWk38kBLvGdKH2b93HMujB_Xx5-ugwD-vrQJVVIJIl","s":"0","d":"EIlV2FfP39_0EOLUKDi2_ljF9FMty8OCp9myBepidVij"}]}-VAn-AABAACDrd4dm-E3OT2IlRwu4A3M7OzLkOgsoYi2-FPfS9Tmwr3awoCP2R-718qVHHUPNCb0MsnzQ2rTqVnNEw0QLWUB-EAB0AAAAAAAAAAAAAAAAAAAAAAC1AAG2025-01-21T13c47c06d452176p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"3","p":"EHfvjSm2o673Ps3dPy6FI_80OjvJicpwZG6FMQoARllG","a":[{"i":"EDR-8z0CviOyrntUK3pyabMTiIuKn0AXGhQvD0C12gkX","s":"0","d":"EGCPj1fDEsyLgRAXwDoD9qrX6lJkwxXfBx0XNoDHtMLl"}]}-VAn-AABAAD6qIPXPrbqhKNPDRuU91_-EzQi01V53f1RFw0AV1sMe4JBjQmOdIwn4-FW88Lo-oht6e7C7sObbgk3-aJbQS4H-EAB0AAAAAAAAAAAAAAAAAAAAAAD1AAG2025-01-21T14c03c51d890362p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"4","p":"EJRetyFJqp1yRs3hbleyAnqE3VqQQC2o4L3JDhIL0j2S","a":[{"i":"EGsSqpbkJ-0SQnhyS-1FxNChZ7p1NV6yTXPPHIdyvjkZ","s":"0","d":"EMNJNkHlDqyrOHWbafUGPpHVrvvj5VbrCZML_ZgXk-Rk"}]}-VAn-AABAAAVj_8Zldpds_naKbRyuIOef3RKABaF23AHjkEKfc_Gb2j1559uY6NA8BV6ZmCKQU1_mpJbLbtaBMes-Oub2yUL-EAB0AAAAAAAAAAAAAAAAAAAAAAE1AAG2025-01-21T14c11c23d141088p00c00{"v":"KERI10JSON00013a_","t":"ixn","d":"EC0Gh5X0JGSEkhUllR5sINwapxeAzYoKOWwP9UU7KdLn","i":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","s":"5","p":"EBVYE7oXrSUvo2wNSTzXOK28SMEg6v_qrh2s_8Jk7Jdx","a":[{"i":"ENMi3aqTIgCSuXROeMywH7VFuUD1-ubK3EMlumKkRkc7","s":"0","d":"EKdvQCM1oSTgjcPezvOw2YanOe8Wdi6wkbViE6vHpEjg"}]}-VAn-AABAABAaL6bwARu41XPQHGnHXuxmvPrIPP8vkghXhQbOTd07xdRZ5X2_kjMXu4UsHNyQcR7mNOht0kPeUPmafGx23EP-EAB0AAAAAAAAAAAAAAAAAAAAAAF1AAG2025-01-21T14c14c51d268032p00c00{"v":"KERI10JSON0000f9_","t":"rpy","d":"ELrQF_D6YFL_2SU7RbDOrTYRtGj0v_GlOmi-YWVyChol","dt":"2025-01-21T13:24:59.001000+00:00","r":"/loc/scheme","a":{"eid":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","url":"http://127.0.0.1:3001","scheme":"http"}}-VA0-FABEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--80AAAAAAAAAAAAAAAAAAAAAAAEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8-AABAAA8QzT_XDXtB_5bK8P-dVrCZIlQ69WniFPWkGmGthK683v1E2ymGA7RlkXogXtIEHekVjdl0Tg5r6lr5aREjxcL{"v":"KERI10JSON000113_","t":"rpy","d":"EA5z8Q3g-llvOK86bvE1QAceLb7g0FzcY9INn4Ch0Hu5","dt":"2025-01-21T13:24:58.660000+00:00","r":"/end/role/add","a":{"cid":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8","role":"indexer","eid":"EKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8"}}-VA0-FABEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--80AAAAAAAAAAAAAAAAAAAAAAAEKxN8WjtIewcbCp_cGih5Dd42PJ-IZ8KTPbc5Xx5q--8-AABAADCsrTysi5_3hhzgP9VUyilJIPE8x-8Yi-lNtyB28tbc0a_S3igdY_v0yLg14tTzOyQn9sv3rGZEt4ZKb4-xl8D',
   }) as jest.Mock;
 });
 
 afterAll(() => {
-  global.fetch = originalFetch!;
+  if (global.fetch) {
+    global.fetch = originalFetch;
+  }
 });
 
 const DATETIME = new Date();
@@ -321,10 +336,10 @@ const DATETIME = new Date();
 describe("Receive individual ACDC actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can accept ACDC from individual identifier and remove notification", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const id = "uuid";
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
@@ -344,7 +359,9 @@ describe("Receive individual ACDC actions", () => {
     identifierStorage.getIdentifierMetadata = jest.fn().mockResolvedValue({
       id: "identifierId",
     });
-    schemaGetMock.mockResolvedValue(QVISchema);
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithEdge)
+      .mockResolvedValue(schemaNoEdges);
     credentialStorage.getCredentialMetadata = jest.fn().mockResolvedValue({
       id: "id",
     });
@@ -375,6 +392,7 @@ describe("Receive individual ACDC actions", () => {
       identifierId: "identifierId",
       identifierType: "individual",
       createdAt: new Date(credentialRecordProps.issuanceDate),
+      credentialType: schemaWithEdge.title,
     });
     expect(eventEmitter.emit).toHaveBeenCalledWith({
       type: EventTypes.AcdcStateChanged,
@@ -417,10 +435,17 @@ describe("Receive individual ACDC actions", () => {
         hidden: true,
       })
     );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "https://issuer.example/oobi/EBIFDhtSE0cM4nbTnaMqiV1vUIlcnbsqBMeVMmeGmXOu",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "https://issuer.example/oobi/farEdgeSchemaSaid",
+      true
+    ); // Ensures we are calling recursiveSchemaResolve as it's public
   });
 
   test("Can accept ACDC from individual identifier even if already exists (idempotent)", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const id = "uuid";
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
@@ -500,7 +525,6 @@ describe("Receive individual ACDC actions", () => {
   });
 
   test("Cannot accept ACDC if the notification is missing in the DB", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "not-found-id";
     notificationStorage.findById = jest.fn().mockResolvedValue(null);
 
@@ -518,7 +542,6 @@ describe("Receive individual ACDC actions", () => {
   });
 
   test("Cannot accept ACDC if identifier is not locally stored", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
     notificationStorage.findById = jest.fn().mockResolvedValue({
       id,
@@ -550,10 +573,10 @@ describe("Receive individual ACDC actions", () => {
 describe("Receive group ACDC actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can begin admitting an ACDC for a group and the notification remains", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -587,18 +610,22 @@ describe("Receive group ACDC actions", () => {
           groupId: "group-id",
           groupInitiator: true,
           groupCreated: true,
+          proposedUsername: "",
         },
       },
-      multisigMembers: [
-        {
-          aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
-          ends: [],
-        },
-        {
-          aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
-          ends: [],
-        },
-      ],
+      multisigMembers: {
+        signing: [
+          {
+            aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
+            ends: [],
+          },
+          {
+            aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
+            ends: [],
+          },
+        ],
+        rotation: [],
+      },
     });
     identifiersGetMock = jest
       .fn()
@@ -708,7 +735,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Cannot begin admitting an ACDC twice", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -740,8 +766,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Can join group admit of an ACDC", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
-
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
       id: "id",
@@ -775,18 +799,22 @@ describe("Receive group ACDC actions", () => {
           groupId: "group-id",
           groupInitiator: true,
           groupCreated: true,
+          proposedUsername: "",
         },
       },
-      multisigMembers: [
-        {
-          aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
-          ends: [],
-        },
-        {
-          aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
-          ends: [],
-        },
-      ],
+      multisigMembers: {
+        signing: [
+          {
+            aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
+            ends: [],
+          },
+          {
+            aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
+            ends: [],
+          },
+        ],
+        rotation: [],
+      },
     });
     getManagerMock.mockReturnValue({
       sign: () => [
@@ -830,9 +858,18 @@ describe("Receive group ACDC actions", () => {
         identifierType: "group",
         createdAt: new Date(credentialRecordProps.issuanceDate),
       });
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithEdge)
+      .mockResolvedValue(schemaNoEdges);
 
     await ipexCommunicationService.joinMultisigAdmit("id");
 
+    // Verify getConnectionById is called with correct parameters
+    expect(connections.getConnectionById).toHaveBeenCalledWith(
+      grantForIssuanceExnMessage.exn.i,
+      false,
+      grantForIssuanceExnMessage.exn.rp
+    );
     expect(getManagerMock).toBeCalledWith(gHab);
     expect(ipexSubmitAdmitMock).toBeCalledWith(
       "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
@@ -849,6 +886,7 @@ describe("Receive group ACDC actions", () => {
       identifierId: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
       identifierType: "group",
       createdAt: new Date(credentialRecordProps.issuanceDate),
+      credentialType: "Schema with edge",
     });
     expect(eventEmitter.emit).toHaveBeenCalledWith({
       type: EventTypes.AcdcStateChanged,
@@ -877,11 +915,17 @@ describe("Receive group ACDC actions", () => {
       recordType: OperationPendingRecordType.ExchangeReceiveCredential,
     });
     expect(notificationStorage.deleteById).not.toBeCalled();
+    expect(connections.resolveOobi).toBeCalledWith(
+      "https://issuer.example/oobi/EBIFDhtSE0cM4nbTnaMqiV1vUIlcnbsqBMeVMmeGmXOu",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "https://issuer.example/oobi/farEdgeSchemaSaid",
+      true
+    ); // Ensures we are calling recursiveSchemaResolve as it's public
   });
 
   test("Can join group admit of an ACDC even if ACDC already exists (idempotent)", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
-
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
       id: "id",
@@ -915,18 +959,22 @@ describe("Receive group ACDC actions", () => {
           groupId: "group-id",
           groupInitiator: true,
           groupCreated: true,
+          proposedUsername: "",
         },
       },
-      multisigMembers: [
-        {
-          aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
-          ends: [],
-        },
-        {
-          aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
-          ends: [],
-        },
-      ],
+      multisigMembers: {
+        signing: [
+          {
+            aid: "ELmrDKf0Yq54Yq7cyrHwHZlA4lBB8ZVX9c8Ea3h2VJFF",
+            ends: [],
+          },
+          {
+            aid: "EGaEIhOGSTPccSMvnXvfvOVyC1C5AFq62GLTrRKVZBS5",
+            ends: [],
+          },
+        ],
+        rotation: [],
+      },
     });
     getManagerMock.mockReturnValue({
       sign: () => [
@@ -1004,7 +1052,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Cannot join group admit for a grant notification that does not exist", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue(null);
@@ -1020,7 +1067,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Cannot join group admit of an ACDC twice", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -1052,7 +1098,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Cannot join group admit of an ACDC if there is no current admit to join", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -1085,7 +1130,6 @@ describe("Receive group ACDC actions", () => {
   });
 
   test("Cannot join group admit of an ACDC if group identifier is not locally stored", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
 
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -1126,6 +1170,7 @@ describe("Receive group ACDC actions", () => {
 describe("Receive group ACDC progress", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Cannot get linkedRequest from ipex/grant if the notification is missing in the DB", async () => {
@@ -1166,6 +1211,7 @@ describe("Receive group ACDC progress", () => {
     identifiersGetMock = jest.fn().mockResolvedValueOnce({
       state: {
         kt: "2",
+        nt: "2",
       },
     });
 
@@ -1194,7 +1240,10 @@ describe("Receive group ACDC progress", () => {
 
     expect(result).toEqual({
       members: ["memberA", "memberB", "memberC"],
-      threshold: "2",
+      threshold: {
+        signingThreshold: 2,
+        rotationThreshold: 2,
+      },
       othersJoined: ["memberB", "memberC"],
       linkedRequest: {
         accepted: true,
@@ -1231,6 +1280,7 @@ describe("Receive group ACDC progress", () => {
     identifiersGetMock = jest.fn().mockResolvedValueOnce({
       state: {
         kt: "2",
+        nt: "2",
       },
     });
 
@@ -1240,7 +1290,10 @@ describe("Receive group ACDC progress", () => {
 
     expect(result).toEqual({
       members: ["memberA", "memberB", "memberC"],
-      threshold: "2",
+      threshold: {
+        signingThreshold: 2,
+        rotationThreshold: 2,
+      },
       othersJoined: [],
       linkedRequest: {
         accepted: false,
@@ -1252,10 +1305,10 @@ describe("Receive group ACDC progress", () => {
 describe("Offer ACDC individual actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can offer ACDC in response to IPEX apply", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "uuid";
     eventEmitter.emit = jest.fn();
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -1299,10 +1352,20 @@ describe("Offer ACDC individual actions", () => {
     });
     markNotificationMock.mockResolvedValueOnce({ status: "done" });
 
-    await ipexCommunicationService.offerAcdcFromApply(
-      id,
-      grantForIssuanceExnMessage.exn.e.acdc
-    );
+    const acdcData = {
+      v: "ACDC10JSON000197_",
+      d: "credential-id",
+      i: "issuer-aid",
+      ri: "registry-aid",
+      s: "schema-said",
+      a: {
+        d: "attribute-said",
+        i: "holder-aid",
+        dt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+
+    await ipexCommunicationService.offerAcdcFromApply(id, acdcData);
 
     expect(operationPendingStorage.save).toBeCalledWith({
       id: "opName",
@@ -1311,7 +1374,7 @@ describe("Offer ACDC individual actions", () => {
     expect(ipexOfferMock).toBeCalledWith({
       senderName: "abc123",
       recipient: "i",
-      acdc: new Serder(grantForIssuanceExnMessage.exn.e.acdc),
+      acdc: new Serder(acdcData),
       applySaid: "d",
     });
     expect(ipexSubmitOfferMock).toBeCalledWith(
@@ -1339,16 +1402,25 @@ describe("Offer ACDC individual actions", () => {
   });
 
   test("Cannot offer ACDC if the apply notification is missing in the DB", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "not-found-id";
     eventEmitter.emit = jest.fn();
     notificationStorage.findById.mockResolvedValueOnce(null);
 
+    const acdcData = {
+      v: "ACDC10JSON000197_",
+      d: "credential-id",
+      i: "issuer-aid",
+      ri: "registry-aid",
+      s: "schema-said",
+      a: {
+        d: "attribute-said",
+        i: "holder-aid",
+        dt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+
     await expect(
-      ipexCommunicationService.offerAcdcFromApply(
-        id,
-        grantForIssuanceExnMessage.exn.e.acdc
-      )
+      ipexCommunicationService.offerAcdcFromApply(id, acdcData)
     ).rejects.toThrowError(
       `${IpexCommunicationService.NOTIFICATION_NOT_FOUND} ${id}`
     );
@@ -1365,10 +1437,10 @@ describe("Offer ACDC individual actions", () => {
 describe("Offer ACDC group actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can begin offering an ACDC from a group identifier", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const id = "uuid";
     eventEmitter.emit = jest.fn();
     notificationStorage.findById = jest.fn().mockResolvedValue({
@@ -1407,12 +1479,25 @@ describe("Offer ACDC group actions", () => {
       recordType: OperationPendingRecordType.ExchangeOfferCredential,
     });
 
-    await ipexCommunicationService.offerAcdcFromApply(id, credentialRecord);
+    const acdcData = {
+      v: "ACDC10JSON000197_",
+      d: "credential-id",
+      i: "issuer-aid",
+      ri: "registry-aid",
+      s: "schema-said",
+      a: {
+        d: "attribute-said",
+        i: "holder-aid",
+        dt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+
+    await ipexCommunicationService.offerAcdcFromApply(id, acdcData);
 
     expect(ipexOfferMock).toBeCalledWith({
       senderName: "EC1cyV3zLnGs4B9AYgoGNjXESyQZrBWygz3jLlRD30bR",
       recipient: "ECS7jn05fIP_JK1Ub4E6hPviRKEdC55QhxZToxDIHo_E",
-      acdc: new Serder(grantForIssuanceExnMessage.exn.e.acdc),
+      acdc: new Serder(acdcData),
       applySaid: "EIDUavcmyHBseNZAdAHR3SF8QMfX1kSJ3Ct0OqS0-HCW",
       message: "",
       datetime: expect.any(String),
@@ -1446,7 +1531,6 @@ describe("Offer ACDC group actions", () => {
   });
 
   test("Cannot begin offering an ACDC twice", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     eventEmitter.emit = jest.fn();
     const applyNoteRecord = {
       linkedRequest: {
@@ -1456,11 +1540,21 @@ describe("Offer ACDC group actions", () => {
     };
     notificationStorage.findById.mockResolvedValue(applyNoteRecord);
 
+    const acdcData = {
+      v: "ACDC10JSON000197_",
+      d: "credential-id",
+      i: "issuer-aid",
+      ri: "registry-aid",
+      s: "schema-said",
+      a: {
+        d: "attribute-said",
+        i: "holder-aid",
+        dt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+
     await expect(
-      ipexCommunicationService.offerAcdcFromApply(
-        "id",
-        grantForIssuanceExnMessage.exn.e.acdc
-      )
+      ipexCommunicationService.offerAcdcFromApply("id", acdcData)
     ).rejects.toThrowError(IpexCommunicationService.IPEX_ALREADY_REPLIED);
 
     expect(ipexOfferMock).not.toBeCalled();
@@ -1630,8 +1724,7 @@ describe("Offer ACDC group actions", () => {
   });
 
   test("Can retrieve the current offered credential SAID", async () => {
-    getExchangeMock.mockReturnValueOnce(multisigExnOfferForPresenting);
-
+    getExchangeMock.mockReturnValue(multisigExnOfferForPresenting);
     const result = await ipexCommunicationService.getOfferedCredentialSaid(
       "current-said"
     );
@@ -1644,6 +1737,7 @@ describe("Offer ACDC group actions", () => {
 describe("Offer ACDC group progress", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Cannot get group offer progress if the apply notification is missing in the DB", async () => {
@@ -1671,6 +1765,7 @@ describe("Offer ACDC group progress", () => {
     identifiersGetMock = jest.fn().mockResolvedValueOnce({
       state: {
         kt: "2",
+        nt: "2",
       },
     });
     identifiersMemberMock.mockResolvedValueOnce({
@@ -1697,7 +1792,10 @@ describe("Offer ACDC group progress", () => {
 
     expect(result).toEqual({
       members: ["memberA", "memberB", "memberC"],
-      threshold: "2",
+      threshold: {
+        signingThreshold: 2,
+        rotationThreshold: 2,
+      },
       linkedRequest: {
         accepted: true,
         current: "current-offer-said",
@@ -1719,6 +1817,7 @@ describe("Offer ACDC group progress", () => {
     identifiersGetMock = jest.fn().mockResolvedValue({
       state: {
         kt: "2",
+        nt: "2",
       },
     });
     identifiersMemberMock.mockResolvedValue({
@@ -1739,7 +1838,10 @@ describe("Offer ACDC group progress", () => {
 
     expect(result).toEqual({
       members: ["memberA", "memberB"],
-      threshold: "2",
+      threshold: {
+        signingThreshold: 2,
+        rotationThreshold: 2,
+      },
       linkedRequest: { accepted: false },
       othersJoined: [],
     });
@@ -1749,10 +1851,10 @@ describe("Offer ACDC group progress", () => {
 describe("Grant ACDC individual actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can present ACDC in response to agree", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     eventEmitter.emit = jest.fn();
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
@@ -1785,6 +1887,13 @@ describe("Grant ACDC individual actions", () => {
     markNotificationMock.mockResolvedValueOnce({ status: "done" });
 
     await ipexCommunicationService.grantAcdcFromAgree("agree-note-id");
+
+    // Verify getConnectionById is called with correct parameters
+    expect(connections.getConnectionById).toHaveBeenCalledWith(
+      agreeForPresentingExnMessage.exn.i,
+      false,
+      agreeForPresentingExnMessage.exn.rp
+    );
 
     expect(ipexGrantMock).toBeCalledWith({
       acdc: new Serder(credentialProps.sad),
@@ -1826,14 +1935,14 @@ describe("Grant ACDC individual actions", () => {
       })
     );
     expect(updateContactMock).toBeCalledWith(
-      "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
+      agreeForPresentingExnMessage.exn.i,
       {
-        [`${KeriaContactKeyPrefix.HISTORY_IPEX}EJ1jbI8vTFCEloTfSsZkBpV0bUJnhGVyak5q-5IFIglL`]:
+        [`${agreeForPresentingExnMessage.exn.rp}:${KeriaContactKeyElement.HISTORY_IPEX}${agreeForPresentingExnMessage.exn.d}`]:
           JSON.stringify({
-            id: "EJ1jbI8vTFCEloTfSsZkBpV0bUJnhGVyak5q-5IFIglL",
+            id: agreeForPresentingExnMessage.exn.d,
             dt: agreeForPresentingExnMessage.exn.dt,
             credentialType: QVISchema.title,
-            connectionId: "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
+            connectionId: agreeForPresentingExnMessage.exn.i,
             historyType: ConnectionHistoryType.IPEX_AGREE_COMPLETE,
           }),
       }
@@ -1841,7 +1950,6 @@ describe("Grant ACDC individual actions", () => {
   });
 
   test("Cannot present ACDC if the notification is missing in the DB", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const id = "not-found-id";
     notificationStorage.findById = jest.fn().mockResolvedValue(null);
 
@@ -1860,7 +1968,6 @@ describe("Grant ACDC individual actions", () => {
   });
 
   test("Cannot present non existing ACDC", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     eventEmitter.emit = jest.fn();
     notificationStorage.findById = jest.fn().mockResolvedValueOnce({
       type: "NotificationRecord",
@@ -1897,7 +2004,6 @@ describe("Grant ACDC individual actions", () => {
   });
 
   test("Should throw if unknown error occurs when fetching ACDC to present", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     getExchangeMock.mockReturnValue(agreeForPresentingExnMessage);
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
@@ -1933,10 +2039,10 @@ describe("Grant ACDC group actions", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
     eventEmitter.emit = jest.fn();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can begin presenting an ACDC in response to agree", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
       id: "note-id",
@@ -2023,14 +2129,14 @@ describe("Grant ACDC group actions", () => {
     expect(notificationStorage.deleteById).not.toBeCalled();
 
     expect(updateContactMock).toBeCalledWith(
-      "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
+      agreeForPresentingExnMessage.exn.i,
       {
-        [`${KeriaContactKeyPrefix.HISTORY_IPEX}EJ1jbI8vTFCEloTfSsZkBpV0bUJnhGVyak5q-5IFIglL`]:
+        [`${agreeForPresentingExnMessage.exn.rp}:${KeriaContactKeyElement.HISTORY_IPEX}${agreeForPresentingExnMessage.exn.d}`]:
           JSON.stringify({
-            id: "EJ1jbI8vTFCEloTfSsZkBpV0bUJnhGVyak5q-5IFIglL",
+            id: agreeForPresentingExnMessage.exn.d,
             dt: agreeForPresentingExnMessage.exn.dt,
             credentialType: QVISchema.title,
-            connectionId: "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
+            connectionId: agreeForPresentingExnMessage.exn.i,
             historyType: ConnectionHistoryType.IPEX_AGREE_COMPLETE,
           }),
       }
@@ -2038,7 +2144,6 @@ describe("Grant ACDC group actions", () => {
   });
 
   test("Cannot begin presenting an ACDC twice", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     notificationStorage.findById = jest.fn().mockResolvedValue({
       type: "NotificationRecord",
       id: "note-id",
@@ -2184,14 +2289,182 @@ describe("Grant ACDC group actions", () => {
   });
 });
 
+describe("Chained ACDC schema resolution", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
+  });
+
+  test("Can resolve non-chained ACDC schema", async () => {
+    schemaGetMock.mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaNoEdges);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(1);
+  });
+
+  test("Can resolve chained ACDC schema with a non-saidified edge section", async () => {
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithEdge)
+      .mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaWithEdge);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(2);
+  });
+
+  test("Can resolve chained ACDC schema with a saidified edge section", async () => {
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithSaidifiedEdgeSection)
+      .mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaWithSaidifiedEdgeSection);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSchemaSaidSaidifiedEdgeSection",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(2);
+  });
+
+  test("Can resolve chained ACDC schema with more than a depth of 2", async () => {
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithEdge)
+      .mockResolvedValueOnce(schemaWithSaidifiedEdgeSection)
+      .mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaWithEdge);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSchemaSaidSaidifiedEdgeSection",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(3);
+  });
+
+  test("Can resolve a schema with multiple edges", async () => {
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithMultipleEdges)
+      .mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaWithMultipleEdges);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeASchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeBSchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(3);
+  });
+
+  test("Can resolve a schema with a saidified edge", async () => {
+    schemaGetMock
+      .mockResolvedValueOnce(schemaWithASaidifiedEdge)
+      .mockResolvedValue(schemaNoEdges);
+    const schema = await ipexCommunicationService.recursiveSchemaResolve(
+      "http://issuerendpoint.com/oobi/",
+      "schemaSaid"
+    );
+    expect(schema).toBe(schemaWithASaidifiedEdge);
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSaidifiedSchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(2);
+  });
+
+  test("Cannot resolve schemas with edge groups", async () => {
+    schemaGetMock.mockResolvedValue(schemaWithEdgeGroup);
+    await expect(
+      ipexCommunicationService.recursiveSchemaResolve(
+        "http://issuerendpoint.com/oobi/",
+        "schemaSaid"
+      )
+    ).rejects.toThrowError(
+      IpexCommunicationService.EDGE_GROUP_SCHEMA_RESOLUTION_UNSUPPORTED
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).not.toBeCalledWith(
+      "http://issuerendpoint.com/oobi/farEdgeSaidifiedSchemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(1);
+  });
+
+  test("Cannot resolve edge schemas that do not specify the schema SAID", async () => {
+    schemaGetMock.mockResolvedValue(schemaWithEdgeWithoutSchemaSaid);
+    await expect(
+      ipexCommunicationService.recursiveSchemaResolve(
+        "http://issuerendpoint.com/oobi/",
+        "schemaSaid"
+      )
+    ).rejects.toThrowError(
+      IpexCommunicationService.MISSING_SUB_SCHEMA_REFERENCE
+    );
+    expect(connections.resolveOobi).toBeCalledWith(
+      "http://issuerendpoint.com/oobi/schemaSaid",
+      true
+    );
+    expect(connections.resolveOobi).toBeCalledTimes(1);
+  });
+});
+
 // @TODO - foconnor: Split into individual describes and tidy up.
 describe("IPEX communication service of agent", () => {
   beforeAll(async () => {
     await new ConfigurationService().start();
+    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
   });
 
   test("Can get matching credential for apply", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const notiId = "notiId";
     const mockExchange = {
       exn: {
@@ -2218,6 +2491,7 @@ describe("IPEX communication service of agent", () => {
       connectionId: "EGR7Jm38EcsXRIidKDZBYDm_xox6eapfU1tqxdAUzkFd",
       read: true,
       groupReplied: false,
+      receivingPre: "EGR7Jm38EcsXRIidKDZBYDm_xox6eapfU1tqxdAUzkFA",
     };
     schemaGetMock.mockResolvedValue(QVISchema);
     credentialStorage.getCredentialMetadatasById.mockResolvedValue([
@@ -2267,7 +2541,7 @@ describe("IPEX communication service of agent", () => {
     expect(updateContactMock).toBeCalledWith(
       applyForPresentingExnMessage.exn.i,
       {
-        [`${KeriaContactKeyPrefix.HISTORY_IPEX}${applyForPresentingExnMessage.exn.d}`]:
+        [`${applyForPresentingExnMessage.exn.rp}:${KeriaContactKeyElement.HISTORY_IPEX}${applyForPresentingExnMessage.exn.d}`]:
           JSON.stringify({
             id: applyForPresentingExnMessage.exn.d,
             dt: applyForPresentingExnMessage.exn.dt,
@@ -2292,7 +2566,7 @@ describe("IPEX communication service of agent", () => {
     expect(updateContactMock).toBeCalledWith(
       grantForIssuanceExnMessage.exn.rp,
       {
-        [`${KeriaContactKeyPrefix.HISTORY_IPEX}${grantForIssuanceExnMessage.exn.d}`]:
+        [`${grantForIssuanceExnMessage.exn.i}:${KeriaContactKeyElement.HISTORY_IPEX}${grantForIssuanceExnMessage.exn.d}`]:
           JSON.stringify({
             id: grantForIssuanceExnMessage.exn.d,
             dt: grantForIssuanceExnMessage.exn.dt,
@@ -2318,7 +2592,7 @@ describe("IPEX communication service of agent", () => {
     );
 
     expect(updateContactMock).toBeCalledWith(grantForIssuanceExnMessage.exn.i, {
-      [`${KeriaContactKeyPrefix.HISTORY_REVOKE}${grantForIssuanceExnMessage.exn.e.acdc.d}`]:
+      [`${grantForIssuanceExnMessage.exn.rp}:${KeriaContactKeyElement.HISTORY_REVOKE}${grantForIssuanceExnMessage.exn.e.acdc.d}`]:
         JSON.stringify({
           id: grantForIssuanceExnMessage.exn.d,
           dt: grantForIssuanceExnMessage.exn.dt,
@@ -2343,7 +2617,7 @@ describe("IPEX communication service of agent", () => {
     );
 
     expect(updateContactMock).toBeCalledWith(grantForIssuanceExnMessage.exn.i, {
-      [`${KeriaContactKeyPrefix.HISTORY_IPEX}${grantForIssuanceExnMessage.exn.d}`]:
+      [`${grantForIssuanceExnMessage.exn.rp}:${KeriaContactKeyElement.HISTORY_IPEX}${grantForIssuanceExnMessage.exn.d}`]:
         JSON.stringify({
           id: grantForIssuanceExnMessage.exn.d,
           dt: grantForIssuanceExnMessage.exn.dt,
@@ -2384,7 +2658,6 @@ describe("IPEX communication service of agent", () => {
   });
 
   test("Should throw error if schemas.get has an unexpected error", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     schemaGetMock.mockRejectedValueOnce(new Error("Unknown error"));
     await expect(
       ipexCommunicationService.createLinkedIpexMessageRecord(
@@ -2395,7 +2668,6 @@ describe("IPEX communication service of agent", () => {
   });
 
   test("Cannot get matching credential for apply if cannot get the schema", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValueOnce(true);
     const notiId = "notiId";
     getExchangeMock = jest.fn().mockResolvedValueOnce({
       exn: {
@@ -2417,6 +2689,7 @@ describe("IPEX communication service of agent", () => {
       connectionId: "EGR7Jm38EcsXRIidKDZBYDm_xox6eapfU1tqxdAUzkFd",
       read: true,
       groupReplied: false,
+      receivingPre: "EGR7Jm38EcsXRIidKDZBYDm_xox6eapfU1tqxdAUzkFA",
     };
     schemaGetMock.mockRejectedValue(
       new Error("request - 404 - SignifyClient message")
@@ -2426,33 +2699,7 @@ describe("IPEX communication service of agent", () => {
     ).rejects.toThrowError(IpexCommunicationService.SCHEMA_NOT_FOUND);
   });
 
-  test("Should throw error when KERIA is offline", async () => {
-    await expect(
-      ipexCommunicationService.admitAcdcFromGrant("id")
-    ).rejects.toThrowError(Agent.KERIA_CONNECTION_BROKEN);
-    const noti = {
-      id: "id",
-      createdAt: DATETIME.toISOString(),
-      a: {
-        d: "keri",
-      },
-      connectionId: "EGR7Jm38EcsXRIidKDZBYDm_xox6eapfU1tqxdAUzkFd",
-      read: true,
-      groupReplied: false,
-    };
-    await expect(
-      ipexCommunicationService.offerAcdcFromApply(noti.id, {})
-    ).rejects.toThrowError(Agent.KERIA_CONNECTION_BROKEN);
-    await expect(
-      ipexCommunicationService.grantAcdcFromAgree(noti.a.d)
-    ).rejects.toThrowError(Agent.KERIA_CONNECTION_BROKEN);
-    await expect(
-      ipexCommunicationService.getIpexApplyDetails(noti)
-    ).rejects.toThrowError(Agent.KERIA_CONNECTION_BROKEN);
-  });
-
   test("Cannot get ipex apply details if the schema cannot be located", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const mockNotification = {
       a: {
         d: "msgSaid",
@@ -2482,7 +2729,6 @@ describe("IPEX communication service of agent", () => {
   });
 
   test("Should throw error for non-404 errors - getIpexApplyDetails", async () => {
-    Agent.agent.getKeriaOnlineStatus = jest.fn().mockReturnValue(true);
     const mockNotification = {
       a: {
         d: "msgSaid",
@@ -2534,7 +2780,11 @@ describe("IPEX communication service of agent", () => {
         dt: "2024-07-30T04:19:55.348000+00:00",
         attendeeName: "ccc",
       },
-      s: QVISchema,
+      s: {
+        title: QVISchema.title,
+        description: QVISchema.description,
+        version: QVISchema.version,
+      },
       lastStatus: { s: "0", dt: "2024-11-07T08:32:34.943Z" },
       status: "pending",
       identifierId: grantForIssuanceExnMessage.exn.rp,
@@ -2565,14 +2815,18 @@ describe("IPEX communication service of agent", () => {
         dt: "2024-07-30T04:19:55.348000+00:00",
         attendeeName: "ccc",
       },
-      s: QVISchema,
+      s: {
+        title: QVISchema.title,
+        description: QVISchema.description,
+        version: QVISchema.version,
+      },
       lastStatus: { s: "0", dt: "2024-11-07T08:32:34.943Z" },
       status: "pending",
       identifierId: grantForIssuanceExnMessage.exn.rp,
       connectionId: "EC9bQGHShmp2Juayqp0C5XcheBiHyc1p54pZ_Op-B95x",
     });
     expect(connections.resolveOobi).toBeCalledWith(
-      "http://127.0.0.1:3001/oobi/EBIFDhtSE0cM4nbTnaMqiV1vUIlcnbsqBMeVMmeGmXOu",
+      "https://issuer.example/oobi/EBIFDhtSE0cM4nbTnaMqiV1vUIlcnbsqBMeVMmeGmXOu",
       true
     );
   });
@@ -2612,7 +2866,11 @@ describe("IPEX communication service of agent", () => {
         dt: "2024-07-30T04:19:55.348000+00:00",
         attendeeName: "ccc",
       },
-      s: QVISchema,
+      s: {
+        title: QVISchema.title,
+        description: QVISchema.description,
+        version: QVISchema.version,
+      },
       lastStatus: { s: "1", dt: "2024-11-07T08:32:34.943Z" },
       status: "pending",
       identifierId: grantForIssuanceExnMessage.exn.rp,

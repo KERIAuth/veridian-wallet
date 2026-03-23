@@ -1,11 +1,8 @@
-import { waitForIonicReact } from "@ionic/react-test-utils";
 import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { setCurrentOperation } from "../../../store/reducers/stateCache";
-import { OperationType } from "../../globals/types";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { TabsRoutePath } from "../navigation/TabsMenu";
 import { ConnectionOptions } from "./ConnectionOptions";
 
@@ -20,10 +17,9 @@ describe("Connection Options modal", () => {
   let mockedStore: Store<unknown, AnyAction>;
   beforeEach(() => {
     jest.resetAllMocks();
-    const mockStore = configureStore();
     const initialState = {
       stateCache: {
-        routes: [TabsRoutePath.IDENTIFIERS],
+        routes: [TabsRoutePath.CREDENTIALS],
         authentication: {
           loggedIn: true,
           time: Date.now(),
@@ -33,7 +29,7 @@ describe("Connection Options modal", () => {
       },
     };
     mockedStore = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
   });
@@ -54,8 +50,6 @@ describe("Connection Options modal", () => {
       </Provider>
     );
 
-    await waitForIonicReact();
-
     expect(getByTestId("connection-options-manage-button")).toBeVisible();
     expect(getByTestId("delete-button-connection-options")).toBeVisible();
 
@@ -71,9 +65,6 @@ describe("Connection Options modal", () => {
     });
 
     expect(optionDeleteMock).toBeCalledTimes(1);
-    expect(dispatchMock).toBeCalledWith(
-      setCurrentOperation(OperationType.DELETE_CONNECTION)
-    );
   });
 
   test("can exclude restricted options in certain flows", async () => {
@@ -88,11 +79,14 @@ describe("Connection Options modal", () => {
         />
       </Provider>
     );
-    await waitForIonicReact();
 
     await waitFor(() =>
-      expect(queryByTestId("connection-options-manage-button")).toBeInTheDocument()
+      expect(
+        queryByTestId("connection-options-manage-button")
+      ).toBeInTheDocument()
     );
-    expect(queryByTestId("delete-button-connection-options")).not.toBeInTheDocument();
+    expect(
+      queryByTestId("delete-button-connection-options")
+    ).not.toBeInTheDocument();
   });
 });

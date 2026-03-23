@@ -9,11 +9,11 @@ export enum IdentifierDetails {
 }
 
 export enum Passcode {
-  Description = "Create a passcode to secure your wallet and to continue the onboarding process",
+  Description = "Create a PIN to secure your wallet and to continue the onboarding process",
   DescriptionNewPasscode = "Create a new passcode to secure your wallet",
   DescriptionEnterPasscode = "Please enter your passcode to verify",
-  Title = "Create your Passcode",
-  TitleReEnter = "Re-enter your Passcode",
+  Title = "Create your PIN",
+  TitleReEnter = "Re-enter your PIN",
   TitleNewPasscode = "Create new passcode",
   TitleEnterPasscode = "Enter passcode",
   TitleReEnterNewPasscode = "Re-enter new passcode",
@@ -32,6 +32,37 @@ export enum WelcomeMessage {
 export enum Scan {
   ValidContent = "https://keria-ext.dev.idw-sandboxes.cf-deployments.org/oobi/EMNJSzxcbs5iMsVrbUuusC4HJD4OnViw9KklvAw4n09k/agent/EBuxdKcxfPY0qoNb08DM-lsV7zQ027wqq6C_h5rq-eK5?name=CF%20Credential%20Issuance",
   InvalidContent = "https://www.google.com/",
+}
+
+import { getSSIAgentUrls } from "../helpers/ssi-agent-urls.helper.js";
+
+// Get SSI Agent URLs based on environment
+const ssiAgentUrls = getSSIAgentUrls();
+
+export const SSIAgent = {
+  get BootURL() {
+    return getSSIAgentUrls().bootUrl;
+  },
+  get ConnectURL() {
+    return getSSIAgentUrls().connectUrl;
+  },
+  TitleAboutSSIAgent: "About SSI agent",
+} as const;
+
+export enum WelcomeModalText {
+  Title = "Welcome! What should we call you?",
+}
+
+export enum WelcomeBack {
+  Title = "Welcome back",
+  IncorrectMessage = "Incorrect passcode",
+  LoginUnavailableTitle = "Login unavailable",
+}
+
+export enum ForgotPasscode {
+  Title = "Forgot passcode",
+  Description = "Please verify your recovery phrase to reset your passcode. To start typing click on the first option.",
+  DescriptionPopup = "If you've forgotten your passcode, please verify your recovery phrase to gain access to your wallet",
 }
 
 export enum PrivacyPolicy {

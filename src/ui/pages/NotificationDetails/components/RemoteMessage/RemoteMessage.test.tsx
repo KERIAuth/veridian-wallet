@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { legacy_createStore as createStore } from "redux";
 import { RemoteMessage } from "./RemoteMessage";
+import { makeTestStore } from "../../../../utils/makeTestStore";
 
 const mockStore = (initialState: any) => createStore(() => initialState);
 const dispatchMock = jest.fn();
@@ -48,7 +49,7 @@ describe("RemoteMessage", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -60,6 +61,7 @@ describe("RemoteMessage", () => {
       connectionId: "connection-456",
       read: false,
       groupReplied: false,
+      receivingPre: "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfA",
     };
 
     render(
@@ -96,7 +98,7 @@ describe("RemoteMessage", () => {
     getHumanReadableMessageMock.mockResolvedValue(mockValue);
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -107,6 +109,7 @@ describe("RemoteMessage", () => {
       connectionId: "connection-456",
       read: false,
       groupReplied: false,
+      receivingPre: "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfA",
     };
 
     const { queryByTestId } = render(

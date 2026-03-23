@@ -1,35 +1,21 @@
 import { IonReactMemoryRouter } from "@ionic/react-router";
-import { mockIonicReact } from "@ionic/react-test-utils";
-import { fireEvent, render, waitFor, cleanup } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createMemoryHistory } from "history";
 import { act } from "react";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
-import configureStore from "redux-mock-store";
+import { NotificationRoute } from "../../../core/agent/services/keriaNotificationService.types";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../routes/paths";
-import { connectionsForNotifications } from "../../__fixtures__/connectionsFix";
+import { connectionsForNotificationsValues } from "../../__fixtures__/connectionsFix";
 import { credsFixAcdc } from "../../__fixtures__/credsFix";
+import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix";
 import { notificationsFix } from "../../__fixtures__/notificationsFix";
+import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { NotificationFilters } from "./Notification.types";
-import { Notifications } from "./Notifications";
-import { NotificationRoute } from "../../../core/agent/services/keriaNotificationService.types";
 import { NotificationItem } from "./NotificationItem";
-
-mockIonicReact();
-
-jest.mock("../../../core/configuration", () => ({
-  ...jest.requireActual("../../../core/configuration"),
-  ConfigurationService: {
-    env: {
-      features: {
-        notifications: {
-          fallbackIcon: false,
-        },
-      },
-    },
-  },
-}));
+import { Notifications } from "./Notifications";
 
 const readNotificationMock = jest.fn((id: string) => Promise.resolve(id));
 jest.mock("../../../core/agent/agent", () => ({
@@ -47,6 +33,13 @@ jest.mock("../../../core/agent/agent", () => ({
       },
       basicStorage: {
         deleteById: jest.fn(() => Promise.resolve()),
+        findById: jest.fn(() =>
+          Promise.resolve({
+            content: {
+              syncing: false,
+            },
+          })
+        ),
       },
       credentials: {
         getCredentialDetailsById: jest.fn(() =>
@@ -71,7 +64,6 @@ jest.mock("react-router-dom", () => ({
   }),
 }));
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const initialState = {
   stateCache: {
@@ -82,11 +74,9 @@ const initialState = {
       passcodeIsSet: true,
     },
   },
-  connectionsCache: {
-    connections: {},
-  },
-  notificationsCache: {
-    notifications: [],
+  profilesCache: {
+    ...profileCacheFixData,
+    defaultProfile: filteredIdentifierFix[2].id,
   },
   biometricsCache: {
     enabled: false,
@@ -102,15 +92,32 @@ const fullState = {
       passcodeIsSet: true,
     },
   },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-    multisigConnectionsCache: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: notificationsFix,
-  },
-  credsCache: {
-    creds: [],
+  profilesCache: {
+    ...profileCacheFixData,
+    profiles: {
+      ...profileCacheFixData.profiles,
+      EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfB: {
+        identity: {
+          id: "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfB",
+          displayName: (
+            connectionsForNotificationsValues.find(
+              (c) => c.id === "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfB"
+            ) || { label: "" }
+          ).label,
+          createdAtUTC: "2000-01-01T00:00:00.000Z",
+        },
+        connections: [
+          connectionsForNotificationsValues.find(
+            (c) => c.id === "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfB"
+          ) || {},
+        ],
+        multisigConnections: [],
+        peerConnections: [],
+        credentials: [],
+        archivedCredentials: [],
+        notifications: [],
+      },
+    },
   },
   biometricsCache: {
     enabled: false,
@@ -126,12 +133,7 @@ const filterTestData = {
       passcodeIsSet: true,
     },
   },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: [notificationsFix[0], notificationsFix[3]],
-  },
+  profilesCache: profileCacheFixData,
   biometricsCache: {
     enabled: false,
   },
@@ -146,36 +148,38 @@ const emptyConnection = {
       passcodeIsSet: true,
     },
   },
-  connectionsCache: {
-    connections: {},
-  },
-  notificationsCache: {
-    notifications: [
-      notificationsFix[0],
-      notificationsFix[3],
-      notificationsFix[4],
-    ],
-  },
+  profilesCache: profileCacheFixData,
   biometricsCache: {
     enabled: false,
   },
 };
 
 describe("Notifications Tab", () => {
+  const storeMocked = {
+    ...makeTestStore(initialState),
+    dispatch: dispatchMock,
+  };
+
+  const filterStore = {
+    ...makeTestStore(filterTestData),
+    dispatch: dispatchMock,
+  };
+
   afterEach(() => {
     cleanup();
   });
 
   test("Renders empty Notifications Tab", () => {
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
-    };
+    const history = createMemoryHistory();
+    history.push(TabsRoutePath.CREDENTIALS);
     const { getByTestId, getByText, queryByTestId } = render(
       <Provider store={storeMocked}>
-        <MemoryRouter initialEntries={[TabsRoutePath.NOTIFICATIONS]}>
+        <IonReactMemoryRouter
+          history={history}
+          initialEntries={[TabsRoutePath.NOTIFICATIONS]}
+        >
           <Notifications />
-        </MemoryRouter>
+        </IonReactMemoryRouter>
       </Provider>
     );
 
@@ -187,7 +191,7 @@ describe("Notifications Tab", () => {
       getByText(EN_TRANSLATIONS.tabs.notifications.tab.chips.all)
     ).toBeInTheDocument();
     expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.tab.chips.identifiers)
+      getByText(EN_TRANSLATIONS.tabs.notifications.tab.chips.connections)
     ).toBeInTheDocument();
     expect(
       getByText(EN_TRANSLATIONS.tabs.notifications.tab.chips.credentials)
@@ -196,13 +200,38 @@ describe("Notifications Tab", () => {
     expect(queryByTestId("notifications-tab-section-earlier")).toBeNull();
   });
 
-  test("Filter", async () => {
+  test("Open profile", async () => {
     const storeMocked = {
-      ...mockStore(filterTestData),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
-    const { getByTestId, queryByTestId } = render(
+    const history = createMemoryHistory();
+    history.push(TabsRoutePath.CREDENTIALS);
+    const { getByTestId, getByText } = render(
       <Provider store={storeMocked}>
+        <IonReactMemoryRouter
+          history={history}
+          initialEntries={[TabsRoutePath.NOTIFICATIONS]}
+        >
+          <Notifications />
+        </IonReactMemoryRouter>
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(getByTestId("avatar-button")).toBeVisible();
+    });
+
+    fireEvent.click(getByTestId("avatar-button"));
+
+    await waitFor(() => {
+      expect(getByText(EN_TRANSLATIONS.profiles.title)).toBeVisible();
+    });
+  });
+
+  test("Filter", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <Provider store={filterStore}>
         <MemoryRouter initialEntries={[TabsRoutePath.NOTIFICATIONS]}>
           <Notifications />
         </MemoryRouter>
@@ -250,17 +279,12 @@ describe("Notifications Tab", () => {
   });
 
   test("Item should mark as readed when click", async () => {
-    const storeMocked = {
-      ...mockStore(filterTestData),
-      dispatch: dispatchMock,
-    };
-
     const history = createMemoryHistory();
     history.push(TabsRoutePath.NOTIFICATIONS);
 
-    const { getByTestId, getByText, queryByText } = render(
+    const { getByTestId, getByText } = render(
       <IonReactMemoryRouter history={history}>
-        <Provider store={storeMocked}>
+        <Provider store={filterStore}>
           <Notifications />
         </Provider>
       </IonReactMemoryRouter>
@@ -291,17 +315,12 @@ describe("Notifications Tab", () => {
   });
 
   test("Cannot open notification from unknown issuer", async () => {
-    const storeMocked = {
-      ...mockStore(filterTestData),
-      dispatch: dispatchMock,
-    };
-
     const history = createMemoryHistory();
     history.push(TabsRoutePath.NOTIFICATIONS);
 
-    const { getByTestId, getByText, findByText } = render(
+    const { getByTestId, findByTestId, findAllByTestId } = render(
       <IonReactMemoryRouter history={history}>
-        <Provider store={storeMocked}>
+        <Provider store={filterStore}>
           <Notifications />
         </Provider>
       </IonReactMemoryRouter>
@@ -319,15 +338,17 @@ describe("Notifications Tab", () => {
       );
     });
 
-    const unknownIssuerText = await findByText(
+    const alerts = await findAllByTestId("alert-unknown-issuer");
+    expect(alerts[0]).toBeInTheDocument();
+    expect(alerts[0]).toHaveAttribute(
+      "header",
       EN_TRANSLATIONS.tabs.notifications.tab.unknownissuer.text
     );
-    expect(unknownIssuerText).toBeInTheDocument();
   });
 
   test("Cannot open notification from unknown presentation connection", async () => {
     const storeMocked = {
-      ...mockStore(emptyConnection),
+      ...makeTestStore(emptyConnection),
       dispatch: dispatchMock,
     };
 
@@ -363,7 +384,7 @@ describe("Notifications Tab", () => {
 
   test("Renders Notifications in Notifications Tab", async () => {
     const storeMocked = {
-      ...mockStore(fullState),
+      ...makeTestStore(fullState),
       dispatch: dispatchMock,
     };
     const { getByTestId, getByText, getAllByText } = render(
@@ -393,7 +414,7 @@ describe("Notifications Tab", () => {
 
   test("Open revoked credential detail", async () => {
     const storeMocked = {
-      ...mockStore(fullState),
+      ...makeTestStore(fullState),
       dispatch: dispatchMock,
     };
 
@@ -435,18 +456,39 @@ describe("Notifications Tab", () => {
       groupReplied: false,
       groupInitiator: false,
       groupInitiatorPre: "",
+      receivingPre: "EMrT7qX0FIMenQoe5pJLahxz_rheks1uIviGW8ch8pfA",
     };
 
     const mockOnClick = jest.fn();
-    const mockOptionClick = jest.fn();
     const customConnectionName = "Test Connection";
 
     const { getByTestId } = render(
       <Provider
-        store={mockStore({
-          connectionsCache: {
-            connections: {
-              "connection-test-id": { label: customConnectionName },
+        store={makeTestStore({
+          profilesCache: {
+            ...profileCacheFixData,
+            defaultProfile: "connection-test-profile",
+            profiles: {
+              ...profileCacheFixData.profiles,
+              "connection-test-profile": {
+                identity: {
+                  id: "connection-test-profile",
+                  displayName: customConnectionName,
+                  createdAtUTC: "2000-01-01T00:00:00.000Z",
+                },
+                connections: [
+                  {
+                    id: "connection-test-id",
+                    label: customConnectionName,
+                    contactId: "connection-test-id",
+                  },
+                ],
+                multisigConnections: [],
+                peerConnections: [],
+                credentials: [],
+                archivedCredentials: [],
+                notifications: [],
+              },
             },
           },
         })}
@@ -454,7 +496,6 @@ describe("Notifications Tab", () => {
         <NotificationItem
           item={item}
           onClick={mockOnClick}
-          onOptionButtonClick={mockOptionClick}
           data-testid="notification-item-test"
         />
       </Provider>

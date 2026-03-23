@@ -1,28 +1,32 @@
 import {
   Algos,
+  b,
+  Cigar,
   CreateIdentifierBody,
   d,
   HabState,
   messagize,
-  Serder,
-  Siger,
-  State,
-  b,
-  Cigar,
-  Signer,
   reply,
+  Serder,
   Serials,
+  Siger,
+  Signer,
+  State,
 } from "signify-ts";
+import { LATEST_IDENTIFIER_VERSION } from "../../storage/sqliteStorage/cloudMigrations";
+import { StorageMessage } from "../../storage/storage.types";
+import type {
+  AuthorizationRequestExn,
+  ConnectionShortDetails,
+  MultisigConnectionDetails,
+} from "../agent.types";
 import {
   AgentServicesProps,
-  MiscRecordId,
   CreationStatus,
+  MiscRecordId,
+  SIGNIFY_CLIENT_MANAGER_NOT_INITIALIZED,
 } from "../agent.types";
-import { NotificationRoute } from "./keriaNotificationService.types";
-import type {
-  ConnectionShortDetails,
-  AuthorizationRequestExn,
-} from "../agent.types";
+import { EventTypes, GroupCreatedEvent } from "../event.types";
 import {
   BasicRecord,
   BasicStorage,
@@ -30,21 +34,27 @@ import {
   NotificationStorage,
   OperationPendingStorage,
 } from "../records";
+import { OperationPendingRecordType } from "../records/operationPendingRecord.type";
 import { AgentService } from "./agentService";
+import { ConnectionService } from "./connectionService";
+import { RpyRoute } from "./connectionService.types";
+import type { MultisigThresholds } from "./identifier.types";
 import {
   GroupParticipants,
+  isGroupInceptionData,
   MultiSigIcpRequestDetails,
   QueuedGroupCreation,
   QueuedGroupProps,
 } from "./identifier.types";
-import { MultiSigRoute, InceptMultiSigExnMessage } from "./multiSig.types";
-import { deleteNotificationRecordById, OnlineOnly } from "./utils";
-import { OperationPendingRecordType } from "../records/operationPendingRecord.type";
-import { EventTypes, GroupCreatedEvent } from "../event.types";
-import { ConnectionService } from "./connectionService";
 import { IdentifierService } from "./identifierService";
-import { StorageMessage } from "../../storage/storage.types";
-import { RpyRoute } from "./connectionService.types";
+import { NotificationRoute } from "./keriaNotificationService.types";
+import {
+  GroupInformation,
+  InceptMultiSigExnMessage,
+  MultiSigRoute,
+} from "./multiSig.types";
+import { deleteNotificationRecordById, OnlineOnly } from "./utils";
+
 class MultiSigService extends AgentService {
   static readonly INVALID_THRESHOLD = "Invalid threshold";
   static readonly CANNOT_GET_KEYSTATE_OF_IDENTIFIER =
@@ -68,6 +78,9 @@ class MultiSigService extends AgentService {
     "We do not control any member AID of the multi-sig";
   static readonly QUEUED_GROUP_DATA_MISSING =
     "Cannot retry creating group identifier if retry data is missing from the DB";
+  static readonly GROUP_DATA_MISSING_FOR_INITIATOR =
+    "Group data missing for initiator";
+  static readonly CANNOT_FIND_EXCHANGES = "Cannot find exchanges";
 
   protected readonly identifierStorage: IdentifierStorage;
   protected readonly operationPendingStorage: OperationPendingStorage;
@@ -101,12 +114,25 @@ class MultiSigService extends AgentService {
   @OnlineOnly
   async createGroup(
     memberPrefix: string,
-    groupConnections: ConnectionShortDetails[],
-    threshold: number,
+    groupConnections: MultisigConnectionDetails[],
+    threshold: number | MultisigThresholds,
     backgroundTask = false
-  ): Promise<void> {
-    if (threshold < 1 || threshold > groupConnections.length + 1) {
-      throw new Error(MultiSigService.INVALID_THRESHOLD);
+  ): Promise<string> {
+    const participantsCount = groupConnections.length + 1;
+
+    if (typeof threshold === "number") {
+      if (threshold < 1 || threshold > participantsCount) {
+        throw new Error(MultiSigService.INVALID_THRESHOLD);
+      }
+    } else {
+      if (
+        threshold.signingThreshold < 1 ||
+        threshold.signingThreshold > participantsCount ||
+        threshold.rotationThreshold < 1 ||
+        threshold.rotationThreshold > participantsCount
+      ) {
+        throw new Error(MultiSigService.INVALID_THRESHOLD);
+      }
     }
 
     const mHabRecord = await this.identifierStorage.getIdentifierMetadata(
@@ -138,21 +164,21 @@ class MultiSigService extends AgentService {
       )
     );
     const states = [mHab["state"], ...connectionStates];
-    const groupName = `${mHabRecord.theme}:${mHabRecord.displayName}`;
 
+    const groupName = `${LATEST_IDENTIFIER_VERSION}:${mHabRecord.theme}:${mHabRecord.displayName}`;
     const inceptionData = backgroundTask
       ? await this.getInceptionData(groupName)
       : await this.generateAndStoreInceptionData(
-        mHab,
-        states,
-        groupName,
-        threshold,
-        {
-          initiator: true,
-          groupConnections,
+          mHab,
+          states,
+          groupName,
           threshold,
-        }
-      );
+          {
+            initiator: true,
+            groupConnections,
+            threshold,
+          }
+        );
     await this.inceptGroup(mHab, states, inceptionData);
 
     // Share witness OOBIs with other group members
@@ -172,6 +198,7 @@ class MultiSigService extends AgentService {
         theme: mHabRecord.theme,
         creationStatus,
         groupMemberPre: memberPrefix,
+        groupUsername: mHabRecord.groupMetadata.proposedUsername,
         createdAt: new Date(multisigDetail.icp_dt),
       });
     } catch (error) {
@@ -202,6 +229,7 @@ class MultiSigService extends AgentService {
           creationStatus,
           groupMemberPre: memberPrefix,
           createdAtUTC: multisigDetail.icp_dt,
+          groupUsername: mHabRecord.groupMetadata.proposedUsername,
         },
       },
     });
@@ -222,6 +250,8 @@ class MultiSigService extends AgentService {
       queued.splice(index, 1);
     }
     await this.basicStorage.update(pendingGroupsRecord);
+
+    return multisigId;
   }
 
   private async getInceptionData(
@@ -244,7 +274,7 @@ class MultiSigService extends AgentService {
     mHab: HabState,
     states: State[],
     groupName: string,
-    threshold: number,
+    threshold: number | MultisigThresholds,
     queuedProps: QueuedGroupProps,
     toad?: string,
     wits?: string[]
@@ -261,20 +291,46 @@ class MultiSigService extends AgentService {
       queued = currentQueue;
     }
 
+    // Handle both number and threshold object formats
+    const signingThreshold =
+      typeof threshold === "number" ? threshold : threshold.signingThreshold;
+    const rotationThreshold =
+      typeof threshold === "number" ? threshold : threshold.rotationThreshold;
+
     const inceptionData = await this.props.signifyClient
       .identifiers()
       .createInceptionData(groupName, {
         algo: Algos.group,
         mhab: mHab,
-        isith: threshold,
-        nsith: threshold,
+        isith: signingThreshold,
+        nsith: rotationThreshold,
         toad: Number(toad ?? mHab.state.bt),
         wits: wits ?? mHab.state.b,
         states: states,
         rstates: states,
       });
 
-    queued.push({ name: groupName, data: inceptionData, ...queuedProps });
+    if (!isGroupInceptionData(inceptionData)) {
+      throw new Error(MultiSigService.GROUP_DATA_MISSING_FOR_INITIATOR);
+    }
+
+    if (queuedProps.initiator) {
+      queued.push({
+        initiator: true,
+        name: groupName,
+        data: inceptionData,
+        groupConnections: queuedProps.groupConnections,
+        threshold: queuedProps.threshold,
+      });
+    } else {
+      queued.push({
+        initiator: false,
+        name: groupName,
+        data: inceptionData,
+        notificationId: queuedProps.notificationId,
+        notificationSaid: queuedProps.notificationSaid,
+      });
+    }
 
     await this.basicStorage.createOrUpdateBasicRecord(
       new BasicRecord({
@@ -337,8 +393,12 @@ class MultiSigService extends AgentService {
     mHab: HabState,
     groupConnections: ConnectionShortDetails[]
   ): Promise<void> {
+    if (!this.props.signifyClient.manager) {
+      throw new Error(SIGNIFY_CLIENT_MANAGER_NOT_INITIALIZED);
+    }
+
     const { witnesses } = await this.identifiers.getAvailableWitnesses();
-    const keeper = this.props.signifyClient.manager!.get(mHab);
+    const keeper = this.props.signifyClient.manager.get(mHab);
 
     for (const witness of witnesses) {
       const rpyData = {
@@ -366,6 +426,60 @@ class MultiSigService extends AgentService {
         await this.props.signifyClient.replies().submitRpy(connection.id, ims);
       }
     }
+  }
+
+  private async shareMemberOobiToGroup(
+    mHab: HabState,
+    recipientIds: string[]
+  ): Promise<void> {
+    const oobi = await this.connections.getOobi(mHab.prefix);
+
+    const signer = new Signer({ transferable: false });
+
+    const rpyData = {
+      cid: signer.verfer.qb64,
+      oobi,
+    };
+
+    const rpy = reply(
+      RpyRoute.INTRODUCE,
+      rpyData,
+      undefined,
+      undefined,
+      Serials.JSON
+    );
+
+    const sig = signer.sign(new Uint8Array(b(rpy.raw)));
+    const ims = d(
+      messagize(rpy, undefined, undefined, undefined, [sig as Cigar])
+    );
+
+    for (const recipientId of recipientIds) {
+      await this.props.signifyClient.replies().submitRpy(recipientId, ims);
+    }
+  }
+
+  @OnlineOnly
+  async getGroupSizeFromIcpExn(notificationSaid: string): Promise<number> {
+    const icpMsg: InceptMultiSigExnMessage[] = await this.props.signifyClient
+      .groups()
+      .getRequest(notificationSaid)
+      .catch((error) => {
+        const status = error.message.split(" - ")[1];
+        if (/404/gi.test(status)) {
+          return [];
+        } else {
+          throw error;
+        }
+      });
+
+    if (!icpMsg.length) {
+      throw new Error(
+        `${MultiSigService.EXN_MESSAGE_NOT_FOUND} ${notificationSaid}`
+      );
+    }
+
+    return icpMsg[0].exn.a.smids.length;
   }
 
   @OnlineOnly
@@ -407,9 +521,16 @@ class MultiSigService extends AgentService {
       throw new Error(MultiSigService.MEMBER_AID_NOT_FOUND);
     }
 
+    senderContact.groupId = icpMsg[0].exn.a.gid;
+
     const linkedConnections = await this.connections.getMultisigLinkedContacts(
       ourIdentifier.groupMetadata.groupId
     );
+
+    const exchanges = await this.props.signifyClient.exchanges().list({
+      filter: { "-r": MultiSigRoute.ICP, "-a-gid": icpMsg[0].exn.a.gid },
+    });
+
     const otherConnections = [];
     for (const prefix of smids) {
       if (prefix === senderPrefix || prefix === ourIdentifier.id) continue;
@@ -417,18 +538,28 @@ class MultiSigService extends AgentService {
       const linkedConnection = linkedConnections.find(
         (connection) => connection.id === prefix
       );
+
       if (!linkedConnection) {
         throw new Error(MultiSigService.UNKNOWN_AIDS_IN_MULTISIG_ICP);
       }
 
-      otherConnections.push(linkedConnection);
+      const hasAccepted = exchanges.some(
+        (exn: { exn: { i: string } }) => exn.exn.i === prefix
+      );
+
+      otherConnections.push({
+        ...linkedConnection,
+        hasAccepted,
+        groupId: ourIdentifier.groupMetadata.groupId,
+      });
     }
 
     return {
       ourIdentifier,
       sender: senderContact,
       otherConnections,
-      threshold: parseInt(icpMsg[0].exn.e.icp.kt as string),
+      signingThreshold: parseInt(icpMsg[0].exn.e.icp.kt as string),
+      rotationThreshold: parseInt(icpMsg[0].exn.e.icp.nt as string),
     };
   }
 
@@ -451,6 +582,7 @@ class MultiSigService extends AgentService {
           throw error;
         }
       });
+
     const exn = icpMsg[0].exn;
 
     const identifiers = await this.identifiers.getIdentifiers(false);
@@ -469,7 +601,8 @@ class MultiSigService extends AgentService {
     const mHab = await this.props.signifyClient
       .identifiers()
       .get(mHabRecord.id);
-    const groupName = `${mHabRecord.theme}:${mHabRecord.displayName}`;
+
+    const groupName = `${LATEST_IDENTIFIER_VERSION}:${mHabRecord.theme}:${mHabRecord.displayName}`;
 
     // @TODO - foconnor: We should error here if smids no longer matches once we have multi-sig rotation.
     const states = await Promise.all(
@@ -484,18 +617,28 @@ class MultiSigService extends AgentService {
     const inceptionData = backgroundTask
       ? await this.getInceptionData(groupName)
       : await this.generateAndStoreInceptionData(
-        mHab,
-        states,
-        groupName,
-        Number(exn.e.icp.kt),
-        {
-          initiator: false,
-          notificationId,
-          notificationSaid,
-        },
-        exn.e.icp.bt,
-        exn.e.icp.b
-      );
+          mHab,
+          states,
+          groupName,
+          {
+            rotationThreshold: Number(exn.e.icp.nt),
+            signingThreshold: Number(exn.e.icp.kt),
+          },
+          {
+            initiator: false,
+            notificationId,
+            notificationSaid,
+          },
+          exn.e.icp.bt,
+          exn.e.icp.b
+        );
+
+    const otherMembers = exn.a.smids.filter((id: string) => id !== mHab.prefix);
+
+    // Joiners must share their OOBI to other members before inception
+    // This ensures other members can parse the inception message even if OOBIs are scanned late
+    await this.shareMemberOobiToGroup(mHab, otherMembers);
+
     await this.inceptGroup(mHab, states, inceptionData);
 
     const multisigId = inceptionData.icp.i;
@@ -511,6 +654,7 @@ class MultiSigService extends AgentService {
         theme: mHabRecord.theme,
         creationStatus,
         groupMemberPre: mHabRecord.id,
+        groupUsername: mHabRecord.groupMetadata.proposedUsername,
         createdAt: new Date(multisigDetail.icp_dt),
       });
     } catch (error) {
@@ -536,11 +680,12 @@ class MultiSigService extends AgentService {
       payload: {
         group: {
           id: multisigId,
-          displayName: mHabRecord.displayName,
           theme: mHabRecord.theme,
+          displayName: mHabRecord.displayName,
           creationStatus,
           groupMemberPre: mHabRecord.id,
           createdAtUTC: multisigDetail.icp_dt,
+          groupUsername: mHabRecord.groupMetadata.proposedUsername,
         },
       },
     });
@@ -555,7 +700,8 @@ class MultiSigService extends AgentService {
         this.props.signifyClient,
         this.notificationStorage,
         notificationId,
-        NotificationRoute.MultiSigIcp
+        NotificationRoute.MultiSigIcp,
+        this.operationPendingStorage
       );
     } catch (error) {
       if (
@@ -589,10 +735,9 @@ class MultiSigService extends AgentService {
     const members = await this.props.signifyClient
       .identifiers()
       .members(multisigId);
-    const multisigMembers = members.signing;
 
     let ourIdentifier;
-    for (const member of multisigMembers) {
+    for (const member of members.signing) {
       const identifier = await this.identifierStorage
         .getIdentifierMetadata(member.aid)
         .catch((error) => {
@@ -618,7 +763,10 @@ class MultiSigService extends AgentService {
 
     return {
       ourIdentifier,
-      multisigMembers,
+      multisigMembers: {
+        signing: members.signing,
+        rotation: members.rotation || [],
+      },
     };
   }
 
@@ -631,11 +779,11 @@ class MultiSigService extends AgentService {
       .identifiers()
       .get(ourIdentifier.id as string);
 
-    const recp = multisigMembers
-      .filter((signing: any) => signing.aid !== ourIdentifier.id)
-      .map((member: any) => member.aid);
+    const recp = multisigMembers.signing
+      .filter((signing) => signing.aid !== ourIdentifier.id)
+      .map((member) => member.aid);
 
-    for (const member of multisigMembers) {
+    for (const member of multisigMembers.signing) {
       const eid = Object.keys(member.ends.agent)[0]; //agent of member
       const endRoleRes = await this.props.signifyClient
         .identifiers()
@@ -705,9 +853,9 @@ class MultiSigService extends AgentService {
 
     const { ourIdentifier, multisigMembers } =
       await this.getMultisigParticipants(multisigId);
-    const recp = multisigMembers
-      .filter((signing: any) => signing.aid !== ourIdentifier.id)
-      .map((member: any) => member.aid);
+    const recp = multisigMembers.signing
+      .filter((signing) => signing.aid !== ourIdentifier.id)
+      .map((member) => member.aid);
     const mHab = await this.props.signifyClient
       .identifiers()
       .get(ourIdentifier.id as string);
@@ -734,10 +882,11 @@ class MultiSigService extends AgentService {
     for (const queued of pendingGroupsRecord.content
       .queued as QueuedGroupCreation[]) {
       if (queued.initiator) {
+        const threshold = queued.threshold;
         await this.createGroup(
-          queued.data.group!.mhab.prefix,
+          queued.data.group.mhab.prefix,
           queued.groupConnections,
-          queued.threshold,
+          threshold,
           true
         );
       } else {
@@ -748,6 +897,40 @@ class MultiSigService extends AgentService {
         );
       }
     }
+  }
+
+  @OnlineOnly
+  async getInceptionStatus(multisigId: string): Promise<GroupInformation> {
+    const members = await this.props.signifyClient
+      .identifiers()
+      .members(multisigId);
+
+    const exchanges = await this.props.signifyClient.exchanges().list({
+      filter: { "-r": MultiSigRoute.ICP, "-a-gid": multisigId },
+    });
+
+    if (exchanges.length === 0) {
+      throw new Error(MultiSigService.CANNOT_FIND_EXCHANGES);
+    }
+
+    const memberInfos = members.signing.map((member: { aid: string }) => {
+      const hasAccepted = exchanges.some(
+        (exn: { exn: { i: string } }) => exn.exn.i === member.aid
+      );
+
+      return {
+        aid: member.aid,
+        hasAccepted,
+      };
+    });
+
+    return {
+      threshold: {
+        signingThreshold: Number(exchanges[0].exn.e.icp.kt),
+        rotationThreshold: Number(exchanges[0].exn.e.icp.nt),
+      },
+      members: memberInfos,
+    };
   }
 }
 

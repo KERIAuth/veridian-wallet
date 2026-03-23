@@ -5,6 +5,7 @@ import {
   ConnectionStatus,
   MiscRecordId,
   CreationStatus,
+  exnHasAcdc,
 } from "../agent.types";
 import {
   KeriaNotificationMarker,
@@ -17,7 +18,8 @@ import { CredentialStatus } from "./credentialService.types";
 import {
   BasicRecord,
   BasicStorage,
-  ConnectionStorage,
+  ConnectionPairStorage,
+  ContactStorage,
   CredentialStorage,
   IdentifierStorage,
   NotificationRecordStorageProps,
@@ -33,21 +35,43 @@ import {
   EventTypes,
   OperationCompleteEvent,
   OperationAddedEvent,
+  OperationRemovedEvent,
   NotificationRemovedEvent,
   ConnectionStateChangedEvent,
+  ConnectionInvalidEvent,
   OperationFailedEvent,
 } from "../event.types";
 import {
   deleteNotificationRecordById,
   isNetworkError,
+  OnlineOnly,
   randomSalt,
 } from "./utils";
 import { CredentialService } from "./credentialService";
-import { ConnectionHistoryType, ExnMessage } from "./connectionService.types";
+import {
+  ConnectionHistoryType,
+  ExnMessage,
+  KeriaContactKeyElement,
+} from "./connectionService.types";
 import { NotificationAttempts } from "../records/notificationRecord.types";
 import { StorageMessage } from "../../storage/storage.types";
-import { IdentifierService } from "./identifierService";
+import { DELETED_IDENTIFIER_THEME, parseHabName } from "../../utils/habName";
+
+// Type guard for exchange data with route information
+function isExnWithRoute(
+  exn: unknown
+): exn is { r: string; p: string; [key: string]: unknown } {
+  return (
+    typeof exn === "object" &&
+    exn !== null &&
+    "r" in exn &&
+    "p" in exn &&
+    typeof (exn as { r: unknown }).r === "string" &&
+    typeof (exn as { p: unknown }).p === "string"
+  );
+}
 import { ConnectionService } from "./connectionService";
+import { LATEST_CONTACT_VERSION } from "../../storage/sqliteStorage/cloudMigrations";
 
 class KeriaNotificationService extends AgentService {
   static readonly NOTIFICATION_NOT_FOUND = "Notification record not found";
@@ -55,8 +79,6 @@ class KeriaNotificationService extends AgentService {
     "Out of order notification received, unable to process right now";
   static readonly DUPLICATE_ISSUANCE =
     "Duplicate IPEX grant message for same credential, may be out-of-order TEL updates for revocation";
-  static readonly SINGLETON_ROUTE_REQUIRED = "singleton";
-  static readonly SINGLETON_PRE = "singleton_pre"; // Dummy prefix to re-use within singleton notifications where unused (better than setting to optional, as weakens rest of code)
 
   static readonly POLL_KERIA_INTERVAL = 2000;
   static readonly CHECK_READINESS_INTERNAL = 25;
@@ -65,7 +87,8 @@ class KeriaNotificationService extends AgentService {
   protected readonly notificationStorage!: NotificationStorage;
   protected readonly identifierStorage: IdentifierStorage;
   protected readonly operationPendingStorage: OperationPendingStorage;
-  protected readonly connectionStorage: ConnectionStorage;
+  protected readonly contactStorage: ContactStorage;
+  protected readonly connectionPairStorage: ConnectionPairStorage;
   protected readonly credentialStorage: CredentialStorage;
   protected readonly basicStorage: BasicStorage;
   protected readonly multiSigs: MultiSigService;
@@ -84,7 +107,8 @@ class KeriaNotificationService extends AgentService {
     notificationStorage: NotificationStorage,
     identifierStorage: IdentifierStorage,
     operationPendingStorage: OperationPendingStorage,
-    connectionStorage: ConnectionStorage,
+    contactStorage: ContactStorage,
+    connectionPairStorage: ConnectionPairStorage,
     credentialStorage: CredentialStorage,
     basicStorage: BasicStorage,
     multiSigs: MultiSigService,
@@ -99,7 +123,8 @@ class KeriaNotificationService extends AgentService {
     this.notificationStorage = notificationStorage;
     this.identifierStorage = identifierStorage;
     this.operationPendingStorage = operationPendingStorage;
-    this.connectionStorage = connectionStorage;
+    this.connectionPairStorage = connectionPairStorage;
+    this.contactStorage = contactStorage;
     this.credentialStorage = credentialStorage;
     this.basicStorage = basicStorage;
     this.multiSigs = multiSigs;
@@ -115,6 +140,17 @@ class KeriaNotificationService extends AgentService {
         this.pendingOperations.push(event.payload.operation);
       }
     );
+    this.props.eventEmitter.on<OperationRemovedEvent>(
+      EventTypes.OperationRemoved,
+      (event) => {
+        const index = this.pendingOperations.findIndex(
+          (op) => op.id === event.payload.operationId
+        );
+        if (index !== -1) {
+          this.pendingOperations.splice(index, 1);
+        }
+      }
+    );
   }
 
   async pollNotifications(): Promise<void> {
@@ -124,7 +160,7 @@ class KeriaNotificationService extends AgentService {
       /* eslint-disable no-console */
       console.error("Error at pollNotifications", error);
       setTimeout(
-        this.pollNotifications,
+        () => this.pollNotifications(),
         KeriaNotificationService.POLL_KERIA_INTERVAL
       );
     }
@@ -278,6 +314,7 @@ class KeriaNotificationService extends AgentService {
     this.loggedIn = false;
   }
 
+  @OnlineOnly
   async deleteNotificationRecordById(
     id: string,
     route: NotificationRoute
@@ -286,7 +323,8 @@ class KeriaNotificationService extends AgentService {
       this.props.signifyClient,
       this.notificationStorage,
       id,
-      route
+      route,
+      this.operationPendingStorage
     );
   }
 
@@ -299,8 +337,13 @@ class KeriaNotificationService extends AgentService {
     }
 
     const exn = await this.props.signifyClient.exchanges().get(notif.a.d);
+    if (await this.outboundExchange(exn)) {
+      await this.markNotification(notif.i);
+      return;
+    }
+
     const deletedCheckResult = await this.identifierDeleted(notif, exn);
-    if ((await this.outboundExchange(exn)) || deletedCheckResult.deleted) {
+    if (deletedCheckResult.deleted) {
       await this.markNotification(notif.i);
       return;
     }
@@ -459,7 +502,8 @@ class KeriaNotificationService extends AgentService {
       for (const smid of exn.exn.a.smids) {
         try {
           const hab = await this.props.signifyClient.identifiers().get(smid);
-          return hab.name.startsWith(IdentifierService.DELETED_IDENTIFIER_THEME)
+          const habParts = parseHabName(hab.name);
+          return habParts.theme.startsWith(DELETED_IDENTIFIER_THEME)
             ? { deleted: true }
             : { deleted: false, receivingPre: smid };
         } catch (error) {
@@ -475,12 +519,14 @@ class KeriaNotificationService extends AgentService {
       }
     } else {
       const receivingPre = exn.exn.r.startsWith("/multisig")
-        ? exn.exn.a.gid
-        : exn.exn.rp;
+        ? (exn.exn.a.gid as string)
+        : (exn.exn.rp as string);
+
       const hab = await this.props.signifyClient
         .identifiers()
         .get(receivingPre);
-      return hab.name.startsWith(IdentifierService.DELETED_IDENTIFIER_THEME)
+      const habParts = parseHabName(hab.name);
+      return habParts.theme.startsWith(DELETED_IDENTIFIER_THEME)
         ? { deleted: true }
         : { deleted: false, receivingPre };
     }
@@ -503,6 +549,11 @@ class KeriaNotificationService extends AgentService {
     exchange: ExnMessage
   ): Promise<boolean> {
     // Only consider issuances for now
+    // Type narrowing: IpexGrant route must have e.acdc
+    if (!exnHasAcdc(exchange.exn.e)) {
+      throw new Error(`IpexGrant notification must have e.acdc: ${notif.i}`);
+    }
+
     const ourIdentifier = await this.identifierStorage
       .getIdentifierMetadata(exchange.exn.e.acdc.a.i)
       .catch((error) => {
@@ -521,6 +572,7 @@ class KeriaNotificationService extends AgentService {
 
     const existingCredential =
       await this.credentialStorage.getCredentialMetadata(exchange.exn.e.acdc.d);
+
     const telStatus = (
       await this.props.signifyClient
         .credentials()
@@ -624,6 +676,7 @@ class KeriaNotificationService extends AgentService {
                 read: false,
                 connectionId: exchange.exn.i,
                 groupReplied: false,
+                receivingPre: notificationRecord.receivingPre,
               },
             },
           });
@@ -669,7 +722,8 @@ class KeriaNotificationService extends AgentService {
     // This is safer than checking for the local metadata record in case
     // We have incepted on the cloud but still haven't created the metadata record locally
     const gHab = await this.props.signifyClient.identifiers().get(multisigId);
-    if (gHab.name.startsWith(IdentifierService.DELETED_IDENTIFIER_THEME)) {
+    const gHabParts = parseHabName(gHab.name);
+    if (gHabParts.theme.startsWith(DELETED_IDENTIFIER_THEME)) {
       await this.markNotification(notif.i);
       return false;
     }
@@ -705,22 +759,31 @@ class KeriaNotificationService extends AgentService {
     notif: Notification,
     exchange: ExnMessage
   ): Promise<false> {
-    switch (exchange.exn.e?.exn?.r) {
+    const exnData = exchange.exn.e?.exn;
+
+    if (!isExnWithRoute(exnData)) {
+      throw new Error(
+        `Invalid exn data structure in processMultiSigExnNotification: ${notif.i}`
+      );
+    }
+
+    switch (exnData.r) {
       case ExchangeRoute.IpexAdmit: {
         const grantNotificationRecords =
           await this.notificationStorage.findAllByQuery({
-            exnSaid: exchange.exn.e.exn.p,
+            exnSaid: exnData.p,
           });
 
         // Either relates to an processed and deleted grant notification, or is out of order
         if (grantNotificationRecords.length === 0) {
           const grantExn = await this.props.signifyClient
             .exchanges()
-            .get(exchange.exn.e.exn.p);
+            .get(exnData.p);
           const connectionInCloud =
             await this.connectionService.getConnectionById(
               grantExn.exn.i,
-              true
+              true,
+              grantExn.exn.rp
             );
           const historyExists = connectionInCloud.historyItems.some(
             (item) => item.id === grantExn.exn.d
@@ -760,6 +823,7 @@ class KeriaNotificationService extends AgentService {
               connectionId: notificationRecord.connectionId,
               read: notificationRecord.read,
               groupReplied: true,
+              receivingPre: notificationRecord.receivingPre,
             },
           },
         });
@@ -769,7 +833,7 @@ class KeriaNotificationService extends AgentService {
       case ExchangeRoute.IpexOffer: {
         const applyExn = await this.props.signifyClient
           .exchanges()
-          .get(exchange.exn.e.exn.p);
+          .get(exnData.p);
 
         const applyNotificationRecords =
           await this.notificationStorage.findAllByQuery({
@@ -781,7 +845,8 @@ class KeriaNotificationService extends AgentService {
           const connectionInCloud =
             await this.connectionService.getConnectionById(
               applyExn.exn.i,
-              true
+              true,
+              applyExn.exn.rp
             );
           const historyExists = connectionInCloud.historyItems.some(
             (item) => item.id === applyExn.exn.d
@@ -807,7 +872,7 @@ class KeriaNotificationService extends AgentService {
           await this.multiSigs.getMultisigParticipants(exchange.exn.a.gid);
 
         notificationRecord.groupReplied = true;
-        notificationRecord.groupInitiatorPre = multisigMembers[0].aid;
+        notificationRecord.groupInitiatorPre = multisigMembers.signing[0].aid;
         notificationRecord.groupInitiator =
           ourIdentifier.groupMetadata?.groupInitiator;
 
@@ -832,6 +897,7 @@ class KeriaNotificationService extends AgentService {
               groupReplied: notificationRecord.groupReplied,
               groupInitiatorPre: notificationRecord.groupInitiatorPre,
               groupInitiator: notificationRecord.groupInitiator,
+              receivingPre: notificationRecord.receivingPre,
             },
           },
         });
@@ -841,7 +907,7 @@ class KeriaNotificationService extends AgentService {
       case ExchangeRoute.IpexGrant: {
         const agreeExn = await this.props.signifyClient
           .exchanges()
-          .get(exchange.exn.e.exn.p);
+          .get(exnData.p);
 
         const agreeNotificationRecords =
           await this.notificationStorage.findAllByQuery({
@@ -853,7 +919,8 @@ class KeriaNotificationService extends AgentService {
           const connectionInCloud =
             await this.connectionService.getConnectionById(
               agreeExn.exn.i,
-              true
+              true,
+              agreeExn.exn.rp
             );
           const historyExists = connectionInCloud.historyItems.some(
             (item) => item.id === agreeExn.exn.d
@@ -921,7 +988,7 @@ class KeriaNotificationService extends AgentService {
   ): Promise<boolean> {
     const payload = exchange.exn.a;
     if (payload.d) {
-      const [saider, _] = Saider.saidify(payload);
+      const [saider] = Saider.saidify(payload);
       if (payload.d === saider.qb64) {
         return true;
       }
@@ -955,50 +1022,7 @@ class KeriaNotificationService extends AgentService {
       connectionId: result.connectionId,
       read: result.read,
       groupReplied: result.linkedRequest.current !== undefined,
-    };
-  }
-
-  async createSingletonNotification(
-    route: NotificationRoute,
-    a = {}
-  ): Promise<KeriaNotification | undefined> {
-    // These notifications are generally only created once, one per local notification route.
-    if (!/^\/local\/singleton/.test(route)) {
-      throw new Error(KeriaNotificationService.SINGLETON_ROUTE_REQUIRED);
-    }
-
-    // Only create once. If deleted by the user, it can be created again, but generally other logic prevents that.
-    if (
-      (
-        await this.notificationStorage.findAllByQuery({
-          route: NotificationRoute.LocalSingletonConnectInstructions,
-        })
-      ).length > 0
-    ) {
-      return;
-    }
-
-    const notification: NotificationRecordStorageProps = {
-      id: randomSalt(),
-      createdAt: new Date(),
-      a: {
-        ...a,
-        r: route,
-      },
-      read: false,
-      route,
-      connectionId: KeriaNotificationService.SINGLETON_PRE,
-      receivingPre: KeriaNotificationService.SINGLETON_PRE,
-    };
-
-    await this.notificationStorage.save(notification);
-    return {
-      id: notification.id,
-      createdAt: notification.createdAt.toISOString(),
-      a: notification.a,
-      connectionId: notification.connectionId,
-      read: notification.read,
-      groupReplied: false,
+      receivingPre: result.receivingPre,
     };
   }
 
@@ -1042,6 +1066,7 @@ class KeriaNotificationService extends AgentService {
         groupReplied: notification.linkedRequest.current !== undefined,
         groupInitiator: notification.groupInitiator,
         groupInitiatorPre: notification.groupInitiatorPre,
+        receivingPre: notification.receivingPre,
       };
     });
   }
@@ -1056,7 +1081,7 @@ class KeriaNotificationService extends AgentService {
     } catch (error) {
       console.error("Error at pollLongOperations", error);
       setTimeout(
-        this.pollLongOperations,
+        () => this.pollLongOperations(),
         KeriaNotificationService.POLL_KERIA_INTERVAL
       );
     }
@@ -1138,14 +1163,22 @@ class KeriaNotificationService extends AgentService {
         case OperationPendingRecordType.Oobi: {
           const oobi = operation.metadata?.oobi?.split("/oobi/")[1];
           const connectionId = oobi.includes("/") ? oobi.split("/")[0] : oobi;
-          const connectionRecord = await this.connectionStorage.findById(
-            connectionId
-          );
+          const connectionPairRecords =
+            await this.connectionPairStorage.findAllByQuery({
+              contactId: connectionId,
+              creationStatus: CreationStatus.PENDING,
+            });
 
-          if (connectionRecord && !connectionRecord.pendingDeletion) {
-            connectionRecord.creationStatus = CreationStatus.FAILED;
-            await this.connectionStorage.update(connectionRecord);
+          for (const connectionPairRecord of connectionPairRecords) {
+            if (
+              connectionPairRecord.identifier &&
+              !connectionPairRecord.pendingDeletion
+            ) {
+              connectionPairRecord.creationStatus = CreationStatus.FAILED;
+              await this.connectionPairStorage.update(connectionPairRecord);
+            }
           }
+
           this.props.eventEmitter.emit<OperationFailedEvent>({
             type: EventTypes.OperationFailed,
             payload: {
@@ -1213,43 +1246,82 @@ class KeriaNotificationService extends AgentService {
           break;
         }
         case OperationPendingRecordType.Oobi: {
-          const connectionRecord = await this.connectionStorage.findById(
-            (operation.response as State).i
-          );
+          if (!(operation.response as State).i) {
+            const contactId =
+              operation.metadata?.oobi?.split("/oobi/")[1] ?? "";
+            const connectionPair =
+              await this.connectionPairStorage.findByContactId(contactId);
 
-          if (connectionRecord && !connectionRecord.pendingDeletion) {
-            if (connectionRecord.sharedIdentifier) {
+            await Promise.all(
+              connectionPair.map(async ({ identifier }) => {
+                await this.connectionService.markConnectionPendingDelete(
+                  contactId,
+                  identifier
+                );
+
+                this.props.eventEmitter.emit<ConnectionInvalidEvent>({
+                  type: EventTypes.ConnectionInvalid,
+                  payload: {
+                    contactId,
+                    identifier,
+                  },
+                });
+              })
+            );
+            break;
+          }
+
+          const connectionPairRecords =
+            await this.connectionPairStorage.findAllByQuery({
+              contactId: (operation.response as State).i,
+              creationStatus: CreationStatus.PENDING,
+            });
+
+          for (const connectionPairRecord of connectionPairRecords) {
+            if (
+              connectionPairRecord.creationStatus === CreationStatus.COMPLETE
+            ) {
+              continue;
+            }
+
+            connectionPairRecord.creationStatus = CreationStatus.COMPLETE;
+
+            const contact = await this.contactStorage.findExpectedById(
+              connectionPairRecord.contactId
+            );
+
+            if (
+              connectionPairRecord.identifier &&
+              !connectionPairRecord.pendingDeletion
+            ) {
               await this.connectionService.shareIdentifier(
-                connectionRecord.id,
-                connectionRecord.sharedIdentifier
+                connectionPairRecord.contactId,
+                connectionPairRecord.identifier
               );
             }
 
-            connectionRecord.creationStatus = CreationStatus.COMPLETE;
+            const pairCreatedAt = new Date();
+            const connectionAlias = connectionPairRecord.alias;
 
-            const keriaContact = await this.props.signifyClient
+            await this.props.signifyClient
               .contacts()
-              .get((operation.response as State).i)
-              .catch(() => undefined);
+              .update((operation.response as State).i, {
+                version: LATEST_CONTACT_VERSION,
+                alias: contact.alias,
+                oobi: contact.oobi,
+                [`${connectionPairRecord.identifier}:createdAt`]: pairCreatedAt,
+                [`${connectionPairRecord.identifier}:${KeriaContactKeyElement.CONNECTION_ALIAS}`]:
+                  connectionAlias,
+              });
 
-            if (!keriaContact) {
-              await this.props.signifyClient
-                .contacts()
-                .update((operation.response as State).i, {
-                  alias: connectionRecord.alias,
-                  createdAt: new Date((operation.response as State).dt),
-                  oobi: connectionRecord.oobi,
-                  sharedIdentifier: connectionRecord.sharedIdentifier ?? "",
-                });
-            }
-
-            await this.connectionStorage.update(connectionRecord);
-
+            connectionPairRecord.createdAt = pairCreatedAt;
+            await this.connectionPairStorage.update(connectionPairRecord);
             this.props.eventEmitter.emit<ConnectionStateChangedEvent>({
               type: EventTypes.ConnectionStateChanged,
               payload: {
-                connectionId: connectionRecord.id,
+                connectionId: connectionPairRecord.contactId,
                 status: ConnectionStatus.CONFIRMED,
+                identifier: connectionPairRecord.identifier,
               },
             });
           }
@@ -1276,7 +1348,8 @@ class KeriaNotificationService extends AgentService {
                 this.props.signifyClient,
                 this.notificationStorage,
                 notification.id,
-                notification.a.r as NotificationRoute
+                notification.a.r as NotificationRoute,
+                this.operationPendingStorage
               );
 
               this.props.eventEmitter.emit<NotificationRemovedEvent>({
@@ -1287,21 +1360,34 @@ class KeriaNotificationService extends AgentService {
               });
             }
 
-            await this.credentialService
-              .markAcdc(credentialId, CredentialStatus.CONFIRMED)
-              .catch((error) => {
-                // In case user deleted pending credential in UI
+            try {
+              await this.credentialService.markAcdc(
+                credentialId,
+                CredentialStatus.CONFIRMED
+              );
+            } catch (error) {
+              if (error instanceof Error) {
                 if (
-                  !(
-                    error instanceof Error &&
-                    error.message.startsWith(
-                      CredentialService.CREDENTIAL_MISSING_METADATA_ERROR_MSG
-                    )
+                  error.message.startsWith(
+                    CredentialService.CREDENTIAL_NOT_READY_ON_KERIA
+                  )
+                ) {
+                  return;
+                }
+
+                // Ignore case where metadata was removed locally (e.g. user deleted pending credential)
+                // and continue processing to clean up notifications/history.
+                if (
+                  !error.message.startsWith(
+                    CredentialService.CREDENTIAL_MISSING_METADATA_ERROR_MSG
                   )
                 ) {
                   throw error;
                 }
-              });
+              } else {
+                throw error;
+              }
+            }
 
             await this.ipexCommunications.createLinkedIpexMessageRecord(
               grantExchange,
@@ -1335,7 +1421,8 @@ class KeriaNotificationService extends AgentService {
                   this.props.signifyClient,
                   this.notificationStorage,
                   notification.id,
-                  notification.a.r as NotificationRoute
+                  notification.a.r as NotificationRoute,
+                  this.operationPendingStorage
                 );
                 continue;
               }
@@ -1350,9 +1437,9 @@ class KeriaNotificationService extends AgentService {
                 );
 
               notification.groupReplied = true;
-              notification.groupInitiatorPre = multisigMembers[0].aid;
+              notification.groupInitiatorPre = multisigMembers.signing[0].aid;
               notification.groupInitiator =
-                ourIdentifier.groupMetadata!.groupInitiator;
+                ourIdentifier.groupMetadata?.groupInitiator;
 
               await this.notificationStorage.update(notification);
 
@@ -1375,6 +1462,7 @@ class KeriaNotificationService extends AgentService {
                     groupReplied: notification.groupReplied,
                     groupInitiatorPre: notification.groupInitiatorPre,
                     groupInitiator: notification.groupInitiator,
+                    receivingPre: notification.receivingPre,
                   },
                 },
               });
@@ -1401,7 +1489,8 @@ class KeriaNotificationService extends AgentService {
                 this.props.signifyClient,
                 this.notificationStorage,
                 notification.id,
-                notification.a.r as NotificationRoute
+                notification.a.r as NotificationRoute,
+                this.operationPendingStorage
               );
             }
 

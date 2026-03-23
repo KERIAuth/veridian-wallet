@@ -2,18 +2,14 @@ const storeSecretMock = jest.fn();
 const verifySecretMock = jest.fn();
 
 import { IonButton, IonIcon, IonInput, IonLabel } from "@ionic/react";
-import { ionFireEvent } from "@ionic/react-test-utils";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { MiscRecordId } from "../../../core/agent/agent.types";
-import { BasicRecord } from "../../../core/agent/records";
-import { KeyStoreKeys } from "../../../core/storage";
+
 import TRANSLATIONS from "../../../locales/en/en.json";
 import { RoutePath } from "../../../routes";
-import { OperationType } from "../../globals/types";
 import { StoreMockedProps } from "../../pages/LockPage/LockPage.test";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { CustomInputProps } from "../CustomInput/CustomInput.types";
 import { PasswordModule } from "./PasswordModule";
 
@@ -25,15 +21,15 @@ const initialState = {
       time: Date.now(),
       passcodeIsSet: true,
       seedPhraseIsSet: false,
+      loginAttempt: {
+        attempts: 0,
+        lockedUntil: Date.now(),
+      },
     },
-    currentOperation: OperationType.IDLE,
   },
   seedPhraseCache: {
     seedPhrase: "",
     bran: "",
-  },
-  cryptoAccountsCache: {
-    cryptoAccounts: [],
   },
   biometricsCache: {
     enabled: false,
@@ -136,11 +132,11 @@ jest.mock("../../components/CustomInput", () => ({
     );
   },
 }));
-const mockStore = configureStore();
+
 const dispatchMock = jest.fn();
 const storeMocked = (initialState: StoreMockedProps) => {
   return {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 };
@@ -158,19 +154,15 @@ describe("Password Module", () => {
           title="Password Module"
           description="Description"
           testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
         />
       </Provider>
     );
 
     expect(getByText("Password Module")).toBeVisible();
     expect(getByText("Description")).toBeVisible();
-
     expect(getByTestId("create-password-input")).toBeVisible();
     expect(getByTestId("confirm-password-input")).toBeVisible();
     expect(getByTestId("create-hint-input")).toBeVisible();
-
-    expect(getByTestId("primary-button-password-module")).toBeVisible();
   });
 
   test("Validate password", async () => {
@@ -180,7 +172,6 @@ describe("Password Module", () => {
           title="Password Module"
           description="Description"
           testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
         />
       </Provider>
     );
@@ -188,8 +179,11 @@ describe("Password Module", () => {
     const input = getByTestId("create-password-input");
 
     act(() => {
-      ionFireEvent.ionInput(input, "pass");
-      ionFireEvent.ionBlur(input);
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "pass" } })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -202,8 +196,12 @@ describe("Password Module", () => {
     });
 
     act(() => {
-      ionFireEvent.ionInput(input, "passsssssss1@");
-      ionFireEvent.ionBlur(input);
+      fireEvent(input, new CustomEvent("ionInput", { detail: { value: "" } }));
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "passsssssss1@" } })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -216,8 +214,11 @@ describe("Password Module", () => {
     });
 
     act(() => {
-      ionFireEvent.ionInput(input, "PASSSSSSSSS1@");
-      ionFireEvent.ionBlur(input);
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "PASSSSSSSSS1@" } })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -227,8 +228,11 @@ describe("Password Module", () => {
     });
 
     act(() => {
-      ionFireEvent.ionInput(input, "Passssssssssssss@");
-      ionFireEvent.ionBlur(input);
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssssssss@" } })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -238,8 +242,11 @@ describe("Password Module", () => {
     });
 
     act(() => {
-      ionFireEvent.ionInput(input, "Passssssssssssss1");
-      ionFireEvent.ionBlur(input);
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssssssss1" } })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -249,8 +256,13 @@ describe("Password Module", () => {
     });
 
     act(() => {
-      ionFireEvent.ionInput(input, "Passssssssssssss@1∞");
-      ionFireEvent.ionBlur(input);
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", {
+          detail: { value: "Passssssssssssss@1∞" },
+        })
+      );
+      fireEvent.blur(input);
     });
 
     await waitFor(() => {
@@ -270,7 +282,6 @@ describe("Password Module", () => {
           title="Password Module"
           description="Description"
           testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
         />
       </Provider>
     );
@@ -279,8 +290,14 @@ describe("Password Module", () => {
     const confirmInput = getByTestId("confirm-password-input");
 
     act(() => {
-      ionFireEvent.ionInput(input, "Passssssssssss1@");
-      ionFireEvent.ionInput(confirmInput, "Passssssssss1@");
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssssss1@" } })
+      );
+      fireEvent(
+        confirmInput,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssss1@" } })
+      );
     });
 
     await waitFor(() => {
@@ -297,7 +314,6 @@ describe("Password Module", () => {
           title="Password Module"
           description="Description"
           testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
         />
       </Provider>
     );
@@ -307,9 +323,20 @@ describe("Password Module", () => {
     const hintInput = getByTestId("create-hint-input");
 
     act(() => {
-      ionFireEvent.ionInput(input, "Passssssssss1@");
-      ionFireEvent.ionInput(confirmInput, "Passssssssss1@");
-      ionFireEvent.ionInput(hintInput, "Password is Passssssssss1@");
+      fireEvent(
+        input,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssss1@" } })
+      );
+      fireEvent(
+        confirmInput,
+        new CustomEvent("ionInput", { detail: { value: "Passssssssss1@" } })
+      );
+      fireEvent(
+        hintInput,
+        new CustomEvent("ionInput", {
+          detail: { value: "Password is Passssssssss1@" },
+        })
+      );
     });
 
     await waitFor(() => {
@@ -317,136 +344,6 @@ describe("Password Module", () => {
         getByText(TRANSLATIONS.createpassword.error.hintSameAsPassword)
       ).toBeVisible();
     });
-  });
-
-  test("Submit existing password", async () => {
-    verifySecretMock.mockResolvedValueOnce(true);
-    const initialState = {
-      stateCache: {
-        routes: [RoutePath.TABS_MENU],
-        authentication: {
-          loggedIn: true,
-          time: Date.now(),
-          passcodeIsSet: true,
-          seedPhraseIsSet: true,
-          passwordIsSet: true,
-        },
-        currentOperation: OperationType.IDLE,
-      },
-      seedPhraseCache: {
-        seedPhrase: "",
-        bran: "",
-      },
-      cryptoAccountsCache: {
-        cryptoAccounts: [],
-      },
-      biometricsCache: {
-        enabled: false,
-      },
-    };
-
-    const { getByTestId, queryByText, getByText } = render(
-      <Provider store={storeMocked(initialState)}>
-        <PasswordModule
-          title="Password Module"
-          description="Description"
-          testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
-        />
-      </Provider>
-    );
-
-    expect(queryByText(TRANSLATIONS.createpassword.button.skip)).toBe(null);
-
-    const input = getByTestId("create-password-input");
-    const confirmInput = getByTestId("confirm-password-input");
-    const hintInput = getByTestId("create-hint-input");
-
-    act(() => {
-      ionFireEvent.ionInput(input, "Passssssss1@");
-      ionFireEvent.ionInput(confirmInput, "Passssssss1@");
-      ionFireEvent.ionInput(hintInput, "hint");
-    });
-
-    expect(
-      queryByText(
-        TRANSLATIONS.tabs.menu.tab.settings.sections.security.managepassword
-          .page.alert.existingpassword
-      )
-    ).toBeNull();
-
-    fireEvent.click(getByTestId("primary-button-password-module"));
-
-    await waitFor(() => {
-      expect(
-        getByText(
-          TRANSLATIONS.tabs.menu.tab.settings.sections.security.managepassword
-            .page.alert.existingpassword
-        )
-      ).toBeVisible();
-    });
-
-    expect(getByTestId("alert-btn-0")).toBeVisible();
-
-    fireEvent.click(getByTestId("alert-btn-0"));
-
-    await waitFor(() => {
-      expect((input as HTMLInputElement).value).toBe("");
-      expect((confirmInput as HTMLInputElement).value).toBe("");
-      expect((hintInput as HTMLInputElement).value).toBe("");
-    });
-  });
-
-  test("Submit password", async () => {
-    const { getByTestId } = render(
-      <Provider store={storeMocked(initialState)}>
-        <PasswordModule
-          title="Password Module"
-          description="Description"
-          testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
-        />
-      </Provider>
-    );
-
-    const input = getByTestId("create-password-input");
-    const confirmInput = getByTestId("confirm-password-input");
-    const hintInput = getByTestId("create-hint-input");
-
-    act(() => {
-      ionFireEvent.ionInput(input, "Passssssssss1@");
-      ionFireEvent.ionInput(confirmInput, "Passssssssss1@");
-      ionFireEvent.ionInput(hintInput, "hint");
-    });
-
-    const submitButton = getByTestId("primary-button-password-module");
-
-    const mockDate = new Date(1466424490000);
-    const spy = jest
-      .spyOn(global, "Date")
-      .mockImplementation((() => mockDate) as never);
-
-    act(() => {
-      ionFireEvent.click(submitButton);
-    });
-
-    await waitFor(() => {
-      expect(storeSecretMock).toBeCalledWith(
-        KeyStoreKeys.APP_OP_PASSWORD,
-        "Passssssssss1@"
-      );
-      expect(createOrUpdateBasicRecordMock).toBeCalledWith(
-        new BasicRecord({
-          id: MiscRecordId.OP_PASS_HINT,
-          content: { value: "hint" },
-        })
-      );
-      expect((input as HTMLInputElement).value).toBe("");
-      expect((confirmInput as HTMLInputElement).value).toBe("");
-      expect((hintInput as HTMLInputElement).value).toBe("");
-    });
-
-    spy.mockRestore();
   });
 
   test("Open symbol modal", async () => {
@@ -459,34 +356,33 @@ describe("Password Module", () => {
           passcodeIsSet: true,
           seedPhraseIsSet: true,
           passwordIsSet: true,
+          loginAttempt: {
+            attempts: 0,
+            lockedUntil: Date.now(),
+          },
         },
-        currentOperation: OperationType.IDLE,
       },
       seedPhraseCache: {
         seedPhrase: "",
         bran: "",
-      },
-      cryptoAccountsCache: {
-        cryptoAccounts: [],
       },
       biometricsCache: {
         enabled: false,
       },
     };
 
-    const { getByTestId, getByText, queryByText } = render(
+    const { getByTestId, getByText } = render(
       <Provider store={storeMocked(initialState)}>
         <PasswordModule
           title="Password Module"
           description="Description"
           testId="password-module"
-          onCreateSuccess={onCreateSuccesMock}
         />
       </Provider>
     );
 
     act(() => {
-      ionFireEvent.click(getByTestId("open-symbol-modal"));
+      fireEvent.click(getByTestId("open-symbol-modal"));
     });
 
     await waitFor(() => {

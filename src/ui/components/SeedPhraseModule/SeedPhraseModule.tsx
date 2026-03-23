@@ -1,6 +1,7 @@
+/* global HTMLIonInputElement */
 import { IonButton, IonChip, IonIcon, IonInput } from "@ionic/react";
 import { eyeOffOutline } from "ionicons/icons";
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { i18n } from "../../../i18n";
 import { combineClassNames } from "../../utils/style";
 import "./SeedPhraseModule.scss";
@@ -9,6 +10,8 @@ import {
   SeedPhraseModuleRef,
 } from "./SeedPhraseModule.types";
 import { useHideKeyboard } from "../../hooks/useHideKeyboard";
+import { useAppDispatch } from "../../../store/hooks";
+import { setShowSeedPhraseScreen } from "../../../store/reducers/stateCache";
 
 const SeedPhraseModule = forwardRef<SeedPhraseModuleRef, SeedPhraseModuleProps>(
   (
@@ -31,15 +34,26 @@ const SeedPhraseModule = forwardRef<SeedPhraseModuleRef, SeedPhraseModuleProps>(
     },
     ref
   ) => {
-    const seedInputs = useRef<(HTMLElement | null)[]>([]);
+    const dispatch = useAppDispatch();
+    const seedInputs = useRef<(HTMLIonInputElement | null)[]>([]);
     const { hideKeyboard } = useHideKeyboard();
+
+    useEffect(() => {
+      dispatch(setShowSeedPhraseScreen(true));
+
+      return () => {
+        dispatch(setShowSeedPhraseScreen(false));
+      };
+    }, [dispatch]);
 
     useImperativeHandle(ref, () => ({
       focusInputByIndex: (index) => {
         const input = seedInputs.current.at(index);
         if (!input) return;
 
-        (input as any).setFocus();
+        (
+          input as HTMLIonInputElement & { setFocus: () => Promise<void> }
+        ).setFocus();
       },
     }));
 
@@ -71,7 +85,6 @@ const SeedPhraseModule = forwardRef<SeedPhraseModuleRef, SeedPhraseModuleProps>(
           </p>
           {showSeedPhraseButton && (
             <IonButton
-              shape="round"
               fill="outline"
               data-testid="reveal-seed-phrase-button"
               onClick={() => setHideSeedPhrase && setHideSeedPhrase(false)}

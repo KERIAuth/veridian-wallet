@@ -1,8 +1,8 @@
 import { RootState } from "../../store";
-import { InitializationPhase } from "../../store/reducers/stateCache/stateCache.types";
-import { OperationType } from "../../ui/globals/types";
-import { CredentialsFilters } from "../../ui/pages/Credentials/Credentials.types";
-import { IdentifiersFilters } from "../../ui/pages/Identifiers/Identifiers.types";
+import {
+  GlobalLoadingType,
+  InitializationPhase,
+} from "../../store/reducers/stateCache/stateCache.types";
 import { DataProps } from "../nextRoute/nextRoute.types";
 import { calcPreviousRoute, getBackRoute, getPreviousRoute } from "./backRoute";
 
@@ -16,8 +16,17 @@ jest.mock("../../store/reducers/seedPhraseCache", () => ({
   clearSeedPhraseCache: jest.fn(),
 }));
 
+type BackRouteStore = Pick<
+  RootState,
+  | "seedPhraseCache"
+  | "stateCache"
+  | "profilesCache"
+  | "viewTypeCache"
+  | "biometricsCache"
+>;
+
 describe("getBackRoute", () => {
-  let storeMock: RootState;
+  let storeMock: BackRouteStore;
 
   beforeEach(() => {
     storeMock = {
@@ -25,14 +34,11 @@ describe("getBackRoute", () => {
         seedPhrase: "",
         bran: "",
       },
-      ssiAgentCache: {
-        bootUrl: "",
-        connectUrl: "",
-      },
       stateCache: {
         isOnline: true,
         initializationPhase: InitializationPhase.PHASE_TWO,
         recoveryCompleteNoInterruption: false,
+        showLoading: GlobalLoadingType.NONE,
         routes: [{ path: "/route1" }, { path: "/route2" }, { path: "/route3" }],
         authentication: {
           passcodeIsSet: true,
@@ -40,7 +46,6 @@ describe("getBackRoute", () => {
           passwordIsSet: false,
           passwordIsSkipped: true,
           loggedIn: false,
-          userName: "",
           time: 0,
           ssiAgentIsSet: false,
           ssiAgentUrl: "",
@@ -51,54 +56,32 @@ describe("getBackRoute", () => {
           },
           firstAppLaunch: false,
         },
-        currentOperation: OperationType.IDLE,
         queueIncomingRequest: {
           isProcessing: false,
           queues: [],
           isPaused: false,
         },
-        showConnections: false,
         toastMsgs: [],
+        pendingJoinGroupMetadata: null,
       },
-      identifiersCache: {
-        identifiers: {},
-        favourites: [],
-        multiSigGroup: {
-          groupId: "",
-          connections: [],
-        },
-        filters: IdentifiersFilters.All,
-      },
-      credsCache: {
-        creds: [],
-        favourites: [],
-        filters: CredentialsFilters.All,
-      },
-      credsArchivedCache: { creds: [] },
-      connectionsCache: {
-        connections: {},
-        multisigConnections: {},
-      },
-      walletConnectionsCache: {
-        walletConnections: [],
-        connectedWallet: null,
-        pendingConnection: null,
+      profilesCache: {
+        profiles: {},
+        recentProfiles: [],
+        multiSigGroup: undefined,
+        connectedDApp: null,
+        pendingDAppConnection: null,
+        isConnectingToDApp: false,
+        showDAppConnect: false,
       },
       viewTypeCache: {
-        identifier: {
-          viewType: null,
-          favouriteIndex: 0,
-        },
         credential: {
           viewType: null,
           favouriteIndex: 0,
+          favourites: [],
         },
       },
       biometricsCache: {
         enabled: false,
-      },
-      notificationsCache: {
-        notifications: [],
       },
     };
   });
@@ -110,7 +93,7 @@ describe("getBackRoute", () => {
   test("should return the correct 'backPath' and 'updateRedux' when currentPath is '/'", () => {
     const currentPath = "/";
     const data: DataProps = {
-      store: storeMock,
+      store: storeMock as unknown as RootState,
     };
 
     const result = getBackRoute(currentPath, data);
@@ -119,34 +102,10 @@ describe("getBackRoute", () => {
     expect(result.updateRedux).toHaveLength(0);
   });
 
-  test("should return the correct back path when currentPath is /generateseedphrase", () => {
-    const currentPath = "/generateseedphrase";
-    const data: DataProps = {
-      store: storeMock,
-    };
-
-    const result = getBackRoute(currentPath, data);
-
-    expect(result.backPath).toEqual({ pathname: "/route2" });
-    expect(result.updateRedux).toHaveLength(3);
-  });
-
-  test("should return the correct back path when currentPath is /verifyseedphrase", () => {
-    const currentPath = "/verifyseedphrase";
-    const data: DataProps = {
-      store: storeMock,
-    };
-
-    const result = getBackRoute(currentPath, data);
-
-    expect(result.backPath).toEqual({ pathname: "/route2" });
-    expect(result.updateRedux).toHaveLength(2);
-  });
-
   test("should return the correct back path when currentPath is /setpasscode", () => {
     const currentPath = "/setpasscode";
     const data: DataProps = {
-      store: storeMock,
+      store: storeMock as unknown as RootState,
     };
 
     const result = getBackRoute(currentPath, data);
@@ -172,16 +131,21 @@ describe("calcPreviousRoute", () => {
 });
 
 describe("getPreviousRoute", () => {
-  let storeMock: RootState;
+  let storeMock: any;
   beforeEach(() => {
     storeMock = {
       seedPhraseCache: {
         seedPhrase: "",
         bran: "",
       },
-      ssiAgentCache: {
-        bootUrl: "",
-        connectUrl: "",
+      profilesCache: {
+        profiles: {},
+        recentProfiles: [],
+        multiSigGroup: undefined,
+        connectedDApp: null,
+        pendingDAppConnection: null,
+        isConnectingToDApp: false,
+        showDAppConnect: false,
       },
       stateCache: {
         isOnline: true,
@@ -194,7 +158,6 @@ describe("getPreviousRoute", () => {
           passwordIsSet: false,
           passwordIsSkipped: true,
           loggedIn: false,
-          userName: "",
           time: 0,
           ssiAgentIsSet: false,
           ssiAgentUrl: "",
@@ -205,54 +168,23 @@ describe("getPreviousRoute", () => {
           },
           firstAppLaunch: false,
         },
-        currentOperation: OperationType.IDLE,
         queueIncomingRequest: {
           isProcessing: false,
           queues: [],
           isPaused: false,
         },
-        showConnections: false,
         toastMsgs: [],
-      },
-      identifiersCache: {
-        identifiers: {},
-        favourites: [],
-        multiSigGroup: {
-          groupId: "",
-          connections: [],
-        },
-        filters: IdentifiersFilters.All,
-      },
-      credsCache: {
-        creds: [],
-        favourites: [],
-        filters: CredentialsFilters.All,
-      },
-      credsArchivedCache: { creds: [] },
-      connectionsCache: {
-        connections: {},
-        multisigConnections: {},
-      },
-      walletConnectionsCache: {
-        walletConnections: [],
-        connectedWallet: null,
-        pendingConnection: null,
+        pendingJoinGroupMetadata: null,
       },
       viewTypeCache: {
-        identifier: {
-          viewType: null,
-          favouriteIndex: 0,
-        },
         credential: {
           viewType: null,
           favouriteIndex: 0,
+          favourites: [],
         },
       },
       biometricsCache: {
         enabled: false,
-      },
-      notificationsCache: {
-        notifications: [],
       },
     };
   });

@@ -1,28 +1,54 @@
-// Before imports to avoid hoisting issues
 const incrementLoginAttemptMock = jest.fn();
 const resetLoginAttemptsMock = jest.fn();
 const storeSecretMock = jest.fn();
 const verifySecretMock = jest.fn();
 
-import { BiometryErrorType } from "@aparajita/capacitor-biometric-auth";
-import {
-  BiometryError,
-  BiometryType,
-} from "@aparajita/capacitor-biometric-auth/dist/esm/definitions";
+import { BiometryType } from "@capgo/capacitor-native-biometric";
 import { IonReactRouter } from "@ionic/react-router";
-import { act } from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { configureStore } from "@reduxjs/toolkit";
+import {
+  act,
+  fireEvent,
+  getByTestId,
+  render,
+  waitFor,
+} from "@testing-library/react";
 import { Provider } from "react-redux";
 import { MemoryRouter, Route } from "react-router-dom";
-import configureStore from "redux-mock-store";
+import { MiscRecordId } from "../../../core/agent/agent.types";
+import { KeyStoreKeys } from "../../../core/storage";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { RoutePath } from "../../../routes";
-import { OperationType } from "../../globals/types";
+import { rootReducer } from "../../../store";
+import {
+  GlobalLoadingType,
+  InitializationPhase,
+} from "../../../store/reducers/stateCache/stateCache.types";
+import {
+  BiometricAuthOutcome,
+  useBiometricAuth,
+} from "../../hooks/useBiometricsHook";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
 import { SetPasscode } from "../SetPasscode";
 import { LockPage } from "./LockPage";
-import { KeyStoreKeys } from "../../../core/storage";
-import { MiscRecordId } from "../../../core/agent/agent.types";
+
+function makeRealStore(
+  preloadedState?: Partial<ReturnType<typeof rootReducer>>
+) {
+  return configureStore({
+    reducer: rootReducer,
+    preloadedState,
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware({
+        serializableCheck: {
+          ignoredActionPaths: [
+            "payload.signTransaction.payload.approvalCallback",
+          ],
+        },
+      }),
+  });
+}
 
 const deleteSecureStorageMock = jest.fn();
 jest.mock("../../../core/storage", () => ({
@@ -70,26 +96,14 @@ jest.mock("@capacitor/keyboard", () => {
   };
 });
 
-jest.mock("../../hooks/useBiometricsHook", () => ({
-  useBiometricAuth: jest.fn(() => ({
-    biometricsIsEnabled: true,
-    biometricInfo: {
-      isAvailable: true,
-      hasCredentials: false,
-      biometryType: BiometryType.fingerprintAuthentication,
-      strongBiometryIsAvailable: true,
-    },
-    handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
-    setBiometricsIsEnabled: jest.fn(),
-  })),
-}));
-
 jest.mock("@capacitor-community/privacy-screen", () => ({
   PrivacyScreen: {
     enable: jest.fn(),
     disable: jest.fn(),
   },
 }));
+
+jest.mock("../../hooks/useBiometricsHook");
 
 interface StoreMockedProps {
   stateCache: {
@@ -99,33 +113,32 @@ interface StoreMockedProps {
       time: number;
       passcodeIsSet: boolean;
       seedPhraseIsSet?: boolean;
+      loginAttempt: {
+        attempts: number;
+        lockedUntil: number;
+      };
     };
-    currentOperation: OperationType;
   };
   seedPhraseCache: {
     seedPhrase: string;
     bran: string;
-  };
-  cryptoAccountsCache: {
-    cryptoAccounts: never[];
   };
   biometricsCache: {
     enabled: boolean;
   };
 }
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const storeMocked = (initialState: StoreMockedProps) => {
   return {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 };
 
-const initialState = {
+const initialState: StoreMockedProps = {
   stateCache: {
-    routes: [RoutePath.GENERATE_SEED_PHRASE],
+    routes: [RoutePath.SSI_AGENT],
     authentication: {
       loggedIn: false,
       time: Date.now(),
@@ -136,14 +149,10 @@ const initialState = {
         lockedUntil: Date.now(),
       },
     },
-    currentOperation: OperationType.IDLE,
   },
   seedPhraseCache: {
     seedPhrase: "",
     bran: "",
-  },
-  cryptoAccountsCache: {
-    cryptoAccounts: [],
   },
   biometricsCache: {
     enabled: true,
@@ -151,8 +160,12 @@ const initialState = {
 };
 
 describe("Lock Page", () => {
+  let handleBiometricAuthMock: jest.Mock;
+
   beforeEach(() => {
-    jest.resetModules();
+    jest.clearAllMocks();
+    handleBiometricAuthMock = jest.fn(() => Promise.resolve(true));
+
     jest.doMock("@ionic/react", () => {
       const actualIonicReact = jest.requireActual("@ionic/react");
       return {
@@ -161,6 +174,24 @@ describe("Lock Page", () => {
       };
     });
     isNativeMock.mockImplementation(() => false);
+
+    (useBiometricAuth as jest.Mock).mockImplementation(() => ({
+      biometricsIsEnabled: true,
+      biometricInfo: {
+        isAvailable: true,
+        hasCredentials: false,
+        biometryType: BiometryType.FINGERPRINT,
+        authenticationStrength: 1, // STRONG
+        deviceIsSecure: true,
+        strongBiometryIsAvailable: true,
+      },
+      handleBiometricAuth: handleBiometricAuthMock,
+      setBiometricsIsEnabled: jest.fn(),
+      setupBiometrics: jest.fn(),
+      checkBiometrics: jest.fn(),
+      remainingLockoutSeconds: 0,
+      lockoutEndTime: null,
+    }));
   });
 
   test("Renders Lock modal with title and description", () => {
@@ -231,42 +262,19 @@ describe("Lock Page", () => {
   });
 
   test("Forgot passcode before verify seedphrase", async () => {
-    const storeMocked = (initialState: StoreMockedProps) => {
-      return {
-        ...mockStore(initialState),
-        dispatch: dispatchMock,
-      };
-    };
-
-    const initialState = {
+    const customInitialState = {
+      ...initialState,
       stateCache: {
-        routes: [RoutePath.GENERATE_SEED_PHRASE],
+        ...initialState.stateCache,
         authentication: {
-          loggedIn: false,
-          time: Date.now(),
-          passcodeIsSet: true,
+          ...initialState.stateCache.authentication,
           seedPhraseIsSet: false,
-          loginAttempt: {
-            attempts: 0,
-            lockedUntil: Date.now(),
-          },
         },
-        currentOperation: OperationType.IDLE,
-      },
-      seedPhraseCache: {
-        seedPhrase: "",
-        bran: "",
-      },
-      cryptoAccountsCache: {
-        cryptoAccounts: [],
-      },
-      biometricsCache: {
-        enabled: true,
       },
     };
 
     const { getByText } = render(
-      <Provider store={storeMocked(initialState)}>
+      <Provider store={storeMocked(customInitialState)}>
         <MemoryRouter initialEntries={[RoutePath.ROOT]}>
           <IonReactRouter>
             <LockPage />
@@ -294,30 +302,49 @@ describe("Lock Page", () => {
   });
 
   test("Verifies passcode and hides page upon correct input", async () => {
-    jest.doMock("../../hooks/useBiometricsHook", () => ({
-      useBiometricAuth: jest.fn(() => ({
-        biometricsIsEnabled: false,
-        biometricInfo: {
-          isAvailable: false,
-          hasCredentials: false,
-          biometryType: BiometryType.none,
-          strongBiometryIsAvailable: false,
-        },
-        handleBiometricAuth: jest.fn(() =>
-          Promise.resolve(
-            new BiometryError("", BiometryErrorType.biometryNotAvailable)
-          )
-        ),
-        setBiometricsIsEnabled: jest.fn(),
-      })),
-    }));
     verifySecretMock.mockResolvedValueOnce(true);
 
+    const store = makeRealStore({
+      stateCache: {
+        routes: [{ path: RoutePath.SSI_AGENT }],
+        showLoading: GlobalLoadingType.NONE,
+        authentication: {
+          loggedIn: false,
+          time: Date.now(),
+          passcodeIsSet: true,
+          seedPhraseIsSet: true,
+          loginAttempt: { attempts: 0, lockedUntil: Date.now() },
+          passwordIsSet: false,
+          passwordIsSkipped: false,
+          ssiAgentIsSet: false,
+          ssiAgentUrl: "",
+          recoveryWalletProgress: false,
+          firstAppLaunch: false,
+        },
+        initializationPhase: InitializationPhase.PHASE_ONE,
+        recoveryCompleteNoInterruption: false,
+        isOnline: true,
+        queueIncomingRequest: {
+          isPaused: false,
+          isProcessing: false,
+          queues: [],
+        },
+        toastMsgs: [],
+        pendingJoinGroupMetadata: null,
+      },
+      seedPhraseCache: { seedPhrase: "", bran: "" },
+      biometricsCache: { enabled: true },
+    });
+
     const { getByText, queryByTestId, getByTestId } = render(
-      <Provider store={storeMocked(initialState)}>
+      <Provider store={store}>
         <LockPage />
       </Provider>
     );
+
+    await waitFor(() => {
+      expect(queryByTestId("lock-page-title")).toBeInTheDocument();
+    });
 
     await passcodeFiller(getByText, getByTestId, "193212");
 
@@ -329,91 +356,175 @@ describe("Lock Page", () => {
     });
 
     await waitFor(() => {
-      expect(queryByTestId("lock-page")).not.toBeInTheDocument();
+      expect(queryByTestId("lock-page-title")).not.toBeInTheDocument();
     });
   });
 
   test("Login using biometrics", async () => {
-    jest.doMock("../../hooks/useBiometricsHook", () => ({
-      useBiometricAuth: jest.fn(() => ({
-        biometricsIsEnabled: true,
-        biometricInfo: {
-          isAvailable: true,
-          hasCredentials: false,
-          biometryType: BiometryType.fingerprintAuthentication,
-          strongBiometryIsAvailable: true,
-        },
-        handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
-        setBiometricsIsEnabled: jest.fn(),
-      })),
-    }));
+    handleBiometricAuthMock.mockImplementation(() =>
+      Promise.resolve(BiometricAuthOutcome.SUCCESS)
+    );
 
     const { queryByTestId } = render(
-      <Provider store={storeMocked(initialState)}>
+      <Provider
+        store={makeTestStore({
+          stateCache: {
+            routes: [RoutePath.SSI_AGENT],
+            authentication: {
+              loggedIn: false,
+              time: Date.now(),
+              passcodeIsSet: true,
+              seedPhraseIsSet: true,
+              firstAppLaunch: true,
+              loginAttempt: {
+                attempts: 0,
+                lockedUntil: Date.now(),
+              },
+            },
+          },
+          seedPhraseCache: {
+            seedPhrase: "",
+            bran: "",
+          },
+          biometricsCache: {
+            enabled: true,
+          },
+        })}
+      >
         <LockPage />
       </Provider>
     );
 
     await waitFor(() => {
-      expect(queryByTestId("lock-page")).not.toBeInTheDocument();
+      expect(handleBiometricAuthMock).toBeCalled();
+      expect(queryByTestId("lock-page-page")).not.toBeInTheDocument();
+      expect(resetLoginAttemptsMock).toBeCalled();
     });
   });
 
-  test("Cancel login using biometrics and re-enabling", async () => {
-    jest.doMock("../../hooks/useBiometricsHook", () => ({
-      useBiometricAuth: jest.fn(() => ({
-        biometricsIsEnabled: true,
-        biometricInfo: {
-          isAvailable: true,
-          hasCredentials: false,
-          biometryType: BiometryType.fingerprintAuthentication,
-          strongBiometryIsAvailable: true,
-        },
-        handleBiometricAuth: jest.fn(() =>
-          Promise.resolve(new BiometryError("", BiometryErrorType.userCancel))
-        ),
-        setBiometricsIsEnabled: jest.fn(),
-      })),
-    }));
+  test("Show biometric temporarily lock", async () => {
+    handleBiometricAuthMock.mockImplementation(() =>
+      Promise.resolve(BiometricAuthOutcome.TEMPORARY_LOCKOUT)
+    );
 
-    const { queryByTestId, getByTestId } = render(
-      <Provider store={storeMocked(initialState)}>
+    const { queryByTestId, getByTestId, getByText } = render(
+      <Provider
+        store={makeTestStore({
+          stateCache: {
+            routes: [RoutePath.SSI_AGENT],
+            authentication: {
+              loggedIn: false,
+              time: Date.now(),
+              passcodeIsSet: true,
+              seedPhraseIsSet: true,
+              firstAppLaunch: true,
+              loginAttempt: {
+                attempts: 0,
+                lockedUntil: Date.now(),
+              },
+            },
+          },
+          seedPhraseCache: {
+            seedPhrase: "",
+            bran: "",
+          },
+          biometricsCache: {
+            enabled: true,
+          },
+        })}
+      >
         <LockPage />
       </Provider>
     );
 
     await waitFor(() => {
-      expect(queryByTestId("passcode-button-#")).toBeInTheDocument();
+      expect(queryByTestId("lock-page-page")).toBeInTheDocument();
+      expect(getByTestId("alert-max-attempts")).toBeVisible();
     });
+  });
 
-    jest.doMock("../../hooks/useBiometricsHook", () => ({
-      useBiometricAuth: jest.fn(() => ({
-        biometricsIsEnabled: true,
-        biometricInfo: {
-          isAvailable: true,
-          hasCredentials: false,
-          biometryType: BiometryType.fingerprintAuthentication,
-          strongBiometryIsAvailable: true,
-        },
-        handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
-        setBiometricsIsEnabled: jest.fn(),
-      })),
-    }));
+  test("Show biometric permanent lock", async () => {
+    handleBiometricAuthMock.mockImplementation(() =>
+      Promise.resolve(BiometricAuthOutcome.PERMANENT_LOCKOUT)
+    );
 
-    act(() => {
-      fireEvent.click(getByTestId("passcode-button-#"));
-    });
+    const { queryByTestId, getByTestId, getByText } = render(
+      <Provider
+        store={makeTestStore({
+          stateCache: {
+            routes: [RoutePath.SSI_AGENT],
+            authentication: {
+              loggedIn: false,
+              time: Date.now(),
+              passcodeIsSet: true,
+              seedPhraseIsSet: true,
+              firstAppLaunch: true,
+              loginAttempt: {
+                attempts: 0,
+                lockedUntil: Date.now(),
+              },
+            },
+          },
+          seedPhraseCache: {
+            seedPhrase: "",
+            bran: "",
+          },
+          biometricsCache: {
+            enabled: true,
+          },
+        })}
+      >
+        <LockPage />
+      </Provider>
+    );
 
     await waitFor(() => {
-      expect(queryByTestId("lock-page")).not.toBeInTheDocument();
+      expect(queryByTestId("lock-page-page")).toBeInTheDocument();
+      expect(getByTestId("alert-permanent-lockout")).toBeVisible();
     });
+
+    expect(getByText(EN_TRANSLATIONS.biometry.permanentlockoutheader));
   });
 });
 
 describe("Lock Page: Max login attempt", () => {
+  let handleBiometricAuthMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    handleBiometricAuthMock = jest.fn(() => Promise.resolve(true));
+
+    jest.doMock("@ionic/react", () => {
+      const actualIonicReact = jest.requireActual("@ionic/react");
+      return {
+        ...actualIonicReact,
+        getPlatforms: () => ["ios"],
+      };
+    });
+    isNativeMock.mockImplementation(() => false);
+
+    (useBiometricAuth as jest.Mock).mockImplementation(() => ({
+      biometricsIsEnabled: true,
+      biometricInfo: {
+        isAvailable: true,
+        hasCredentials: false,
+        biometryType: BiometryType.FINGERPRINT,
+        authenticationStrength: 1, // STRONG
+        deviceIsSecure: true,
+        strongBiometryIsAvailable: true,
+      },
+      handleBiometricAuth: handleBiometricAuthMock,
+      setBiometricsIsEnabled: jest.fn(),
+      setupBiometrics: jest.fn(),
+      checkBiometrics: jest.fn(),
+      remainingLockoutSeconds: 0,
+      lockoutEndTime: null,
+    }));
+  });
+
   const initialState = {
     stateCache: {
-      routes: [RoutePath.GENERATE_SEED_PHRASE],
+      routes: [RoutePath.SSI_AGENT],
       authentication: {
         loggedIn: false,
         time: Date.now(),
@@ -424,14 +535,10 @@ describe("Lock Page: Max login attempt", () => {
           lockedUntil: Date.now(),
         },
       },
-      currentOperation: OperationType.IDLE,
     },
     seedPhraseCache: {
       seedPhrase: "",
       bran: "",
-    },
-    cryptoAccountsCache: {
-      cryptoAccounts: [],
     },
     biometricsCache: {
       enabled: true,
@@ -439,15 +546,22 @@ describe("Lock Page: Max login attempt", () => {
   };
 
   test("Show remain login error", async () => {
-    initialState.stateCache.authentication.loginAttempt.attempts = 2;
-
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
+    const customInitialState = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        authentication: {
+          ...initialState.stateCache.authentication,
+          loginAttempt: {
+            ...initialState.stateCache.authentication.loginAttempt,
+            attempts: 2,
+          },
+        },
+      },
     };
 
     const { getByText, getByTestId } = render(
-      <Provider store={storeMocked}>
+      <Provider store={storeMocked(customInitialState)}>
         <LockPage />
       </Provider>
     );
@@ -468,17 +582,22 @@ describe("Lock Page: Max login attempt", () => {
   });
 
   test("Show max login attemp alert", async () => {
-    initialState.stateCache.authentication.loginAttempt.attempts = 5;
-    initialState.stateCache.authentication.loginAttempt.lockedUntil =
-      Date.now() + 60000;
-
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
+    const customInitialState = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        authentication: {
+          ...initialState.stateCache.authentication,
+          loginAttempt: {
+            attempts: 5,
+            lockedUntil: Date.now() + 60000,
+          },
+        },
+      },
     };
 
     const { getByText } = render(
-      <Provider store={storeMocked}>
+      <Provider store={storeMocked(customInitialState)}>
         <LockPage />
       </Provider>
     );
@@ -490,15 +609,22 @@ describe("Lock Page: Max login attempt", () => {
 
   test("Reset login attempt", async () => {
     verifySecretMock.mockResolvedValueOnce(true);
-    initialState.stateCache.authentication.loginAttempt.attempts = 2;
-
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
+    const customInitialState = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        authentication: {
+          ...initialState.stateCache.authentication,
+          loginAttempt: {
+            ...initialState.stateCache.authentication.loginAttempt,
+            attempts: 2,
+          },
+        },
+      },
     };
 
     const { getByText, getByTestId } = render(
-      <Provider store={storeMocked}>
+      <Provider store={storeMocked(customInitialState)}>
         <LockPage />
       </Provider>
     );
@@ -510,6 +636,74 @@ describe("Lock Page: Max login attempt", () => {
 
     await waitFor(() => {
       expect(resetLoginAttemptsMock).toBeCalled();
+    });
+  });
+
+  test("Reset login attempt after login by biometric auth success", async () => {
+    const customInitialState = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        authentication: {
+          ...initialState.stateCache.authentication,
+          firstAppLaunch: true,
+          loginAttempt: {
+            ...initialState.stateCache.authentication.loginAttempt,
+            attempts: 2,
+          },
+        },
+      },
+    };
+
+    handleBiometricAuthMock.mockResolvedValue(BiometricAuthOutcome.SUCCESS);
+
+    const { getByText } = render(
+      <Provider store={storeMocked(customInitialState)}>
+        <LockPage />
+      </Provider>
+    );
+
+    expect(getByText(EN_TRANSLATIONS.lockpage.title)).toBeInTheDocument();
+    expect(getByText(EN_TRANSLATIONS.lockpage.description)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(handleBiometricAuthMock).toBeCalled();
+      expect(resetLoginAttemptsMock).toBeCalled();
+    });
+  });
+
+  test("Not reset login attempt after login by biometric auth fail", async () => {
+    const customInitialState = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        authentication: {
+          ...initialState.stateCache.authentication,
+          firstAppLaunch: true,
+          loginAttempt: {
+            ...initialState.stateCache.authentication.loginAttempt,
+            attempts: 2,
+          },
+        },
+      },
+    };
+
+    handleBiometricAuthMock.mockResolvedValue(
+      BiometricAuthOutcome.GENERIC_ERROR
+    );
+
+    const { getByText } = render(
+      <Provider store={storeMocked(customInitialState)}>
+        <LockPage />
+      </Provider>
+    );
+
+    expect(getByText(EN_TRANSLATIONS.lockpage.title)).toBeInTheDocument();
+    expect(getByText(EN_TRANSLATIONS.lockpage.description)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(handleBiometricAuthMock).toBeCalled();
+      expect(resetLoginAttemptsMock).not.toBeCalled();
     });
   });
 });

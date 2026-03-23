@@ -1,22 +1,23 @@
 const verifySecretMock = jest.fn();
 const storeSecretMock = jest.fn();
 
-import { BiometryType } from "@aparajita/capacitor-biometric-auth/dist/esm/definitions";
+import { BiometryType } from "@capgo/capacitor-native-biometric";
 import { IonRouterOutlet } from "@ionic/react";
 import { IonReactMemoryRouter, IonReactRouter } from "@ionic/react-router";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { createMemoryHistory } from "history";
 import { Provider } from "react-redux";
 import { Redirect, Route } from "react-router-dom";
-import configureStore from "redux-mock-store";
+
+import { AuthService } from "../../../core/agent/services";
 import { KeyStoreKeys } from "../../../core/storage";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { RoutePath } from "../../../routes";
 import { store } from "../../../store";
-import { GenerateSeedPhrase } from "../GenerateSeedPhrase";
-import { SetPasscode } from "./SetPasscode";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
-import { AuthService } from "../../../core/agent/services";
+import { CreateSSIAgent } from "../CreateSSIAgent";
+import { SetPasscode } from "./SetPasscode";
 
 jest.mock("../../utils/passcodeChecker", () => ({
   isRepeat: () => false,
@@ -47,7 +48,9 @@ jest.mock("../../hooks/useBiometricsHook", () => ({
     biometricInfo: {
       isAvailable: false,
       hasCredentials: false,
-      biometryType: BiometryType.fingerprintAuthentication,
+      biometryType: BiometryType.FINGERPRINT,
+      authenticationStrength: 0, // NONE
+      deviceIsSecure: false,
       strongBiometryIsAvailable: false,
     },
     handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
@@ -148,8 +151,8 @@ describe("SetPasscode Page", () => {
             />
           </Provider>
           <Route
-            path={RoutePath.GENERATE_SEED_PHRASE}
-            component={GenerateSeedPhrase}
+            path={RoutePath.SSI_AGENT}
+            component={CreateSSIAgent}
           />
           <Redirect
             exact
@@ -184,8 +187,7 @@ describe("SetPasscode Page", () => {
 
   test("calls handleOnBack when back button is clicked", async () => {
     require("@ionic/react");
-    const mockStore = configureStore();
-    const dispatchMock = jest.fn();
+
     const initialState = {
       stateCache: {
         routes: [RoutePath.SET_PASSCODE, RoutePath.ONBOARDING],
@@ -202,12 +204,11 @@ describe("SetPasscode Page", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
+      ...makeTestStore(initialState),
     };
 
     const history = createMemoryHistory();
-    history.push(RoutePath.VERIFY_SEED_PHRASE);
+    history.push(RoutePath.SET_PASSCODE);
 
     const { queryByText, getByTestId } = render(
       <IonReactMemoryRouter

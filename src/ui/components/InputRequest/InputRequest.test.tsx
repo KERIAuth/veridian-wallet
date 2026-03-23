@@ -1,23 +1,17 @@
 import { IonInput, IonLabel } from "@ionic/react";
-import { ionFireEvent } from "@ionic/react-test-utils";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { Agent } from "../../../core/agent/agent";
+import { StorageMessage } from "../../../core/storage/storage.types";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
-import {
-  setAuthentication,
-  setToastMsg,
-} from "../../../store/reducers/stateCache";
+import { setOpenConnectionId } from "../../../store/reducers/profileCache";
+import { setToastMsg } from "../../../store/reducers/stateCache";
 import { connectionsFix } from "../../__fixtures__/connectionsFix";
-import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix";
+import { identifierFix } from "../../__fixtures__/identifierFix";
 import { ToastMsgType } from "../../globals/types";
 import { CustomInputProps } from "../CustomInput/CustomInput.types";
 import { InputRequest } from "./InputRequest";
-import { StorageMessage } from "../../../core/storage/storage.types";
-import { setOpenConnectionId } from "../../../store/reducers/connectionsCache";
-import { identifierFix } from "../../__fixtures__/identifierFix";
+import { makeTestStore } from "../../utils/makeTestStore";
 
 const connectByOobiUrl = jest.fn();
 jest.mock("../../../core/agent/agent", () => ({
@@ -76,203 +70,7 @@ jest.mock("signify-ts", () => ({
   }),
 }));
 
-describe("SetUserName component", () => {
-  const mockStore = configureStore();
-  const dispatchMock = jest.fn();
-  const initialState = {
-    stateCache: {
-      routes: ["/"],
-      authentication: {
-        loggedIn: true,
-        time: 0,
-        passcodeIsSet: true,
-        seedPhraseIsSet: true,
-        passwordIsSet: false,
-        passwordIsSkipped: true,
-        ssiAgentIsSet: true,
-        ssiAgentUrl: "http://keria.com",
-        recoveryWalletProgress: false,
-        loginAttempt: {
-          attempts: 0,
-          lockedUntil: 0,
-        },
-        firstAppLaunch: true,
-      },
-    },
-    connectionsCache: {
-      connections: connectionsFix,
-    },
-    identifiersCache: {
-      identifiers: filteredIdentifierFix,
-      favourites: [],
-    },
-  };
-
-  const storeMocked = {
-    ...mockStore(initialState),
-    dispatch: dispatchMock,
-  };
-
-  test("It renders modal successfully", async () => {
-    const { getByText } = render(
-      <Provider store={storeMocked}>
-        <InputRequest />
-      </Provider>
-    );
-    expect(
-      getByText(EN_TRANSLATIONS.inputrequest.title.username)
-    ).toBeVisible();
-    expect(
-      getByText(EN_TRANSLATIONS.inputrequest.button.confirm)
-    ).toBeVisible();
-  });
-
-  test("Disable CTA if username is space", async () => {
-    const { getByTestId } = render(
-      <Provider store={storeMocked}>
-        <InputRequest />
-      </Provider>
-    );
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), " ");
-    });
-
-    expect(
-      getByTestId("primary-button-input-request").getAttribute("disabled")
-    ).toBe("true");
-  });
-
-  test("It should call handleConfirm when the primary button is clicked", async () => {
-    const { getByText, getByTestId } = render(
-      <Provider store={storeMocked}>
-        <InputRequest />
-      </Provider>
-    );
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), "testUser");
-    });
-
-    await waitFor(() => {
-      expect(
-        (getByTestId("input-request-input") as HTMLInputElement).value
-      ).toBe("testUser");
-    });
-
-    act(() => {
-      fireEvent.click(getByText(EN_TRANSLATIONS.inputrequest.button.confirm));
-    });
-
-    await waitFor(() => {
-      expect(dispatchMock).toHaveBeenCalledWith(
-        setAuthentication({
-          loggedIn: true,
-          time: 0,
-          passcodeIsSet: true,
-          seedPhraseIsSet: true,
-          passwordIsSet: false,
-          passwordIsSkipped: true,
-          ssiAgentIsSet: true,
-          ssiAgentUrl: "http://keria.com",
-          recoveryWalletProgress: false,
-          loginAttempt: {
-            attempts: 0,
-            lockedUntil: 0,
-          },
-          firstAppLaunch: true,
-          userName: "testUser",
-        })
-      );
-    });
-
-    await waitFor(() => {
-      expect(dispatchMock).toHaveBeenCalledWith(
-        setToastMsg(ToastMsgType.USERNAME_CREATION_SUCCESS)
-      );
-    });
-  });
-
-  test("Display toast error message", async () => {
-    const { getByText, getByTestId } = render(
-      <Provider store={storeMocked}>
-        <InputRequest />
-      </Provider>
-    );
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), "testUser");
-    });
-
-    await waitFor(() => {
-      expect(
-        (getByTestId("input-request-input") as HTMLInputElement).value
-      ).toBe("testUser");
-    });
-
-    jest
-      .spyOn(Agent.agent.basicStorage, "createOrUpdateBasicRecord")
-      .mockImplementation(() => {
-        return Promise.reject("Error");
-      });
-
-    act(() => {
-      fireEvent.click(getByText(EN_TRANSLATIONS.inputrequest.button.confirm));
-    });
-
-    await waitFor(() => {
-      expect(dispatchMock).toHaveBeenCalledWith(
-        setToastMsg(ToastMsgType.USERNAME_CREATION_ERROR)
-      );
-    });
-  });
-
-  test("Display validate error message", async () => {
-    const { getByText, getByTestId } = render(
-      <Provider store={storeMocked}>
-        <InputRequest />
-      </Provider>
-    );
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), "");
-    });
-
-    await waitFor(() => {
-      expect(getByText(EN_TRANSLATIONS.nameerror.onlyspace)).toBeVisible();
-    });
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), "   ");
-    });
-
-    await waitFor(() => {
-      expect(getByText(EN_TRANSLATIONS.nameerror.onlyspace)).toBeVisible();
-    });
-
-    act(() => {
-      ionFireEvent.ionInput(
-        getByTestId("input-request-input"),
-        "Duke Duke Duke Duke  Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke Duke"
-      );
-    });
-
-    await waitFor(() => {
-      expect(getByText(EN_TRANSLATIONS.nameerror.maxlength)).toBeVisible();
-    });
-
-    act(() => {
-      ionFireEvent.ionInput(getByTestId("input-request-input"), "Duke@@");
-    });
-
-    await waitFor(() => {
-      expect(getByText(EN_TRANSLATIONS.nameerror.hasspecialchar)).toBeVisible();
-    });
-  });
-});
-
 describe("Set connection alias", () => {
-  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
@@ -293,8 +91,19 @@ describe("Set connection alias", () => {
         },
       },
     },
-    connectionsCache: {
-      connections: connectionsFix,
+    // use profilesCache shape for connections
+    profilesCache: {
+      defaultProfile: identifierFix[0].id,
+      profiles: {
+        [identifierFix[0].id]: {
+          identity: identifierFix[0],
+          connections: connectionsFix,
+          multisigConnections: [],
+          peerConnections: [],
+          credentials: [],
+          archivedCredentials: [],
+        },
+      },
       missingAliasUrl: {
         url: "http://keria:3902/oobi/EJ0XanWANawPeyCzyPxAbilMId9FNHY8eobED84Gxfij/agent/ENmmQwmKjO7UQdRMGd2STVUvjV8y1sKCkg1Wc_QvpZU3",
         identifier: identifierFix[0].id,
@@ -303,7 +112,7 @@ describe("Set connection alias", () => {
   };
 
   const storeMocked = {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 
@@ -322,16 +131,18 @@ describe("Set connection alias", () => {
     ).toBeVisible();
 
     act(() => {
-      ionFireEvent.ionInput(
+      fireEvent(
         getByTestId("input-request-input"),
-        "connectionName"
+        new CustomEvent("ionInput", {
+          detail: { value: "connection Name" },
+        })
       );
     });
 
     await waitFor(() => {
       expect(
         (getByTestId("input-request-input") as HTMLInputElement).value
-      ).toBe("connectionName");
+      ).toBe("connection Name");
     });
 
     act(() => {
@@ -340,7 +151,7 @@ describe("Set connection alias", () => {
 
     await waitFor(() => {
       expect(connectByOobiUrl).toBeCalledWith(
-        "http://keria:3902/oobi/EJ0XanWANawPeyCzyPxAbilMId9FNHY8eobED84Gxfij/agent/ENmmQwmKjO7UQdRMGd2STVUvjV8y1sKCkg1Wc_QvpZU3?name=connectionName"
+        "http://keria:3902/oobi/EJ0XanWANawPeyCzyPxAbilMId9FNHY8eobED84Gxfij/agent/ENmmQwmKjO7UQdRMGd2STVUvjV8y1sKCkg1Wc_QvpZU3?name=connection+Name"
       );
     });
   });
@@ -366,9 +177,11 @@ describe("Set connection alias", () => {
     ).toBeVisible();
 
     act(() => {
-      ionFireEvent.ionInput(
+      fireEvent(
         getByTestId("input-request-input"),
-        "connectionName"
+        new CustomEvent("ionInput", {
+          detail: { value: "connectionName" },
+        })
       );
     });
 

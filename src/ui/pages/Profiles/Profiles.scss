@@ -1,0 +1,198 @@
+.scan-active {
+  &.scan-modal {
+    div.app-router {
+      display: none;
+    }
+
+    .profiles-modal {
+      display: none;
+    }
+
+    .side-slider-modal {
+      --background: transparent;
+
+      .profile-setup.responsive-page-layout {
+        &.scan {
+          background: transparent;
+        }
+      }
+    }
+  }
+}
+
+.profiles {
+  display: flex;
+  flex-direction: column;
+
+  .scrollable-page-content > * {
+    margin: 0;
+  }
+
+  .profiles-selected-profile {
+    padding: 2rem 0 1.5rem;
+    border-bottom: 1px solid var(--ion-color-neutral-300);
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      padding: 1.2rem 0;
+    }
+
+    .profiles-list-item {
+      padding-bottom: 0.62rem;
+    }
+
+    .profiles-options-button {
+      margin-block: 0;
+    }
+  }
+
+  .profiles-list {
+    > *:not(:first-child) {
+      border-top: 1px solid var(--ion-color-neutral-300);
+    }
+  }
+
+  .profiles-list-item {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 1rem 0;
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      padding: 0.8rem 0;
+    }
+
+    &-avatar {
+      margin-right: 1rem;
+
+      @media screen and (min-width: 250px) and (max-width: 374px) {
+        margin-right: 0.8rem;
+      }
+    }
+
+    &-inner {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    &-name {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: center;
+
+      @media screen and (min-width: 250px) and (max-width: 374px) {
+        font-size: 0.8rem;
+      }
+    }
+
+    ion-chip {
+      min-height: 1.5rem;
+      line-height: 1rem;
+      border-radius: 0.25rem;
+      font-weight: 500;
+      font-size: 0.75rem;
+      color: var(--ion-color-neutral-100);
+      background: var(--ion-color-primary-700);
+      margin: 0;
+      padding: 0.25rem 0.5rem;
+
+      ion-icon {
+        width: 0.75rem;
+        height: 0.75rem;
+        margin: 0;
+        --ion-color-base: var(--ion-color-neutral-100) !important;
+      }
+
+      span {
+        text-transform: capitalize;
+        margin-left: 0.31rem;
+      }
+
+      &.action-needed {
+        color: var(--ion-color-warning-800);
+        background: rgba(var(--ion-color-warning-800-rgb), 0.1);
+
+        ion-icon {
+          color: var(--ion-color-warning-800) !important;
+        }
+      }
+    }
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      ion-chip {
+        min-height: 1.2rem;
+        font-size: 0.65rem;
+
+        ion-icon {
+          width: 0.6rem;
+          height: 0.6rem;
+        }
+      }
+    }
+  }
+
+  .profiles-options {
+    margin-top: 1rem;
+    min-height: 6rem;
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      margin-top: 0.8rem;
+    }
+  }
+
+  .profiles-options-button {
+    --color: var(--ion-color-neutral-700);
+    --background: var(--ion-color-neutral-200);
+    --border-color: var(--ion-color-neutral-400);
+    --background-activated: var(--ion-color-neutral-400);
+
+    &::part(native) {
+      height: 2.5rem;
+      text-align: center;
+      align-content: center;
+      border-radius: 0.5rem;
+      padding: 0.5rem 1rem 0.5rem 0.75rem;
+      border: 1px solid var(--ion-color-neutral-400);
+
+      @media screen and (min-width: 250px) and (max-width: 374px) {
+        font-size: 0.8rem;
+      }
+    }
+
+    &:not(:last-child) {
+      margin-bottom: 0.5rem;
+    }
+
+    &.button-disabled {
+      color: var(--ion-color-neutral-800);
+      --background: var(--ion-color-neutral-400);
+
+      ion-icon {
+        --ion-color-base: var(--ion-color-neutral-800) !important;
+      }
+    }
+
+    ion-icon {
+      margin-right: 0.25rem;
+      height: 1.5rem;
+      width: 1.5rem;
+    }
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      ion-icon {
+        height: 1.2rem;
+        width: 1.2rem;
+      }
+    }
+  }
+
+  > *:last-child {
+    margin-bottom: 2.25rem;
+
+    @media screen and (min-width: 250px) and (max-width: 374px) {
+      margin-bottom: 1.8rem;
+    }
+  }
+}

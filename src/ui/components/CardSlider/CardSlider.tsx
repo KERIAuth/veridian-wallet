@@ -1,64 +1,21 @@
 import { useEffect, useState } from "react";
 import { useHistory } from "react-router-dom";
-import { Swiper, SwiperClass, SwiperSlide } from "swiper/react";
 import { Pagination } from "swiper/modules";
+import { Swiper, SwiperClass, SwiperSlide } from "swiper/react";
 import { Agent } from "../../../core/agent/agent";
 import { MiscRecordId } from "../../../core/agent/agent.types";
 import { BasicRecord } from "../../../core/agent/records";
-import { CredentialShortDetails } from "../../../core/agent/services/credentialService.types";
-import {
-  IdentifierDetails,
-  IdentifierShortDetails,
-} from "../../../core/agent/services/identifier.types";
 import { useAppSelector } from "../../../store/hooks";
-import {
-  getCredentialFavouriteIndex,
-  getIdentifierFavouriteIndex,
-} from "../../../store/reducers/viewTypeCache";
-import { CardType } from "../../globals/types";
+import { getCredentialFavouriteIndex } from "../../../store/reducers/viewTypeCache";
 import { CredentialCardTemplate } from "../CredentialCardTemplate";
-import { IdentifierCardTemplate } from "../IdentifierCardTemplate";
 import { TabsRoutePath } from "../navigation/TabsMenu";
 import "./CardSlider.scss";
-import { CardProps, CardSliderProps } from "./CardSlider.types";
+import { CardSliderProps } from "./CardSlider.types";
 
 const NAVIGATION_DELAY = 250;
 const RESET_ANIMATION = 350;
-
-const Card = ({
-  cardType,
-  name,
-  index,
-  cardData,
-  handleShowCardDetails,
-  pickedCard,
-}: CardProps) => {
-  return cardType === CardType.IDENTIFIERS ? (
-    <IdentifierCardTemplate
-      name={name}
-      key={index}
-      index={index}
-      isActive={false}
-      cardData={cardData as IdentifierShortDetails}
-      onHandleShowCardDetails={() => handleShowCardDetails(index)}
-      pickedCard={pickedCard === index}
-    />
-  ) : (
-    <CredentialCardTemplate
-      name={name}
-      key={index}
-      index={index}
-      isActive={false}
-      cardData={cardData as CredentialShortDetails}
-      onHandleShowCardDetails={() => handleShowCardDetails(index)}
-      pickedCard={pickedCard === index}
-    />
-  );
-};
-
 const CardSlider = ({
   name,
-  cardType,
   title,
   cardsData,
   onShowCardDetails,
@@ -67,25 +24,15 @@ const CardSlider = ({
   const [swiper, setSwiper] = useState<SwiperClass | undefined>(undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pickedCardIndex, setPickedCardIndex] = useState<number | null>(null);
-  const identifierFavouriteIndex = useAppSelector(getIdentifierFavouriteIndex);
-  const credFavouriteIndex = useAppSelector(getCredentialFavouriteIndex);
-  const isIdentifier = cardType === CardType.IDENTIFIERS;
-  const favouriteIndex = isIdentifier
-    ? identifierFavouriteIndex
-    : credFavouriteIndex;
+  const favouriteIndex = useAppSelector(getCredentialFavouriteIndex);
 
   const handleShowCardDetails = async (index: number) => {
     setPickedCardIndex(index);
 
     let pathname = "";
     onShowCardDetails?.();
-    if (cardType === CardType.IDENTIFIERS) {
-      const data = cardsData[index] as IdentifierDetails;
-      pathname = `${TabsRoutePath.IDENTIFIERS}/${data.id}`;
-    } else {
-      const data = cardsData[index] as CredentialShortDetails;
-      pathname = `${TabsRoutePath.CREDENTIALS}/${data.id}`;
-    }
+    const data = cardsData[index];
+    pathname = `${TabsRoutePath.CREDENTIALS}/${data.id}`;
 
     setTimeout(() => {
       history.push({ pathname: pathname });
@@ -100,9 +47,7 @@ const CardSlider = ({
     setActiveIndex(() => index);
     Agent.agent.basicStorage.createOrUpdateBasicRecord(
       new BasicRecord({
-        id: isIdentifier
-          ? MiscRecordId.APP_IDENTIFIER_FAVOURITE_INDEX
-          : MiscRecordId.APP_CRED_FAVOURITE_INDEX,
+        id: MiscRecordId.APP_CRED_FAVOURITE_INDEX,
         content: { favouriteIndex: index },
       })
     );
@@ -115,6 +60,7 @@ const CardSlider = ({
   useEffect(() => {
     if (!swiper) return;
     swiper.slideTo(favouriteIndex, 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swiper]);
 
   const containerClasses = `card-slider ${
@@ -150,7 +96,7 @@ const CardSlider = ({
         }}
         modules={[Pagination]}
         className="swiper-container"
-        onSwiper={(swiper: SwiperClass) => setSwiper(swiper)}
+        onSwiper={setSwiper}
         onSlideChange={(swiper: SwiperClass) => {
           saveFavouriteIndex(swiper.realIndex);
         }}
@@ -162,13 +108,14 @@ const CardSlider = ({
             className="swiper-item"
             key={index}
           >
-            <Card
-              cardData={card}
-              cardType={cardType}
+            <CredentialCardTemplate
               name={name}
+              key={index}
               index={index}
-              handleShowCardDetails={handleShowCardDetails}
-              pickedCard={pickedCardIndex}
+              isActive={false}
+              cardData={card}
+              onHandleShowCardDetails={handleShowCardDetails}
+              pickedCard={pickedCardIndex === index}
             />
           </SwiperSlide>
         ))}

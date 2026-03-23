@@ -1,42 +1,42 @@
+import { IonReactMemoryRouter } from "@ionic/react-router";
 import { AnyAction, Store } from "@reduxjs/toolkit";
 import { fireEvent, render, waitFor } from "@testing-library/react";
+import { createMemoryHistory } from "history";
 import { act } from "react";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
-import configureStore from "redux-mock-store";
-import { CredentialStatus } from "../../../core/agent/services/credentialService.types";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../routes/paths";
-import { store } from "../../../store";
-import {
-  setCredentialsFilters,
-  setCredsCache,
-} from "../../../store/reducers/credsCache";
-import {
-  setCurrentRoute,
-  showConnections,
-} from "../../../store/reducers/stateCache";
+import { setCredsCache } from "../../../store/reducers/profileCache";
+import { setCurrentRoute } from "../../../store/reducers/stateCache";
 import { connectionsFix } from "../../__fixtures__/connectionsFix";
-import { pendingCredFixs } from "../../__fixtures__/credsFix";
-import { filteredCredsFix } from "../../__fixtures__/filteredCredsFix";
+import {
+  filteredCredsFix,
+  pendingCredFix,
+} from "../../__fixtures__/filteredCredsFix";
 import { filteredIdentifierFix } from "../../__fixtures__/filteredIdentifierFix";
+import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
 import { Credentials } from "./Credentials";
-import { CredentialsFilters } from "./Credentials.types";
 
 const deleteIdentifierMock = jest.fn();
 const archiveIdentifierMock = jest.fn();
 const markCredentialPendingDeletionMock = jest.fn();
 jest.mock("../../../core/agent/agent", () => ({
   Agent: {
+    MISSING_DATA_ON_KERIA: "MISSING_DATA_ON_KERIA",
     agent: {
       credentials: {
         getCredentialDetailsById: jest.fn(),
         deleteCredential: () => deleteIdentifierMock(),
         archiveCredential: () => archiveIdentifierMock(),
-        getCredentials: jest.fn(),
+        getCredentials: jest.fn(() => Promise.resolve([])),
         markCredentialPendingDeletion: () =>
           markCredentialPendingDeletionMock(),
+      },
+      identifiers: {
+        getIdentifier: jest.fn(),
       },
       basicStorage: {
         findById: jest.fn(),
@@ -56,6 +56,36 @@ jest.mock("@ionic/react", () => ({
     isOpen ? <div data-testid={props["data-testid"]}>{children}</div> : null,
 }));
 
+const initialStatePendingEmpty = {
+  stateCache: {
+    routes: [TabsRoutePath.CREDENTIALS],
+    authentication: {
+      loggedIn: true,
+      time: Date.now(),
+      passcodeIsSet: true,
+    },
+    isOnline: true,
+  },
+  seedPhraseCache: {},
+  profilesCache: {
+    ...profileCacheFixData,
+    defaultProfile: filteredIdentifierFix[2].id,
+  },
+  viewTypeCache: {
+    identifier: {
+      viewType: null,
+      favouriteIndex: 0,
+    },
+    credential: {
+      viewType: null,
+      favouriteIndex: 0,
+    },
+  },
+  biometricsCache: {
+    enabled: false,
+  },
+};
+
 const initialStateEmpty = {
   stateCache: {
     routes: [TabsRoutePath.CREDENTIALS],
@@ -65,20 +95,11 @@ const initialStateEmpty = {
       passcodeIsSet: true,
     },
     isOnline: true,
-    showConnections: false,
   },
   seedPhraseCache: {},
-  credsCache: {
-    creds: [],
-  },
-  credsArchivedCache: {
-    creds: filteredCredsFix,
-  },
-  connectionsCache: {
-    connections: [],
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierFix,
+  profilesCache: {
+    ...profileCacheFixData,
+    defaultProfile: filteredIdentifierFix[1].id,
   },
   viewTypeCache: {
     identifier: {
@@ -105,36 +126,30 @@ const initialStateFull = {
     },
   },
   seedPhraseCache: {},
-  credsCache: {
-    creds: filteredCredsFix,
-    favourites: [
-      {
-        id: filteredCredsFix[0].id,
-        time: 1,
+  profilesCache: {
+    ...profileCacheFixData,
+    profiles: {
+      ...profileCacheFixData.profiles,
+      [filteredIdentifierFix[0].id]: {
+        ...(profileCacheFixData.profiles as any)[filteredIdentifierFix[0].id],
+        connections: connectionsFix,
       },
-      {
-        id: filteredCredsFix[1].id,
-        time: 2,
-      },
-    ],
-  },
-  credsArchivedCache: {
-    creds: filteredCredsFix,
-  },
-  connectionsCache: {
-    connections: connectionsFix,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierFix,
+    },
   },
   viewTypeCache: {
-    identifier: {
-      viewType: null,
-      favouriteIndex: 0,
-    },
     credential: {
       viewType: null,
       favouriteIndex: 0,
+      favourites: [
+        {
+          id: filteredCredsFix[0].id,
+          time: 1,
+        },
+        {
+          id: filteredCredsFix[1].id,
+          time: 2,
+        },
+      ],
     },
   },
   biometricsCache: {
@@ -146,47 +161,33 @@ const archivedAndRevokedState = {
   stateCache: {
     routes: [TabsRoutePath.CREDENTIALS],
     authentication: {
+      defaultProfile: filteredIdentifierFix[0].id,
       loggedIn: true,
       time: Date.now(),
       passcodeIsSet: true,
     },
   },
   seedPhraseCache: {},
-  credsCache: {
-    creds: [
-      filteredCredsFix[0],
-      {
-        ...filteredCredsFix[1],
-        status: CredentialStatus.REVOKED,
+  profilesCache: {
+    ...profileCacheFixData,
+    profiles: {
+      ...profileCacheFixData.profiles,
+      [filteredIdentifierFix[0].id]: {
+        ...(profileCacheFixData.profiles as any)[filteredIdentifierFix[0].id],
+        connections: connectionsFix,
       },
-    ],
-    favourites: [
-      {
-        id: filteredCredsFix[0].id,
-        time: 1,
-      },
-    ],
-  },
-  credsArchivedCache: {
-    creds: filteredCredsFix,
-  },
-  connectionsCache: {
-    connections: connectionsFix,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierFix,
-  },
-  notificationsCache: {
-    notifications: [],
+    },
   },
   viewTypeCache: {
-    identifier: {
-      viewType: null,
-      favouriteIndex: 0,
-    },
     credential: {
       viewType: null,
       favouriteIndex: 0,
+      favourites: [
+        {
+          id: filteredCredsFix[0].id,
+          time: 1,
+        },
+      ],
     },
   },
   biometricsCache: {
@@ -197,39 +198,23 @@ const archivedAndRevokedState = {
 let mockedStore: Store<unknown, AnyAction>;
 
 describe("Creds Tab", () => {
-  const mockStore = configureStore();
   const dispatchMock = jest.fn();
 
   beforeEach(() => {
-    const mockStore = configureStore();
     const dispatchMock = jest.fn();
 
     mockedStore = {
-      ...mockStore(initialStateFull),
+      ...makeTestStore(initialStateFull),
       dispatch: dispatchMock,
     };
-
-    store.dispatch(setCredsCache([]));
-    store.dispatch(setCredentialsFilters(CredentialsFilters.All));
   });
 
-  test("Renders favourites in Creds", () => {
-    const { getByText } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
-        <Provider store={mockedStore}>
-          <Credentials />
-        </Provider>
-      </MemoryRouter>
-    );
+  const history = createMemoryHistory();
+  history.push(TabsRoutePath.CREDENTIALS);
 
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.credentials.tab.favourites)
-    ).toBeInTheDocument();
-  });
-
-  test("Renders Creds Tab", () => {
+  it("Renders favourites in Creds", async () => {
     const storeMocked = {
-      ...mockStore(initialStateEmpty),
+      ...makeTestStore(initialStateFull),
       dispatch: dispatchMock,
     };
     const { getByText, getByTestId } = render(
@@ -240,22 +225,95 @@ describe("Creds Tab", () => {
       </MemoryRouter>
     );
 
-    expect(getByTestId("credentials-tab")).toBeInTheDocument();
-    expect(getByText("Credentials")).toBeInTheDocument();
+    expect(
+      getByText(EN_TRANSLATIONS.tabs.credentials.tab.favourites)
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
+    });
   });
 
-  test("Renders Creds Card placeholder", () => {
+  test("Renders Creds Tab", async () => {
     const storeMocked = {
-      ...mockStore(initialStateEmpty),
+      ...makeTestStore(initialStatePendingEmpty),
       dispatch: dispatchMock,
     };
-    const { getByTestId, getByText } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
+    const { getByText, getByTestId } = render(
+      <IonReactMemoryRouter
+        history={history}
+        initialEntries={[TabsRoutePath.CREDENTIALS]}
+      >
         <Provider store={storeMocked}>
           <Credentials />
         </Provider>
-      </MemoryRouter>
+      </IonReactMemoryRouter>
     );
+
+    expect(getByTestId("credentials-tab")).toBeInTheDocument();
+    expect(getByText("Credentials")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("hidden")
+      ).toBeTruthy();
+    });
+  });
+
+  test("Open profile", async () => {
+    const storeMocked = {
+      ...makeTestStore(initialStateEmpty),
+      dispatch: dispatchMock,
+    };
+    const { getByText, getByTestId } = render(
+      <IonReactMemoryRouter
+        history={history}
+        initialEntries={[TabsRoutePath.CREDENTIALS]}
+      >
+        <Provider store={storeMocked}>
+          <Credentials />
+        </Provider>
+      </IonReactMemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("hidden")
+      ).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("avatar-button")).toBeVisible();
+    });
+
+    fireEvent.click(getByTestId("avatar-button"));
+
+    await waitFor(() => {
+      expect(getByText(EN_TRANSLATIONS.profiles.title)).toBeVisible();
+    });
+  });
+
+  test("Renders Creds Card placeholder", async () => {
+    const storeMocked = {
+      ...makeTestStore(initialStatePendingEmpty),
+      dispatch: dispatchMock,
+    };
+    const { getByTestId, getByText } = render(
+      <IonReactMemoryRouter
+        history={history}
+        initialEntries={[TabsRoutePath.CREDENTIALS]}
+      >
+        <Provider store={storeMocked}>
+          <Credentials />
+        </Provider>
+      </IonReactMemoryRouter>
+    );
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("hidden")
+      ).toBeTruthy();
+    });
 
     expect(
       getByTestId("credentials-tab-cards-placeholder")
@@ -265,9 +323,9 @@ describe("Creds Tab", () => {
     ).toBeInTheDocument();
   });
 
-  test("Renders Creds Card", () => {
+  test("Renders Creds Card", async () => {
     const storeMocked = {
-      ...mockStore(initialStateFull),
+      ...makeTestStore(initialStateFull),
       dispatch: dispatchMock,
     };
     const { getByTestId } = render(
@@ -277,13 +335,18 @@ describe("Creds Tab", () => {
         </Provider>
       </MemoryRouter>
     );
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
+    });
 
     expect(getByTestId("keri-card-template-favs-index-0")).toBeInTheDocument();
   });
 
-  test("Renders Creds Filters", () => {
+  test("Renders Creds Filters", async () => {
     const storeMocked = {
-      ...mockStore(initialStateFull),
+      ...makeTestStore(initialStateFull),
     };
     const { getByTestId } = render(
       <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
@@ -292,161 +355,14 @@ describe("Creds Tab", () => {
         </Provider>
       </MemoryRouter>
     );
-
-    const allFilterBtn = getByTestId("all-filter-btn");
-    const individualFilterBtn = getByTestId("individual-filter-btn");
-    const groupFilterBtn = getByTestId("group-filter-btn");
-
-    expect(allFilterBtn).toHaveTextContent(
-      EN_TRANSLATIONS.tabs.credentials.tab.filters.all
-    );
-    expect(individualFilterBtn).toHaveTextContent(
-      EN_TRANSLATIONS.tabs.credentials.tab.filters.individual
-    );
-    expect(groupFilterBtn).toHaveTextContent(
-      EN_TRANSLATIONS.tabs.credentials.tab.filters.group
-    );
-  });
-
-  test("Toggle Creds Filters show Individual", async () => {
-    store.dispatch(setCredsCache([filteredCredsFix[0]]));
-
-    const { getByTestId, getByText, queryByText } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
-        <Provider store={store}>
-          <Credentials />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const allFilterBtn = getByTestId("all-filter-btn");
-    const individualFilterBtn = getByTestId("individual-filter-btn");
-    const groupFilterBtn = getByTestId("group-filter-btn");
-
-    expect(allFilterBtn).toHaveClass("selected");
-
     await waitFor(() => {
-      expect(getByText(filteredCredsFix[0].credentialType)).toBeVisible();
-    });
-
-    act(() => {
-      fireEvent.click(individualFilterBtn);
-    });
-
-    await waitFor(() => {
-      expect(getByText(filteredCredsFix[0].credentialType)).toBeVisible();
-    });
-
-    act(() => {
-      fireEvent.click(groupFilterBtn);
-    });
-
-    await waitFor(() => {
-      expect(queryByText(filteredCredsFix[0].credentialType)).toBeNull();
       expect(
-        getByText(
-          EN_TRANSLATIONS.tabs.credentials.tab.filters.placeholder.replace(
-            "{{ type }}",
-            CredentialsFilters.Group
-          )
-        )
-      ).toBeVisible();
-    });
-  });
-
-  test("Toggle Creds Filters show Group", async () => {
-    store.dispatch(setCredsCache([filteredCredsFix[3]]));
-    store.dispatch(setCredentialsFilters(CredentialsFilters.All));
-
-    const { getByTestId, getByText, queryByText } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
-        <Provider store={store}>
-          <Credentials />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const allFilterBtn = getByTestId("all-filter-btn");
-    const individualFilterBtn = getByTestId("individual-filter-btn");
-    const groupFilterBtn = getByTestId("group-filter-btn");
-
-    expect(allFilterBtn).toHaveClass("selected");
-
-    await waitFor(() => {
-      expect(getByText(filteredCredsFix[3].credentialType)).toBeVisible();
-    });
-
-    act(() => {
-      fireEvent.click(individualFilterBtn);
-    });
-
-    await waitFor(() => {
-      expect(queryByText(filteredCredsFix[3].credentialType)).toBeNull();
-      expect(
-        getByText(
-          EN_TRANSLATIONS.tabs.credentials.tab.filters.placeholder.replace(
-            "{{ type }}",
-            CredentialsFilters.Individual
-          )
-        )
-      ).toBeVisible();
-    });
-
-    act(() => {
-      fireEvent.click(groupFilterBtn);
-    });
-
-    await waitFor(() => {
-      expect(getByText(filteredCredsFix[3].credentialType)).toBeVisible();
-    });
-  });
-
-  test("Toggle Connections view", async () => {
-    const storeMocked = {
-      ...mockStore(initialStateEmpty),
-      dispatch: dispatchMock,
-    };
-    const { getByTestId } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
-        <Provider store={storeMocked}>
-          <Credentials />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    act(() => {
-      fireEvent.click(getByTestId("connections-button"));
-    });
-
-    await waitFor(() => {
-      expect(dispatchMock).toBeCalledWith(showConnections(true));
-    });
-  });
-
-  test("Show Connections placeholder", async () => {
-    const storeMocked = {
-      ...mockStore(initialStateEmpty),
-      dispatch: dispatchMock,
-    };
-    const { getByTestId } = render(
-      <MemoryRouter initialEntries={[TabsRoutePath.CREDENTIALS]}>
-        <Provider store={storeMocked}>
-          <Credentials />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    act(() => {
-      fireEvent.click(getByTestId("connections-button"));
-    });
-
-    await waitFor(() => {
-      expect(dispatchMock).toBeCalledWith(showConnections(true));
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
     });
   });
 
   test("Remove pending cred alert", async () => {
-    const mockStore = configureStore();
     const dispatchMock = jest.fn();
     const initialState = {
       stateCache: {
@@ -457,18 +373,7 @@ describe("Creds Tab", () => {
           passcodeIsSet: true,
         },
       },
-      credsCache: {
-        creds: pendingCredFixs,
-        favourites: [],
-      },
       seedPhraseCache: {},
-      identifiersCache: {
-        identifiers: filteredIdentifierFix,
-      },
-
-      credsArchivedCache: {
-        creds: [],
-      },
       viewTypeCache: {
         identifier: {
           viewType: null,
@@ -479,8 +384,16 @@ describe("Creds Tab", () => {
           favouriteIndex: 0,
         },
       },
-      connectionsCache: {
-        connections: connectionsFix,
+      profilesCache: {
+        ...profileCacheFixData,
+        defaultProfile: filteredIdentifierFix[1].id,
+        profiles: {
+          ...profileCacheFixData.profiles,
+          [filteredIdentifierFix[1].id]: {
+            ...profileCacheFixData.profiles[filteredIdentifierFix[1].id],
+            connections: connectionsFix,
+          },
+        },
       },
       biometricsCache: {
         enabled: false,
@@ -488,7 +401,7 @@ describe("Creds Tab", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -501,11 +414,17 @@ describe("Creds Tab", () => {
     );
 
     await waitFor(() => {
-      expect(getByTestId(`card-item-${pendingCredFixs[0].id}`)).toBeVisible();
+      expect(
+        getByTestId("archive-button-container").classList.contains("hidden")
+      ).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(getByTestId(`card-item-${pendingCredFix.id}`)).toBeVisible();
     });
 
     act(() => {
-      fireEvent.click(getByTestId(`card-item-${pendingCredFixs[0].id}`));
+      fireEvent.click(getByTestId(`card-item-${pendingCredFix.id}`));
     });
 
     await waitFor(() => {
@@ -556,7 +475,7 @@ describe("Creds Tab", () => {
 
   test("Show archived & revoked credentials", async () => {
     const storeMocked = {
-      ...mockStore(archivedAndRevokedState),
+      ...makeTestStore(archivedAndRevokedState),
       dispatch: dispatchMock,
     };
     const { getByTestId } = render(
@@ -566,13 +485,18 @@ describe("Creds Tab", () => {
         </Provider>
       </MemoryRouter>
     );
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
+    });
 
     expect(getByTestId("cred-archived-revoked-button")).toBeVisible();
   });
 
   test("Open cred detail", async () => {
     const storeMocked = {
-      ...mockStore(initialStateFull),
+      ...makeTestStore(initialStateFull),
       dispatch: dispatchMock,
     };
     const { getByTestId } = render(
@@ -582,6 +506,11 @@ describe("Creds Tab", () => {
         </Provider>
       </MemoryRouter>
     );
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
+    });
 
     act(() => {
       fireEvent.click(getByTestId("keri-card-template-allcreds-index-0"));
@@ -608,7 +537,7 @@ describe("Creds Tab", () => {
 
   test("Open cred archived modal", async () => {
     const storeMocked = {
-      ...mockStore(archivedAndRevokedState),
+      ...makeTestStore(archivedAndRevokedState),
       dispatch: dispatchMock,
     };
     const { getByTestId } = render(
@@ -618,6 +547,11 @@ describe("Creds Tab", () => {
         </Provider>
       </MemoryRouter>
     );
+    await waitFor(() => {
+      expect(
+        getByTestId("archive-button-container").classList.contains("visible")
+      ).toBeTruthy();
+    });
 
     act(() => {
       fireEvent.click(getByTestId("cred-archived-revoked-button"));

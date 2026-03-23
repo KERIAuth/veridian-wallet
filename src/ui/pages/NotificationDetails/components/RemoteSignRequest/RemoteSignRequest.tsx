@@ -10,7 +10,7 @@ import { Agent } from "../../../../../core/agent/agent";
 import { RemoteSignRequest as RemoteSignRequestModel } from "../../../../../core/agent/services/identifier.types";
 import { i18n } from "../../../../../i18n";
 import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
-import { getConnectionsCache } from "../../../../../store/reducers/connectionsCache";
+import { getConnectionsCache } from "../../../../../store/reducers/profileCache";
 import { setToastMsg } from "../../../../../store/reducers/stateCache";
 import {
   CardBlock,
@@ -48,7 +48,9 @@ const RemoteSignRequest = ({
   const [displayExpandButton, setDisplayExpandButton] = useState(false);
   const attributeContainerRef = useRef<HTMLDivElement>(null);
   const attributeRef = useRef<HTMLDivElement>(null);
-  const connectionName = connections[notificationDetails.connectionId];
+  const connectionName = connections.find(
+    (c) => c.id === notificationDetails.connectionId
+  );
   const [requestData, setRequestData] = useState<RemoteSignRequestModel>();
   const [loading, showLoading] = useState(true);
 

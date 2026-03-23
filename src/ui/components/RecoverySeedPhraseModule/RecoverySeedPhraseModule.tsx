@@ -1,6 +1,6 @@
 import { IonButton, IonIcon } from "@ionic/react";
 import { wordlists } from "bip39";
-import { closeOutline, addOutline } from "ionicons/icons";
+import { backspaceOutline, addOutline } from "ionicons/icons";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Agent } from "../../../core/agent/agent";
 import { i18n } from "../../../i18n";
@@ -226,11 +226,11 @@ const RecoverySeedPhraseModule = forwardRef<
 
     return (
       <>
-        <div className="content-container verify-recovery-seed-phrase-module">
-          <div className="page-content">
+        <div className="recovery-content-container recovery-seed-phrase-module">
+          <div>
             {title && (
               <h2
-                className="page-title"
+                className="title"
                 data-testid={`${testId}-title`}
               >
                 {title}
@@ -255,25 +255,27 @@ const RecoverySeedPhraseModule = forwardRef<
               errorInputIndexs={errorInputIndex}
             />
             {(suggestSeedPhrase.length > 0 || displaySuggestionError) && (
-              <h3 className="suggestion-title">
-                {i18n.t("verifyrecoveryseedphrase.suggestions.title")}
-              </h3>
-            )}
-            {suggestSeedPhrase.length > 0 && (
-              <SeedPhraseModule
-                testId="suggestion-seed-phrase-container"
-                seedPhrase={suggestSeedPhrase}
-                addSeedPhraseSelected={addSeedPhraseSelected}
-                hideSeedNumber
-              />
-            )}
-            {displaySuggestionError && (
-              <p
-                className="suggest-error"
-                data-testid="no-suggest-error"
-              >
-                {i18n.t("verifyrecoveryseedphrase.suggestions.error")}
-              </p>
+              <div className="suggestions-feature">
+                <h3 className="suggestions-title">
+                  {i18n.t("verifyrecoveryseedphrase.suggestions.title")}
+                </h3>
+                {suggestSeedPhrase.length > 0 && (
+                  <SeedPhraseModule
+                    testId="suggestions-seed-phrase-container"
+                    seedPhrase={suggestSeedPhrase}
+                    addSeedPhraseSelected={addSeedPhraseSelected}
+                    hideSeedNumber
+                  />
+                )}
+                {displaySuggestionError && (
+                  <p
+                    className="suggest-error"
+                    data-testid="no-suggest-error"
+                  >
+                    {i18n.t("verifyrecoveryseedphrase.suggestions.error")}
+                  </p>
+                )}
+              </div>
             )}
             {seedPhrase.filter((item) => !!item).length > 0 && (
               <IonButton
@@ -284,7 +286,7 @@ const RecoverySeedPhraseModule = forwardRef<
               >
                 <IonIcon
                   slot="start"
-                  icon={closeOutline}
+                  icon={backspaceOutline}
                 />
                 {i18n.t("verifyrecoveryseedphrase.button.clear")}
               </IonButton>

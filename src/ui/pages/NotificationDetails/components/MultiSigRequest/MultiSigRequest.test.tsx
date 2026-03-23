@@ -2,24 +2,26 @@ const verifySecretMock = jest.fn().mockResolvedValue(true);
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { mockIonicReact } from "@ionic/react-test-utils";
+
 import { act } from "react";
 import { TabsRoutePath } from "../../../../../routes/paths";
 import { notificationsFix } from "../../../../__fixtures__/notificationsFix";
 import {
   connectionsFix,
-  connectionsForNotifications,
+  connectionsForNotificationsValues,
 } from "../../../../__fixtures__/connectionsFix";
 import EN_TRANSLATIONS from "../../../../../locales/en/en.json";
 import { MultiSigRequest } from "./MultiSigRequest";
 import { filteredIdentifierFix } from "../../../../__fixtures__/filteredIdentifierFix";
-import { setNotificationsCache } from "../../../../../store/reducers/notificationsCache";
 import { MultiSigService } from "../../../../../core/agent/services/multiSigService";
 import { KeyStoreKeys } from "../../../../../core/storage";
 import { passcodeFiller } from "../../../../utils/passcodeFiller";
-
-mockIonicReact();
+import { makeTestStore } from "../../../../utils/makeTestStore";
+import {
+  deleteNotificationById,
+  setNotificationsCache,
+} from "../../../../../store/reducers/profileCache";
+import { profileCacheFixData } from "../../../../__fixtures__/storeDataFix";
 
 const multisigIcpDetails = {
   sender: {
@@ -65,7 +67,6 @@ jest.mock("../../../../../core/agent/agent", () => ({
   },
 }));
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialState = {
@@ -78,24 +79,21 @@ const initialState = {
     },
     isOnline: true,
   },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: notificationsFix,
+  profilesCache: {
+    ...profileCacheFixData,
+    profiles: {
+      ...(profileCacheFixData.profiles || {}),
+    },
   },
   biometricsCache: {
     enabled: false,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierFix,
   },
 };
 
 describe("Multisign request", () => {
   test("Render and decline", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
     const { getByText, getByTestId } = render(
@@ -141,7 +139,7 @@ describe("Multisign request", () => {
 
   test("Accept", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -191,17 +189,15 @@ describe("Multisign request", () => {
       );
     });
 
-    const newNotification = notificationsFix.filter(
-      (notification) => notification.id !== notificationsFix[3].id
-    );
-
     expect(backMock).toBeCalled();
-    expect(dispatchMock).lastCalledWith(setNotificationsCache(newNotification));
+    expect(dispatchMock).lastCalledWith(
+      deleteNotificationById(notificationsFix[3].id)
+    );
   });
 
   test("Show error page", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 

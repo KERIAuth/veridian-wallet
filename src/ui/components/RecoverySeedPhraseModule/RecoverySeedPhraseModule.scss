@@ -1,69 +1,81 @@
-.verify-recovery-seed-phrase-module {
+.recovery-seed-phrase-module {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: calc(100vh - (5.25rem + var(--ion-safe-area-top)));
+  min-height: calc(100vh - (4.5rem + var(--ion-safe-area-top)));
 
-  .page-content {
-    display: flex;
-    flex-direction: column;
-
-    & > * {
-      flex: 0 1 auto;
-    }
-  }
-
-  .page-title {
-    font-size: 1.5rem;
-    line-height: 1.75rem;
-    margin-top: 0.5rem;
-    font-weight: 700;
+  .title {
+    text-align: center;
   }
 
   .paragraph-top {
-    margin: 0.75rem 0 1rem;
-  }
-
-  .suggest-error {
-    font-size: 1rem;
-    line-height: 1.115rem;
-    color: var(--ion-color-neutral-800);
+    padding-inline: 1rem;
     text-align: center;
-    font-weight: 400;
+    margin-bottom: 1.5rem;
   }
 
-  .suggestion-title {
-    margin: 1.5rem 0 0.75rem;
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.5rem;
+  .suggestions-feature {
+    .suggest-error {
+      font-size: 1rem;
+      line-height: 1.115rem;
+      color: var(--ion-color-neutral-800);
+      text-align: center;
+      font-weight: 400;
+    }
+
+    .suggestions-title {
+      margin: 1.5rem 0 0.75rem;
+      padding-left: 0.75rem;
+      font-size: 1rem;
+      font-weight: 500;
+      line-height: 1.5rem;
+    }
+
+    .seed-phrase-module {
+      background: var(--ion-color-neutral-200);
+      border: none;
+    }
   }
 
-  .seed-phrase-module:nth-of-type(2) {
-    border: none;
+  .page-footer {
+    margin-top: auto !important;
   }
 
   .clear-button {
     display: flex;
+    height: 2.5rem;
     width: fit-content;
-    margin: 1.5rem auto 1rem;
+    margin: 1.25rem auto 1rem;
+
+    &::part(native) {
+      border-radius: 0.5rem;
+      padding: 0.5rem 1rem 0.5rem 0.75rem;
+    }
+
+    ion-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
   }
 
   @media screen and (min-width: 250px) and (max-width: 370px) {
     .paragraph-top {
-      margin: 0.5rem 0;
+      margin: 0.2rem 0;
+      padding-inline: 0.5rem;
     }
 
-    .suggest-error {
+    .suggestions-feature .suggestions-title {
+      margin: 1.2rem 0 0.5rem;
+      padding-left: 0.5rem;
       font-size: 0.8rem;
     }
 
     .clear-button {
-      margin-top: 1rem;
+      margin: 0.75rem auto;
     }
 
-    .suggestion-title {
-      margin-top: 1rem;
+    .page-footer {
+      margin-bottom: 0.5rem;
     }
   }
 }

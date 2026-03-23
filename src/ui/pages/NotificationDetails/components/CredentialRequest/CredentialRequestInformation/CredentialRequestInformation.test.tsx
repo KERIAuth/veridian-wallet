@@ -1,16 +1,20 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
+
 import EN_TRANSLATIONS from "../../../../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../../../../routes/paths";
-import { connectionsForNotifications } from "../../../../../__fixtures__/connectionsFix";
+import { InitializationPhase } from "../../../../../../store/reducers/stateCache/stateCache.types";
+import { connectionsForNotificationsValues } from "../../../../../__fixtures__/connectionsFix";
 import { credRequestFix } from "../../../../../__fixtures__/credRequestFix";
+import { credsFixAcdc } from "../../../../../__fixtures__/credsFix";
+import { filteredCredsFix } from "../../../../../__fixtures__/filteredCredsFix";
+import { filteredIdentifierFix } from "../../../../../__fixtures__/filteredIdentifierFix";
 import { notificationsFix } from "../../../../../__fixtures__/notificationsFix";
+import { profileCacheFixData } from "../../../../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../../../../utils/makeTestStore";
 import { passcodeFiller } from "../../../../../utils/passcodeFiller";
 import { CredentialRequestInformation } from "./CredentialRequestInformation";
-import { credsFixAcdc } from "../../../../../__fixtures__/credsFix";
-import { filteredIdentifierMapFix } from "../../../../../__fixtures__/filteredIdentifierFix";
 
 jest.mock("@ionic/react", () => ({
   ...jest.requireActual("@ionic/react"),
@@ -48,42 +52,51 @@ jest.mock("../../../../../../core/agent/agent", () => ({
   },
 }));
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialState = {
   stateCache: {
-    routes: [TabsRoutePath.NOTIFICATIONS],
+    routes: [{ path: TabsRoutePath.NOTIFICATIONS }],
     authentication: {
       loggedIn: true,
       time: Date.now(),
       passcodeIsSet: true,
+      seedPhraseIsSet: true,
+      passwordIsSet: false,
+      passwordIsSkipped: false,
+      ssiAgentIsSet: false,
+      ssiAgentUrl: "",
+      recoveryWalletProgress: false,
+      loginAttempt: {
+        attempts: 0,
+        lockedUntil: Date.now(),
+      },
+      firstAppLaunch: false,
     },
+    initializationPhase: InitializationPhase.PHASE_ONE,
+    recoveryCompleteNoInterruption: false,
+    isOnline: true,
+    queueIncomingRequest: {
+      isPaused: false,
+      isProcessing: false,
+      queues: [],
+    },
+    toastMsgs: [],
   },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: notificationsFix,
-  },
-  credsCache: {
-    creds: [{ ...credsFixAcdc[0], id: "cred-id" }],
-  },
-  credsArchivedCache: {
-    creds: [],
-  },
+
+  profilesCache: profileCacheFixData,
   biometricsCache: {
     enabled: false,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierMapFix,
   },
 };
 
 describe("Credential request information", () => {
+  beforeEach(() => {
+    getOfferedCredentialSaid.mockImplementation(() => "cred-id");
+  });
   test("Render and decline", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
     const { getByText, getByTestId, queryByText, unmount } = render(
@@ -147,6 +160,90 @@ describe("Credential request information", () => {
     unmount();
     document.getElementsByTagName("body")[0].innerHTML = "";
   });
+
+  test("Open connection modal", async () => {
+    const storeMocked = {
+      ...makeTestStore({
+        stateCache: {
+          routes: [{ path: TabsRoutePath.NOTIFICATIONS }],
+          authentication: {
+            loggedIn: true,
+            time: Date.now(),
+            passcodeIsSet: true,
+            seedPhraseIsSet: true,
+            passwordIsSet: false,
+            passwordIsSkipped: false,
+            ssiAgentIsSet: false,
+            ssiAgentUrl: "",
+            recoveryWalletProgress: false,
+            loginAttempt: {
+              attempts: 0,
+              lockedUntil: Date.now(),
+            },
+            firstAppLaunch: false,
+          },
+          initializationPhase: InitializationPhase.PHASE_ONE,
+          recoveryCompleteNoInterruption: false,
+          isOnline: true,
+          queueIncomingRequest: {
+            isPaused: false,
+            isProcessing: false,
+            queues: [],
+          },
+          toastMsgs: [],
+        },
+
+        profilesCache: {
+          ...profileCacheFixData,
+          profiles: {
+            [filteredIdentifierFix[0].id]: {
+              identity: filteredIdentifierFix[0],
+              connections: connectionsForNotificationsValues,
+              multisigConnections: [],
+            },
+          },
+        },
+        biometricsCache: {
+          enabled: false,
+        },
+      }),
+      dispatch: dispatchMock,
+    };
+    const { getByText, getByTestId } = render(
+      <Provider store={storeMocked}>
+        <CredentialRequestInformation
+          pageId="multi-sign"
+          activeStatus
+          onBack={jest.fn()}
+          onAccept={jest.fn()}
+          notificationDetails={notificationsFix[4]}
+          credentialRequest={credRequestFix}
+          linkedGroup={null}
+          onReloadData={jest.fn()}
+        />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText(
+          EN_TRANSLATIONS.tabs.notifications.details.credential.request
+            .information.requestfrom
+        )
+      ).toBeVisible();
+    });
+
+    fireEvent.click(
+      getByText(
+        EN_TRANSLATIONS.tabs.notifications.details.credential.request
+          .information.requestfrom
+      )
+    );
+
+    await waitFor(() => {
+      expect(getByTestId("connection-details-page")).toBeVisible();
+    });
+  });
 });
 
 describe("Credential request information: multisig", () => {
@@ -156,7 +253,7 @@ describe("Credential request information: multisig", () => {
       current: "",
       previous: undefined,
     },
-    threshold: "2",
+    threshold: { signingThreshold: 2, rotationThreshold: 2 },
     members: ["member-1", "member-2"],
     othersJoined: [],
     memberInfos: [
@@ -173,9 +270,14 @@ describe("Credential request information: multisig", () => {
     ],
   };
 
+  beforeEach(() => {
+    // Clear any leftover DOM overlays (ion-alert overlays) between tests
+    document.body.innerHTML = "";
+  });
+
   test("Initiator open request before proposing", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -262,7 +364,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: [],
       memberInfos: [
@@ -280,7 +382,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -347,15 +449,6 @@ describe("Credential request information: multisig", () => {
     expect(
       queryByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.reject)
     ).toBeNull();
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
-
-    act(() => {
-      fireEvent.click(getByTestId("primary-button-multi-sign"));
-    });
-
-    expect(back).toBeCalled();
   });
 
   test("Initiator opens request after proposing and after threshold is met", async () => {
@@ -365,7 +458,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-2"],
       memberInfos: [
@@ -383,7 +476,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -450,15 +543,6 @@ describe("Credential request information: multisig", () => {
     expect(
       queryByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.reject)
     ).toBeNull();
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
-
-    act(() => {
-      fireEvent.click(getByTestId("primary-button-multi-sign"));
-    });
-
-    expect(back).toBeCalled();
   });
 
   test("Initiator opens request after proposing and before threshold is met, but has deleted the proposed credential", async () => {
@@ -468,7 +552,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: [],
       memberInfos: [
@@ -486,11 +570,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: [],
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -564,15 +645,6 @@ describe("Credential request information: multisig", () => {
     expect(
       queryByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.reject)
     ).toBeNull();
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
-
-    act(() => {
-      fireEvent.click(getByTestId("primary-button-multi-sign"));
-    });
-
-    expect(back).toBeCalled();
   });
 
   test("Initiator opens request after proposing and after threshold is met", async () => {
@@ -582,7 +654,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-2"],
       memberInfos: [
@@ -600,11 +672,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: [],
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -678,15 +747,6 @@ describe("Credential request information: multisig", () => {
     expect(
       queryByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.reject)
     ).toBeNull();
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
-
-    act(() => {
-      fireEvent.click(getByTestId("primary-button-multi-sign"));
-    });
-
-    expect(back).toBeCalled();
   });
 
   test("Member opens request that does not yet have a proposal", async () => {
@@ -696,7 +756,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: [],
       memberInfos: [
@@ -714,7 +774,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -763,25 +823,17 @@ describe("Credential request information: multisig", () => {
           .information.groupmember
       )
     ).toBeVisible();
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
-
-    act(() => {
-      fireEvent.click(getByTestId("primary-button-multi-sign"));
-    });
-
-    expect(back).toBeCalled();
   });
 
   test("Member open request and accepts proposal from initiator", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => filteredCredsFix[0].id);
     const linkedGroup = {
       linkedRequest: {
         accepted: false,
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -799,7 +851,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -918,7 +970,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -936,14 +988,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: [],
-        },
-        credsArchivedCache: {
-          creds: [{ ...credsFixAcdc[0], id: "cred-id" }],
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -1063,7 +1109,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "3",
+      threshold: { signingThreshold: 3, rotationThreshold: 3 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1086,7 +1132,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -1167,7 +1213,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1190,7 +1236,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -1271,7 +1317,7 @@ describe("Credential request information: multisig", () => {
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1", "member-3"],
       memberInfos: [
@@ -1294,7 +1340,7 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -1369,13 +1415,14 @@ describe("Credential request information: multisig", () => {
   });
 
   test("Member opens request before accepting but proposed credential is missing, before threshold is met", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => "cred-id");
     const linkedGroup = {
       linkedRequest: {
         accepted: false,
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1398,11 +1445,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: credsFixAcdc,
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -1484,13 +1528,14 @@ describe("Credential request information: multisig", () => {
   });
 
   test("Member opens request before accepting but proposed credential is missing, after threshold met", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => "cred-id");
     const linkedGroup = {
       linkedRequest: {
         accepted: false,
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1", "member-3"],
       memberInfos: [
@@ -1513,11 +1558,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: credsFixAcdc,
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -1599,13 +1641,14 @@ describe("Credential request information: multisig", () => {
   });
 
   test("Member opens request after accepting but proposed credential is missing, before threshold is met", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => "cred-id");
     const linkedGroup = {
       linkedRequest: {
         accepted: true,
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "3",
+      threshold: { signingThreshold: 3, rotationThreshold: 3 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1628,11 +1671,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: credsFixAcdc,
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -1714,13 +1754,14 @@ describe("Credential request information: multisig", () => {
   });
 
   test("Member opens request after accepting but proposed credential is missing, after threshold is met", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => "cred-id");
     const linkedGroup = {
       linkedRequest: {
         accepted: true,
         current: "cred-id",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1743,11 +1784,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: credsFixAcdc,
-        },
       }),
       dispatch: dispatchMock,
     };
@@ -1829,13 +1867,14 @@ describe("Credential request information: multisig", () => {
   });
 
   test("Open proposed cred", async () => {
+    getOfferedCredentialSaid.mockImplementation(() => filteredCredsFix[0].id);
     const linkedGroup = {
       linkedRequest: {
         accepted: true,
         current: "EKfweht5lOkjaguB5dz42BMkfejhBFIF9-ghumzCJ6nv",
         previous: undefined,
       },
-      threshold: "2",
+      threshold: { signingThreshold: 2, rotationThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1"],
       memberInfos: [
@@ -1858,11 +1897,8 @@ describe("Credential request information: multisig", () => {
     };
 
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
-        credsCache: {
-          creds: [{ ...credsFixAcdc[0], id: "cred-id" }],
-        },
       }),
       dispatch: dispatchMock,
     };

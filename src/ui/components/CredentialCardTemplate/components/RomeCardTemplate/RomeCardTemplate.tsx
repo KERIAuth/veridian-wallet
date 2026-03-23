@@ -1,13 +1,13 @@
 import { IonChip, IonIcon } from "@ionic/react";
-import { useState } from "react";
 import { hourglassOutline } from "ionicons/icons";
+import { useState } from "react";
 import { CredentialStatus } from "../../../../../core/agent/services/credentialService.types";
 import { i18n } from "../../../../../i18n";
+import RomeBackground from "../../../../assets/images/rome-bg.png";
 import { formatShortDate } from "../../../../utils/formatters";
 import { Alert } from "../../../Alert";
 import { CredentialCardTemplateProps } from "../../CredentialCardTemplate.types";
-import { useCardOffsetTop } from "../../../IdentifierCardTemplate";
-import RomeBackground from "../../../../assets/images/rome-bg.png";
+import { useCardOffsetTop } from "../../hook/cardOffsetTopHook";
 import "./RomeCardTemplate.scss";
 
 const RomeCardTemplate = ({
@@ -68,8 +68,13 @@ const RomeCardTemplate = ({
             <span className="card-footer-column-label card-text">
               {i18n.t("tabs.credentials.layout.issued")}
             </span>
-            <span className="card-footer-column-value card-text">
-              {cardData.status === CredentialStatus.CONFIRMED ? (
+            <span
+              data-testid="card-issued-date"
+              className="card-footer-column-value card-text"
+            >
+              {[CredentialStatus.CONFIRMED, CredentialStatus.REVOKED].includes(
+                cardData.status
+              ) ? (
                 formatShortDate(cardData.issuanceDate)
               ) : (
                 <>&nbsp;</>

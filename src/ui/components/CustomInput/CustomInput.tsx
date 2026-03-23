@@ -22,6 +22,9 @@ const CustomInput = ({
   actionIcon,
   className,
   labelAction,
+  endAction,
+  inputMode,
+  type = "text",
 }: CustomInputProps) => {
   const [hidden, setHidden] = useState(hiddenInput);
   const { hideKeyboard } = useHideKeyboard();
@@ -39,22 +42,8 @@ const CustomInput = ({
 
   return (
     <IonItem className={inputClassname}>
-      {!labelAction ? (
-        <IonLabel
-          position="stacked"
-          data-testid={`${title
-            ?.toLowerCase()
-            .replace(/\s/g, "-")}-input-title`}
-        >
-          {title}
-          {optional && (
-            <span className="custom-input-optional">
-              {i18n.t("custominput.optional")}
-            </span>
-          )}
-        </IonLabel>
-      ) : (
-        <div className="input-label">
+      {title &&
+        (!labelAction ? (
           <IonLabel
             position="stacked"
             data-testid={`${title
@@ -68,9 +57,24 @@ const CustomInput = ({
               </span>
             )}
           </IonLabel>
-          {labelAction}
-        </div>
-      )}
+        ) : (
+          <div className="input-label">
+            <IonLabel
+              position="stacked"
+              data-testid={`${title
+                ?.toLowerCase()
+                .replace(/\s/g, "-")}-input-title`}
+            >
+              {title}
+              {optional && (
+                <span className="custom-input-optional">
+                  {i18n.t("custominput.optional")}
+                </span>
+              )}
+            </IonLabel>
+            {labelAction}
+          </div>
+        ))}
       <div className="input-line">
         <IonInput
           id={dataTestId}
@@ -78,7 +82,7 @@ const CustomInput = ({
           label={title}
           aria-label={`input-${title}`}
           labelPlacement="stacked"
-          type={hidden ? "password" : "text"}
+          type={hidden ? "password" : type}
           autofocus={autofocus}
           placeholder={placeholder}
           onIonInput={(e) => onChangeInput(e.target.value as string)}
@@ -86,6 +90,7 @@ const CustomInput = ({
           onIonBlur={() => handleFocus(false)}
           onKeyDown={hideKeyboard}
           value={value}
+          inputMode={inputMode}
         />
         {hiddenInput && (
           <IonButton
@@ -117,6 +122,7 @@ const CustomInput = ({
             />
           </IonButton>
         )}
+        {endAction}
       </div>
     </IonItem>
   );

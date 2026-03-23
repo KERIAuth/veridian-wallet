@@ -19,18 +19,24 @@ const ConnectionNotes = ({
             key={index}
             className="connection-details-notes"
             title={
-              index === 0 ? i18n.t("connections.details.notes") : undefined
+              index === 0
+                ? i18n.t("tabs.connections.details.notes.title")
+                : undefined
             }
           >
-            <h4 className="connection-details-note-title">{note.title}</h4>
-            <IonText className="connection-details-note-text">
-              {note.message}
-            </IonText>
+            {note.title && (
+              <h4 className="connection-details-note-title">{note.title}</h4>
+            )}
+            {note.message && (
+              <IonText className="connection-details-note-text">
+                {note.message}
+              </IonText>
+            )}
           </CardDetailsBlock>
         ))
       ) : (
         <p className="connection-notes-empty">
-          {i18n.t("connections.details.nocurrentnotesext")}
+          {i18n.t("tabs.connections.details.nocurrentnotesext")}
         </p>
       )}
       <PageFooter
@@ -38,8 +44,8 @@ const ConnectionNotes = ({
         primaryButtonIcon={notes.length > 0 ? "" : addOutline}
         primaryButtonText={`${
           notes.length > 0
-            ? i18n.t("connections.details.options.labels.manage")
-            : i18n.t("connections.details.options.labels.add")
+            ? i18n.t("tabs.connections.details.options.labels.manage")
+            : i18n.t("tabs.connections.details.options.labels.add")
         }`}
         primaryButtonAction={onOptionButtonClick}
       />

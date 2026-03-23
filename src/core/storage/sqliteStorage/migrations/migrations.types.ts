@@ -9,6 +9,7 @@ type BaseMigration = {
   version: string;
 };
 
+// Local-only migrations (SQLite database)
 type SqlMigration = BaseMigration & {
   type: MigrationType.SQL;
   sql: string[];
@@ -24,6 +25,9 @@ type TsMigration = BaseMigration & {
   >;
 };
 
+// Type aliases for better organization
+type LocalMigration = SqlMigration | TsMigration;
+
 export { MigrationType };
 
-export type { SqlMigration, TsMigration };
+export type { SqlMigration, TsMigration, LocalMigration };

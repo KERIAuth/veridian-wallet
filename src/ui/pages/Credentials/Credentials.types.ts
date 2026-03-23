@@ -1,7 +1,3 @@
-enum CredentialsFilters {
-  All = "all",
-  Individual = "individual",
-  Group = "group",
-}
+type StartAnimationSource = "favourite" | "cards" | "none";
 
-export { CredentialsFilters };
+export type { StartAnimationSource };

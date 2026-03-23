@@ -1,23 +1,21 @@
 const verifySecretMock = jest.fn().mockResolvedValue(true);
 
-import { BiometryType } from "@aparajita/capacitor-biometric-auth";
+import { BiometryType } from "@capgo/capacitor-native-biometric";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
+
 import { IdentifierType } from "../../../../../core/agent/services/identifier.types";
 import { KeyStoreKeys } from "../../../../../core/storage";
 import EN_TRANSLATIONS from "../../../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../../../routes/paths";
 import { showGenericError } from "../../../../../store/reducers/stateCache";
-import { connectionsForNotifications } from "../../../../__fixtures__/connectionsFix";
 import { credsFixAcdc } from "../../../../__fixtures__/credsFix";
-import {
-  filteredIdentifierFix,
-  filteredIdentifierMapFix,
-} from "../../../../__fixtures__/filteredIdentifierFix";
+import { filteredIdentifierFix } from "../../../../__fixtures__/filteredIdentifierFix";
 import { identifierFix } from "../../../../__fixtures__/identifierFix";
 import { notificationsFix } from "../../../../__fixtures__/notificationsFix";
+import { profileCacheFixData } from "../../../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../../../utils/makeTestStore";
 import { passcodeFiller } from "../../../../utils/passcodeFiller";
 import { ReceiveCredential } from "./ReceiveCredential";
 
@@ -67,15 +65,13 @@ jest.mock("../../../../hooks/useBiometricsHook", () => ({
     biometricInfo: {
       isAvailable: true,
       hasCredentials: false,
-      biometryType: BiometryType.fingerprintAuthentication,
-      strongBiometryIsAvailable: true,
+      biometryType: BiometryType.FINGERPRINT,
     },
     handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
     setBiometricsIsEnabled: jest.fn(),
   })),
 }));
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 
 const initialState = {
@@ -87,17 +83,43 @@ const initialState = {
       passcodeIsSet: true,
     },
   },
-  credsCache: {
-    creds: [],
-  },
-  connectionsCache: {
-    connections: connectionsForNotifications,
-  },
-  notificationsCache: {
-    notifications: notificationsFix,
-  },
-  identifiersCache: {
-    identifiers: filteredIdentifierMapFix,
+  profilesCache: {
+    ...profileCacheFixData,
+    defaultProfile: filteredIdentifierFix[2].id,
+    profiles: {
+      ...profileCacheFixData.profiles,
+      [filteredIdentifierFix[2].id]: {
+        identity: {
+          id: filteredIdentifierFix[2].id,
+          displayName:
+            profileCacheFixData.profiles[filteredIdentifierFix[2].id]?.identity
+              ?.displayName || "Test MS",
+          createdAtUTC: "2000-01-01T00:00:00.000Z",
+          groupMetadata: true,
+        },
+        connections:
+          profileCacheFixData.profiles[filteredIdentifierFix[2].id]
+            ?.connections || [],
+        multisigConnections: [
+          {
+            id: "member-1",
+            contactId: filteredIdentifierFix[2].id,
+            label: "Member 1",
+            groupId: "g1",
+          },
+          {
+            id: "member-2",
+            contactId: filteredIdentifierFix[2].id,
+            label: "Member 2",
+            groupId: "g1",
+          },
+        ],
+        peerConnections: [],
+        credentials: [],
+        archivedCredentials: [],
+        notifications: [],
+      },
+    },
   },
   biometricsCache: {
     enabled: false,
@@ -123,7 +145,7 @@ describe("Receive credential", () => {
 
   test("Render and decline", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
     const { getAllByText, getByText, getByTestId, queryByText } = render(
@@ -177,7 +199,7 @@ describe("Receive credential", () => {
 
   test("Accept", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -225,9 +247,114 @@ describe("Receive credential", () => {
     });
   }, 10000);
 
+  test("Race condition protection: prevents re-fetching while accepting", async () => {
+    const storeMocked = {
+      ...makeTestStore({
+        ...initialState,
+        profilesCache: {
+          ...initialState.profilesCache,
+          profiles: {
+            ...initialState.profilesCache.profiles,
+            [filteredIdentifierFix[2].id]: {
+              ...initialState.profilesCache.profiles[
+                filteredIdentifierFix[2].id
+              ],
+              identity: {
+                ...initialState.profilesCache.profiles[
+                  filteredIdentifierFix[2].id
+                ].identity,
+                groupMemberPre: "member-1",
+              },
+            },
+          },
+        },
+      }),
+      dispatch: dispatchMock,
+    };
+
+    const backMock = jest.fn();
+
+    getAcdcFromIpexGrantMock.mockResolvedValue({
+      ...credsFixAcdc[0],
+      identifierType: IdentifierType.Group,
+      identifierId: filteredIdentifierFix[2].id,
+    });
+
+    // We also need to mock valid response for getLinkedGroupFromIpexGrantMock
+    // so the component doesn't error out before we can test this race condition
+    getLinkedGroupFromIpexGrantMock.mockResolvedValue({
+      threshold: { signingThreshold: 2 },
+      members: ["member-1", "member-2"],
+      othersJoined: ["member-1"],
+      linkedRequest: {
+        accepted: false,
+      },
+    });
+
+    const { getByTestId, getByText, container } = render(
+      <Provider store={storeMocked}>
+        <ReceiveCredential
+          pageId="creadential-request-race"
+          activeStatus
+          handleBack={backMock}
+          notificationDetails={notificationsFix[0]}
+        />
+      </Provider>
+    );
+
+    // 1. Initial fetch should happen
+    await waitFor(() => {
+      expect(getLinkedGroupFromIpexGrantMock).toBeCalledTimes(1);
+    });
+
+    // 2. Clear mock to strictly track new calls
+    getLinkedGroupFromIpexGrantMock.mockClear();
+
+    // 3. Start Acceptance
+    act(() => {
+      fireEvent.click(getByTestId("primary-button-creadential-request-race"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("verify-passcode")).toBeVisible();
+    });
+
+    await passcodeFiller(getByText, getByTestId, "193212");
+
+    // 4. Verify we are in "isAccepting" state (via CSS class)
+    // The component wrapper should have "animation-on" class
+    await waitFor(() => {
+      const page = container.getElementsByClassName(
+        "creadential-request-race-receive-credential"
+      )[0];
+      expect(page).toHaveClass("animation-on");
+    });
+
+    // 5. Simulate a scenario that might trigger fetching (e.g., fast forward time slightly or re-render)
+    // In a real browser, useOnlineStatusEffect properties might change.
+    // Here we ensure that NO new calls to getLinkedGroupFromIpexGrantMock happen immediately.
+
+    // We advance time but NOT enough to finish the accept promise (700ms)
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+
+    // 6. Assert NO new calls occurred
+    expect(getLinkedGroupFromIpexGrantMock).not.toBeCalled();
+
+    // 7. Finish the process
+    act(() => {
+      jest.advanceTimersByTime(500); // Complete the 700ms + buffer
+    });
+
+    await waitFor(() => {
+      expect(admitAcdcFromGrantMock).toBeCalledWith(notificationsFix[0].id);
+    });
+  }, 10000);
+
   test("Open cred detail", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -268,25 +395,14 @@ describe("Receive credential", () => {
           passcodeIsSet: true,
         },
       },
-      credsCache: {
-        creds: [],
-      },
-      connectionsCache: {
-        connections: [],
-      },
-      notificationsCache: {
-        notifications: notificationsFix,
-      },
-      identifiersCache: {
-        identifiers: filteredIdentifierMapFix,
-      },
+      profilesCache: profileCacheFixData,
       biometricsCache: {
         enabled: false,
       },
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -317,96 +433,9 @@ describe("Receive credential", () => {
     });
   });
 
-  test("Open identifier details", async () => {
-    const initialState = {
-      stateCache: {
-        routes: [TabsRoutePath.NOTIFICATIONS],
-        authentication: {
-          loggedIn: true,
-          time: Date.now(),
-          passcodeIsSet: true,
-        },
-        isOnline: true,
-      },
-      credsCache: {
-        creds: [],
-      },
-      connectionsCache: {
-        connections: connectionsForNotifications,
-      },
-      notificationsCache: {
-        notifications: notificationsFix,
-      },
-      identifiersCache: {
-        identifiers: filteredIdentifierMapFix,
-      },
-      biometricsCache: {
-        enabled: false,
-      },
-    };
-
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
-    };
-
-    const backMock = jest.fn();
-    const { getAllByText, getByTestId, getByText, queryByTestId } = render(
-      <Provider store={storeMocked}>
-        <ReceiveCredential
-          pageId="creadential-request"
-          activeStatus
-          handleBack={backMock}
-          notificationDetails={notificationsFix[0]}
-        />
-      </Provider>
-    );
-
-    expect(
-      getAllByText(
-        EN_TRANSLATIONS.tabs.notifications.details.credential.receive.title
-      )[0]
-    ).toBeVisible();
-
-    await waitFor(() => {
-      expect(getByText("Profess")).toBeVisible();
-    });
-
-    fireEvent.click(getByTestId("related-identifier-detail"));
-
-    await waitFor(() => {
-      expect(getByTestId("identifier-detail-modal")).toBeVisible();
-    });
-
-    await waitFor(() =>
-      expect(
-        getByTestId("identifier-card-template-default-index-0")
-      ).toBeInTheDocument()
-    );
-    expect(
-      queryByTestId("delete-button-identifier-detail")
-    ).not.toBeInTheDocument();
-
-    act(() => {
-      fireEvent.click(getByTestId("identifier-options-button"));
-    });
-
-    await waitFor(() => {
-      expect(getByTestId("share-identifier-option")).toBeInTheDocument();
-    });
-
-    expect(queryByTestId("delete-identifier-option")).not.toBeInTheDocument();
-
-    fireEvent.click(getByText(EN_TRANSLATIONS.tabs.identifiers.details.done));
-
-    await waitFor(() => {
-      expect(queryByTestId("identifier-detail-modal")).toBeNull();
-    });
-  }, 10000);
-
   test("Show error when cred open", async () => {
     const storeMocked = {
-      ...mockStore({
+      ...makeTestStore({
         ...initialState,
         stateCache: {
           routes: [TabsRoutePath.NOTIFICATIONS],
@@ -444,6 +473,48 @@ describe("Receive credential", () => {
 
     unmount();
   });
+
+  test("Open relate profile and not show delete button", async () => {
+    const storeMocked = {
+      ...makeTestStore(initialState),
+      dispatch: dispatchMock,
+    };
+
+    getAcdcFromIpexGrantMock.mockResolvedValue({
+      ...credsFixAcdc[0],
+      identifierType: IdentifierType.Individual,
+      identifierId: filteredIdentifierFix[0].id,
+    });
+
+    const { getByText, queryByTestId, getByTestId } = render(
+      <Provider store={storeMocked}>
+        <ReceiveCredential
+          pageId="creadential-request"
+          activeStatus
+          handleBack={jest.fn()}
+          notificationDetails={notificationsFix[0]}
+        />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText(
+          EN_TRANSLATIONS.tabs.notifications.details.credential.receive
+            .relatedprofile
+        )
+      ).toBeVisible();
+    });
+
+    act(() => {
+      fireEvent.click(getByTestId("related-profile"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("profile-details-page")).toBeVisible();
+      expect(queryByTestId("delete-buttonprofile-details")).toBe(null);
+    });
+  });
 });
 
 describe("Credential request: Multisig", () => {
@@ -457,25 +528,43 @@ describe("Credential request: Multisig", () => {
       },
       isOnline: true,
     },
-    credsCache: {
-      creds: [],
-    },
-    connectionsCache: {
-      connections: connectionsForNotifications,
-      multisigConnections: {
-        "member-1": {
-          label: "Member 1",
-        },
-        "member-2": {
-          label: "Member 2",
+    profilesCache: {
+      ...profileCacheFixData,
+      profiles: {
+        ...profileCacheFixData.profiles,
+        [filteredIdentifierFix[2].id]: {
+          identity: {
+            id: filteredIdentifierFix[2].id,
+            displayName:
+              profileCacheFixData.profiles[filteredIdentifierFix[2].id]
+                ?.identity?.displayName || "Test MS",
+            createdAtUTC: "2000-01-01T00:00:00.000Z",
+            groupMetadata: true,
+          },
+          connections:
+            profileCacheFixData.profiles[filteredIdentifierFix[2].id]
+              ?.connections || [],
+          multisigConnections: [
+            {
+              id: "member-1",
+              contactId: filteredIdentifierFix[2].id,
+              label: "Member 1",
+              groupId: "g1",
+            },
+            {
+              id: "member-2",
+              contactId: filteredIdentifierFix[2].id,
+              label: "Member 2",
+              groupId: "g1",
+            },
+          ],
+          peerConnections: [],
+          credentials: [],
+          archivedCredentials: [],
+          notifications: [],
         },
       },
-    },
-    notificationsCache: {
-      notifications: notificationsFix,
-    },
-    identifiersCache: {
-      identifiers: filteredIdentifierMapFix,
+      defaultProfile: filteredIdentifierFix[2].id,
     },
     biometricsCache: {
       enabled: false,
@@ -483,7 +572,7 @@ describe("Credential request: Multisig", () => {
   };
 
   const storeMocked = {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 
@@ -497,7 +586,7 @@ describe("Credential request: Multisig", () => {
     });
 
     getLinkedGroupFromIpexGrantMock.mockResolvedValue({
-      threshold: "2",
+      threshold: { signingThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: [],
       linkedRequest: {
@@ -534,15 +623,11 @@ describe("Credential request: Multisig", () => {
           .initiatoracceptedalert
       )
     ).toBeVisible();
-
-    expect(
-      getByText(EN_TRANSLATIONS.tabs.notifications.details.buttons.ok)
-    ).toBeVisible();
   });
 
   test("Hide alert when group initiator accept cred", async () => {
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 
@@ -555,7 +640,7 @@ describe("Credential request: Multisig", () => {
     });
 
     getLinkedGroupFromIpexGrantMock.mockResolvedValue({
-      threshold: "2",
+      threshold: { signingThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-1"],
       linkedRequest: {
@@ -604,7 +689,7 @@ describe("Credential request: Multisig", () => {
     });
 
     getLinkedGroupFromIpexGrantMock.mockResolvedValue({
-      threshold: "2",
+      threshold: { signingThreshold: 2 },
       members: ["member-1", "member-2", "member-3"],
       othersJoined: ["member-1", "member-2"],
       linkedRequest: {
@@ -646,7 +731,7 @@ describe("Credential request: Multisig", () => {
     });
 
     getLinkedGroupFromIpexGrantMock.mockResolvedValue({
-      threshold: "2",
+      threshold: { signingThreshold: 2 },
       members: ["member-1", "member-2"],
       othersJoined: ["member-1"],
       linkedRequest: {

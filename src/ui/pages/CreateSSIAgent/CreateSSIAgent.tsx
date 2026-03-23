@@ -1,162 +1,96 @@
-import { IonButton, IonIcon, IonSpinner } from "@ionic/react";
-import {
-  addOutline,
-  informationCircleOutline,
-  openOutline,
-  refreshOutline,
-  scanOutline,
-} from "ionicons/icons";
-import { MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
+import { IonSpinner } from "@ionic/react";
+import { useCallback, useEffect, useState } from "react";
 import { Agent } from "../../../core/agent/agent";
 import { MiscRecordId } from "../../../core/agent/agent.types";
 import { BasicRecord } from "../../../core/agent/records";
-import { ConfigurationService } from "../../../core/configuration";
-import { IndividualOnlyMode } from "../../../core/configuration/configurationService.types";
-import { i18n } from "../../../i18n";
+import { KeyStoreKeys, SecureStorage } from "../../../core/storage";
 import { RoutePath } from "../../../routes";
 import { getNextRoute } from "../../../routes/nextRoute";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { setIndividualFirstCreate } from "../../../store/reducers/identifiersCache";
+import {
+  getProfiles,
+  updateCurrentProfile,
+} from "../../../store/reducers/profileCache";
 import { getSeedPhraseCache } from "../../../store/reducers/seedPhraseCache";
 import {
-  clearSSIAgent,
-  getSSIAgent,
-  setBootUrl,
-  setConnectUrl,
-} from "../../../store/reducers/ssiAgent";
-import {
   getStateCache,
-  setCurrentOperation,
+  setIsSetupProfile,
   setRecoveryCompleteNoInterruption,
-  setShowWelcomePage,
+  setSeedPhraseVerified,
+  setSsiAgentIsSet,
+  setSyncingData,
+  showGlobalLoading,
 } from "../../../store/reducers/stateCache";
 import { updateReduxState } from "../../../store/utils";
-import { CustomInput } from "../../components/CustomInput";
-import { ErrorMessage } from "../../components/ErrorMessage";
-import { PageFooter } from "../../components/PageFooter";
-import { PageHeader } from "../../components/PageHeader";
-import { SwitchOnboardingModeModal } from "../../components/SwitchOnboardingModeModal";
-import { OnboardingMode } from "../../components/SwitchOnboardingModeModal/SwitchOnboardingModeModal.types";
-import { TermsModal } from "../../components/TermsModal";
-import { ScrollablePageLayout } from "../../components/layout/ScrollablePageLayout";
-import {
-  ONBOARDING_DOCUMENTATION_LINK,
-  RECOVERY_DOCUMENTATION_LINK,
-} from "../../globals/constants";
-import { OperationType, ToastMsgType } from "../../globals/types";
+import { ToastMsgType } from "../../globals/types";
 import { useAppIonRouter } from "../../hooks";
 import { showError } from "../../utils/error";
-import { openBrowserLink } from "../../utils/openBrowserLink";
-import { isValidHttpUrl } from "../../utils/urlChecker";
 import "./CreateSSIAgent.scss";
-import { NotificationRoute } from "../../../core/agent/services/keriaNotificationService.types";
-import { addNotification } from "../../../store/reducers/notificationsCache";
+import { CurrentPage, SSIError } from "./CreateSSIAgent.types";
+import { AdvancedSetting, removeLastSlash } from "./components/AdvancedSetting";
+import { Connect } from "./components/Connect";
+import { SSIScan } from "./components/SSIScan";
+import { GlobalLoadingType } from "../../../store/reducers/stateCache/stateCache.types";
 
 const SSI_URLS_EMPTY = "SSI url is empty";
 const SEED_PHRASE_EMPTY = "Invalid seed phrase";
 
-const InputError = ({
-  showError,
-  errorMessage,
-}: {
-  showError: boolean;
-  errorMessage: string;
-}) => {
-  return showError ? (
-    <ErrorMessage message={errorMessage} />
-  ) : (
-    <div className="ssi-error-placeholder" />
-  );
-};
-
 const CreateSSIAgent = () => {
-  const pageId = "create-ssi-agent";
-  const ssiAgent = useAppSelector(getSSIAgent);
   const seedPhraseCache = useAppSelector(getSeedPhraseCache);
   const stateCache = useAppSelector(getStateCache);
+  const identifiers = useAppSelector(getProfiles);
 
   const ionRouter = useAppIonRouter();
   const dispatch = useAppDispatch();
-  const [connectUrlInputTouched, setConnectUrlTouched] = useState(false);
-  const [bootUrlInputTouched, setBootUrlInputTouched] = useState(false);
-  const [openInfo, setOpenInfo] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [hasMismatchError, setHasMismatchError] = useState(false);
-  const [unknownError, setUnknownError] = useState(false);
-  const [isInvalidBootUrl, setIsInvalidBootUrl] = useState(false);
-  const [isInvalidConnectUrl, setInvalidConnectUrl] = useState(false);
-  const [showSwitchModeModal, setSwitchModeModal] = useState(false);
+  const [errors, setError] = useState<SSIError>({
+    hasMismatchError: false,
+    unknownError: false,
+    isInvalidBootUrl: false,
+    isInvalidConnectUrl: false,
+    failedDiscoveryConnectUrl: false,
+    connectURlNotFound: false,
+    bootNetworkIssue: false,
+    connectNetworkIssue: false,
+  });
+  const [currentPage, setCurrentPage] = useState(CurrentPage.Connect);
 
   const isRecoveryMode = stateCache.authentication.recoveryWalletProgress;
-  const isIndividualOnlyFirstCreateMode =
-    ConfigurationService.env.features.customise?.identifiers?.creation
-      ?.individualOnly === IndividualOnlyMode.FirstTime;
+  const isOnline = stateCache.isOnline;
 
-  useEffect(() => {
-    if (!ssiAgent.bootUrl && !ssiAgent.connectUrl) {
-      dispatch(
-        setConnectUrl(ConfigurationService.env?.keri?.keria?.url || undefined)
-      );
-      dispatch(
-        setBootUrl(ConfigurationService.env?.keri?.keria?.bootUrl || undefined)
-      );
-    }
-  }, [dispatch, ssiAgent.bootUrl, ssiAgent.connectUrl]);
-
-  const setTouchedConnectUrlInput = () => {
-    setConnectUrlTouched(true);
+  const setSSIError = (values: Partial<SSIError>) => {
+    setError((errors) => ({
+      ...errors,
+      ...values,
+    }));
   };
 
-  const setTouchedBootUrlInput = () => {
-    setBootUrlInputTouched(true);
-  };
-
-  const validBootUrl =
-    isRecoveryMode || (ssiAgent.bootUrl && isValidHttpUrl(ssiAgent.bootUrl));
-
-  const validConnectUrl =
-    ssiAgent.connectUrl && isValidHttpUrl(ssiAgent.connectUrl);
-
-  const displayBootUrlError =
-    !isRecoveryMode &&
-    bootUrlInputTouched &&
-    ssiAgent.bootUrl &&
-    !isValidHttpUrl(ssiAgent.bootUrl);
-
-  const displayConnectUrlError =
-    connectUrlInputTouched &&
-    ssiAgent.connectUrl &&
-    !isValidHttpUrl(ssiAgent.connectUrl);
-
-  const validated = validBootUrl && validConnectUrl;
-
-  const handleClearState = () => {
-    dispatch(clearSSIAgent());
-  };
-
-  const handleError = (error: Error) => {
+  const handleScanError = (
+    error: Error,
+    context:
+      | { recovery: false }
+      | { recovery: true; connectUrlDiscovered: boolean }
+  ) => {
     const errorMessage = error.message;
 
-    if (Agent.KERIA_BOOT_FAILED === errorMessage) {
-      setIsInvalidBootUrl(true);
+    const invalidUrlErrors = [Agent.CONNECT_URL_DISCOVERY_FAILED];
+    if (context.recovery && !context.connectUrlDiscovered) {
+      invalidUrlErrors.push(Agent.KERIA_NOT_BOOTED);
     }
 
-    if (Agent.KERIA_NOT_BOOTED === errorMessage) {
-      setHasMismatchError(true);
-    }
-
-    if (Agent.KERIA_BOOTED_ALREADY_BUT_CANNOT_CONNECT === errorMessage) {
-      setInvalidConnectUrl(true);
+    if (invalidUrlErrors.some((message) => errorMessage.includes(message))) {
+      showError(errorMessage, error, dispatch, ToastMsgType.URL_ERROR);
+      return;
     }
 
     if (
       [
         Agent.KERIA_BOOT_FAILED_BAD_NETWORK,
         Agent.KERIA_CONNECT_FAILED_BAD_NETWORK,
-      ].includes(errorMessage)
+        Agent.CONNECT_URL_DISCOVERY_BAD_NETWORK,
+      ].some((message) => errorMessage.includes(message))
     ) {
-      setUnknownError(true);
-      showError("Bad network", error);
+      showError(errorMessage, error, dispatch, ToastMsgType.NETWORK_ERROR);
       return;
     }
 
@@ -168,50 +102,169 @@ const CreateSSIAgent = () => {
     );
   };
 
-  const updateFirstInstallValue = async (firstInstall: boolean) => {
-    try {
-      if (firstInstall) {
-        if (
-          ConfigurationService.env.features.customise?.notifications
-            ?.connectInstructions
-        ) {
-          const connectNotification =
-            await Agent.agent.keriaNotifications.createSingletonNotification(
-              NotificationRoute.LocalSingletonConnectInstructions,
-              {
-                name: ConfigurationService.env.features.customise?.notifications
-                  .connectInstructions.connectionName,
-              }
-            );
+  const handleError = (error: Error) => {
+    const errorMessage = error.message;
 
-          if (connectNotification) {
-            dispatch(addNotification(connectNotification));
+    if (Agent.KERIA_BOOT_FAILED === errorMessage) {
+      setSSIError({
+        isInvalidBootUrl: true,
+      });
+      return;
+    }
+
+    if (Agent.KERIA_BOOTED_ALREADY_BUT_CANNOT_CONNECT === errorMessage) {
+      setSSIError({
+        isInvalidConnectUrl: true,
+      });
+      return;
+    }
+
+    if (Agent.KERIA_NOT_BOOTED === errorMessage) {
+      showError(
+        errorMessage,
+        error,
+        dispatch,
+        ToastMsgType.CONNECT_URL_MISMATCH
+      );
+      setSSIError({
+        hasMismatchError: true,
+      });
+      return;
+    }
+
+    if (
+      [
+        Agent.KERIA_BOOT_FAILED_BAD_NETWORK,
+        Agent.KERIA_CONNECT_FAILED_BAD_NETWORK,
+      ].includes(errorMessage)
+    ) {
+      showError(errorMessage, error, dispatch, ToastMsgType.NETWORK_ERROR);
+      setSSIError({
+        bootNetworkIssue: errorMessage === Agent.KERIA_BOOT_FAILED_BAD_NETWORK,
+        connectNetworkIssue:
+          errorMessage === Agent.KERIA_CONNECT_FAILED_BAD_NETWORK,
+      });
+      return;
+    }
+
+    showError(
+      "Unable to boot or connect keria",
+      error,
+      dispatch,
+      ToastMsgType.UNKNOWN_ERROR
+    );
+  };
+
+  const updateIsSetupProfile = useCallback(
+    async (mustSetupProfile: boolean) => {
+      try {
+        if (mustSetupProfile) {
+          await Agent.agent.basicStorage.createOrUpdateBasicRecord(
+            new BasicRecord({
+              id: MiscRecordId.IS_SETUP_PROFILE,
+              content: {
+                value: mustSetupProfile,
+              },
+            })
+          );
+        } else {
+          const oldestProfile = Object.values(identifiers).reduce(
+            (prev, curr) => {
+              return new Date(curr.identity.createdAtUTC) <
+                new Date(prev.identity.createdAtUTC)
+                ? curr
+                : prev;
+            }
+          );
+
+          if (oldestProfile) {
+            Agent.agent.basicStorage
+              .createOrUpdateBasicRecord(
+                new BasicRecord({
+                  id: MiscRecordId.DEFAULT_PROFILE,
+                  content: { defaultProfile: oldestProfile.identity.id },
+                })
+              )
+              .then(() => {
+                dispatch(updateCurrentProfile(oldestProfile.identity.id));
+              })
+              .catch((e) => {
+                showError("Cannot set default profile", e);
+              });
           }
         }
 
-        await Agent.agent.basicStorage.createOrUpdateBasicRecord(
-          new BasicRecord({
-            id: MiscRecordId.APP_FIRST_INSTALL,
-            content: {
-              value: firstInstall,
-            },
-          })
-        );
-      } else {
-        await Agent.agent.basicStorage.deleteById(
-          MiscRecordId.APP_FIRST_INSTALL
-        );
+        dispatch(setIsSetupProfile(mustSetupProfile));
+      } catch (e) {
+        showError("Unable to set first app launch", e);
       }
-      dispatch(setShowWelcomePage(firstInstall));
+    },
+    [dispatch, identifiers]
+  );
+
+  const getConnectUrl = async (bootUrl: string) => {
+    try {
+      return await Agent.agent.discoverConnectUrl(bootUrl);
     } catch (e) {
-      showError("Unable to set first app launch", e);
+      const message = (e as Error).message;
+
+      if (message.startsWith(Agent.CONNECT_URL_DISCOVERY_FAILED)) {
+        return bootUrl;
+      }
+
+      throw e;
     }
   };
 
-  const handleRecoveryWallet = async () => {
+  const handlePostRecovery = async () => {
+    await Agent.agent.markSeedPhraseAsVerified();
+    dispatch(setSeedPhraseVerified(true));
+    dispatch(setRecoveryCompleteNoInterruption());
+  };
+
+  const recoverAndLoadDb = async () => {
+    const recoveryStatus = await Agent.agent.basicStorage.findById(
+      MiscRecordId.CLOUD_RECOVERY_STATUS
+    );
+
+    const isSyncing = recoveryStatus?.content?.syncing;
+
+    if (isSyncing) {
+      setCurrentPage(CurrentPage.Connect);
+      dispatch(setSsiAgentIsSet(true));
+    }
+
+    await Agent.agent.connect(Agent.DEFAULT_RECONNECT_INTERVAL, false);
+
+    if (isSyncing) {
+      try {
+        dispatch(setSyncingData(true));
+        dispatch(showGlobalLoading(GlobalLoadingType.HIDEBG));
+        await Agent.agent.syncWithKeria();
+        await handlePostRecovery();
+      } catch (e) {
+        const errorMessage = (e as Error).message;
+
+        if (errorMessage === Agent.SYNC_DATA_NETWORK_ERROR) {
+          await recoverAndLoadDb();
+          return;
+        }
+
+        throw e;
+      } finally {
+        dispatch(showGlobalLoading(GlobalLoadingType.NONE));
+      }
+    }
+  };
+
+  const handleRecoveryWallet = async (bootUrl: string) => {
     setLoading(true);
+
+    let validBootUrl: string | undefined;
+    let connectUrl: string | undefined;
+
     try {
-      if (!ssiAgent.connectUrl) {
+      if (!bootUrl) {
         throw new Error(SSI_URLS_EMPTY);
       }
 
@@ -219,36 +272,16 @@ const CreateSSIAgent = () => {
         throw new Error(SEED_PHRASE_EMPTY);
       }
 
-      const connectUrl = removeLastSlash(ssiAgent.connectUrl.trim());
-
-      dispatch(setConnectUrl(connectUrl));
+      validBootUrl = removeLastSlash(bootUrl.trim());
+      connectUrl = await getConnectUrl(validBootUrl);
 
       await Agent.agent.recoverKeriaAgent(
         seedPhraseCache.seedPhrase.split(" "),
         connectUrl
       );
 
-      dispatch(setRecoveryCompleteNoInterruption());
-
-      await updateFirstInstallValue(false);
-
-      const { nextPath, updateRedux } = getNextRoute(RoutePath.SSI_AGENT, {
-        store: { stateCache },
-      });
-
-      updateReduxState(
-        nextPath.pathname,
-        {
-          store: { stateCache },
-        },
-        dispatch,
-        updateRedux
-      );
-
-      Agent.agent.basicStorage.deleteById(MiscRecordId.APP_RECOVERY_WALLET);
-
-      ionRouter.push(nextPath.pathname, "forward", "push");
-      handleClearState();
+      await handlePostRecovery();
+      // Note: We need to wait load data from db before go to next page
     } catch (e) {
       const errorMessage = (e as Error).message;
 
@@ -260,47 +293,35 @@ const CreateSSIAgent = () => {
         return;
       }
 
+      if (Agent.SYNC_DATA_NETWORK_ERROR === errorMessage) {
+        await recoverAndLoadDb();
+        return;
+      }
+
+      if (currentPage === CurrentPage.Scan) {
+        const connectUrlDiscovered =
+          connectUrl !== undefined && validBootUrl !== connectUrl;
+        handleScanError(e as Error, { recovery: true, connectUrlDiscovered });
+        return;
+      }
+
       handleError(e as Error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateSSI = async () => {
-    setLoading(true);
-    try {
-      if (!ssiAgent.bootUrl || !ssiAgent.connectUrl) {
-        throw new Error(SSI_URLS_EMPTY);
-      }
+  useEffect(() => {
+    async function handAfterRecoveryWallet() {
+      const shouldSetupProfile = Object.values(identifiers).length === 0;
 
-      const bootUrl = removeLastSlash(ssiAgent.bootUrl.trim());
-      const connectUrl = removeLastSlash(ssiAgent.connectUrl.trim());
-
-      dispatch(setBootUrl(bootUrl));
-      dispatch(setConnectUrl(connectUrl));
-
-      await Agent.agent.bootAndConnect({
-        bootUrl: bootUrl,
-        url: connectUrl,
-      });
-
-      await updateFirstInstallValue(true);
-
-      if (isIndividualOnlyFirstCreateMode) {
-        await Agent.agent.basicStorage
-          .createOrUpdateBasicRecord(
-            new BasicRecord({
-              id: MiscRecordId.INDIVIDUAL_FIRST_CREATE,
-              content: { value: true },
-            })
-          )
-          .then(() =>
-            dispatch(setIndividualFirstCreate(isIndividualOnlyFirstCreateMode))
-          );
-      }
+      await updateIsSetupProfile(shouldSetupProfile);
 
       const { nextPath, updateRedux } = getNextRoute(RoutePath.SSI_AGENT, {
         store: { stateCache },
+        state: {
+          shouldSetupProfile,
+        },
       });
 
       updateReduxState(
@@ -312,244 +333,154 @@ const CreateSSIAgent = () => {
         updateRedux
       );
 
+      await Agent.agent.basicStorage
+        .deleteById(MiscRecordId.APP_RECOVERY_WALLET)
+        .catch((e) => showError("Unable to detele recovery key", e));
+
       ionRouter.push(nextPath.pathname, "forward", "push");
-      handleClearState();
+    }
+
+    // Note: If user is recovering their wallet and old data has been loaded
+    if (isRecoveryMode && isOnline) {
+      handAfterRecoveryWallet();
+    }
+  }, [
+    dispatch,
+    stateCache,
+    updateIsSetupProfile,
+    isRecoveryMode,
+    isOnline,
+    identifiers,
+    ionRouter,
+  ]);
+
+  const handleCreateSSI = async (bootUrl: string, connectUrl?: string) => {
+    setLoading(true);
+    try {
+      const validBootUrl = removeLastSlash(bootUrl.trim());
+
+      const existBran = await SecureStorage.keyExists(
+        KeyStoreKeys.SIGNIFY_BRAN
+      );
+
+      if (!existBran) {
+        const seedPhraseStore = await Agent.agent.getBranAndMnemonic();
+        await SecureStorage.set(
+          KeyStoreKeys.SIGNIFY_BRAN,
+          seedPhraseStore.bran
+        );
+      }
+
+      if (connectUrl) {
+        const validconnectUrl = removeLastSlash(connectUrl.trim());
+
+        await Agent.agent.bootAndConnect({
+          bootUrl: validBootUrl,
+          url: validconnectUrl,
+        });
+      } else {
+        await Agent.agent.bootAndConnect(validBootUrl);
+      }
+
+      await updateIsSetupProfile(true);
+
+      const { nextPath, updateRedux } = getNextRoute(RoutePath.SSI_AGENT, {
+        store: { stateCache },
+        state: {
+          shouldSetupProfile: true,
+        },
+      });
+
+      updateReduxState(
+        nextPath.pathname,
+        {
+          store: { stateCache },
+          state: {
+            shouldSetupProfile: true,
+          },
+        },
+        dispatch,
+        updateRedux
+      );
+
+      ionRouter.push(nextPath.pathname, "forward", "push");
     } catch (e) {
+      if (currentPage === CurrentPage.Scan) {
+        handleScanError(e as Error, { recovery: false });
+        return;
+      }
+
       handleError(e as Error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleValidate = () => {
-    if (isRecoveryMode) {
-      handleRecoveryWallet();
-    } else {
-      handleCreateSSI();
-    }
+  const clearError = () => {
+    setError({
+      hasMismatchError: false,
+      unknownError: false,
+      isInvalidBootUrl: false,
+      isInvalidConnectUrl: false,
+      failedDiscoveryConnectUrl: false,
+      connectURlNotFound: false,
+      bootNetworkIssue: false,
+      connectNetworkIssue: false,
+    });
   };
 
-  const scanBootUrl = (event: ReactMouseEvent<HTMLElement, MouseEvent>) => {
-    event.stopPropagation();
-    dispatch(setCurrentOperation(OperationType.SCAN_SSI_BOOT_URL));
-    setTouchedBootUrlInput();
-  };
+  const handleSSI = async (mainUrl?: string, connectUrl?: string) => {
+    clearError();
 
-  const scanConnectUrl = (event: ReactMouseEvent<HTMLElement, MouseEvent>) => {
-    event.stopPropagation();
-    dispatch(setCurrentOperation(OperationType.SCAN_SSI_CONNECT_URL));
-    setTouchedConnectUrlInput();
-  };
-
-  const removeLastSlash = (url: string) => {
-    let result = url;
-
-    while (result && result.length > 0 && url[result.length - 1] === "/") {
-      result = result.substring(0, result.length - 1);
-    }
-
-    return result;
-  };
-
-  const handleChangeConnectUrl = (connectionUrl: string) => {
-    setInvalidConnectUrl(false);
-    setHasMismatchError(false);
-    setUnknownError(false);
-    dispatch(setConnectUrl(connectionUrl));
-  };
-
-  const handleChangeBootUrl = (bootUrl: string) => {
-    setIsInvalidBootUrl(false);
-    dispatch(setBootUrl(bootUrl));
-  };
-
-  const handleOpenUrl = () => {
-    openBrowserLink(
-      isRecoveryMode
-        ? RECOVERY_DOCUMENTATION_LINK
-        : ONBOARDING_DOCUMENTATION_LINK
-    );
-  };
-
-  const mode = isRecoveryMode ? OnboardingMode.Create : OnboardingMode.Recovery;
-
-  const buttonLabel = !isRecoveryMode
-    ? i18n.t("generateseedphrase.onboarding.button.switch")
-    : i18n.t("verifyrecoveryseedphrase.button.switch");
-
-  const showConnectionUrlError =
-    !!displayConnectUrlError ||
-    hasMismatchError ||
-    isInvalidConnectUrl ||
-    unknownError;
-
-  const connectionUrlError = (() => {
-    if (unknownError) {
-      return "ssiagent.error.unknownissue";
-    }
-
-    if (hasMismatchError) {
-      if (isRecoveryMode) {
-        return "ssiagent.error.recoverymismatchconnecturl";
+    if (stateCache.authentication.recoveryWalletProgress) {
+      if (currentPage == CurrentPage.Scan && mainUrl) {
+        return await handleRecoveryWallet(mainUrl);
       }
-      return "ssiagent.error.mismatchconnecturl";
-    }
 
-    if (displayBootUrlError && !isInvalidConnectUrl) {
-      return "ssiagent.error.invalidurl";
+      if (!connectUrl) return;
+      return await handleRecoveryWallet(connectUrl);
+    } else {
+      if (!mainUrl) return;
+      return await handleCreateSSI(mainUrl, connectUrl);
     }
+  };
 
-    return "ssiagent.error.invalidconnecturl";
-  })();
+  const renderContent = () => {
+    switch (currentPage) {
+      case CurrentPage.Scan:
+        return (
+          <SSIScan
+            setCurrentPage={setCurrentPage}
+            onScanFinish={handleSSI}
+            isLoading={loading}
+            isRecovery={stateCache.authentication.recoveryWalletProgress}
+          />
+        );
+      case CurrentPage.AdvancedSetting:
+        return (
+          <AdvancedSetting
+            onSubmitForm={handleSSI}
+            setCurrentPage={setCurrentPage}
+            errors={errors}
+            setErrors={setSSIError}
+          />
+        );
+      default:
+        return <Connect onConnect={() => setCurrentPage(CurrentPage.Scan)} />;
+    }
+  };
 
   return (
     <>
-      <ScrollablePageLayout
-        pageId={pageId}
-        header={
-          <PageHeader
-            currentPath={RoutePath.SSI_AGENT}
-            progressBar={true}
-            progressBarValue={1}
-            progressBarBuffer={1}
-          />
-        }
-      >
-        <div className="content-container ">
-          <div>
-            <h2
-              className="title"
-              data-testid={`${pageId}-title`}
-            >
-              {i18n.t("ssiagent.title")}
-            </h2>
-            <p
-              className="page-paragraph"
-              data-testid={`${pageId}-top-paragraph`}
-            >
-              {i18n.t(
-                isRecoveryMode
-                  ? "ssiagent.verifydescription"
-                  : "ssiagent.description"
-              )}
-            </p>
-            <div>
-              <IonButton
-                fill="outline"
-                className="copy-button secondary-button"
-                onClick={() => setOpenInfo(true)}
-              >
-                <IonIcon
-                  slot="start"
-                  icon={informationCircleOutline}
-                />
-                {i18n.t("ssiagent.button.info")}
-              </IonButton>
-            </div>
-            {!isRecoveryMode && (
-              <>
-                <CustomInput
-                  className="boot-url-input"
-                  dataTestId="boot-url-input"
-                  title={`${i18n.t("ssiagent.input.boot.label")}`}
-                  placeholder={`${i18n.t("ssiagent.input.boot.placeholder")}`}
-                  actionIcon={scanOutline}
-                  action={scanBootUrl}
-                  onChangeInput={handleChangeBootUrl}
-                  value={ssiAgent.bootUrl || ""}
-                  onChangeFocus={(result) => {
-                    setTouchedBootUrlInput();
-
-                    if (!result && ssiAgent.bootUrl) {
-                      dispatch(
-                        setBootUrl(removeLastSlash(ssiAgent.bootUrl.trim()))
-                      );
-                    }
-                  }}
-                  error={!!displayBootUrlError || isInvalidBootUrl}
-                />
-                <InputError
-                  showError={!!displayBootUrlError || isInvalidBootUrl}
-                  errorMessage={
-                    (displayBootUrlError || isInvalidBootUrl) &&
-                    !displayConnectUrlError
-                      ? `${i18n.t("ssiagent.error.invalidbooturl")}`
-                      : `${i18n.t("ssiagent.error.invalidurl")}`
-                  }
-                />
-              </>
-            )}
-            <CustomInput
-              className="connect-url-input"
-              dataTestId="connect-url-input"
-              title={`${i18n.t("ssiagent.input.connect.label")}`}
-              placeholder={`${i18n.t("ssiagent.input.connect.placeholder")}`}
-              actionIcon={scanOutline}
-              action={scanConnectUrl}
-              onChangeInput={handleChangeConnectUrl}
-              onChangeFocus={(result) => {
-                setTouchedConnectUrlInput();
-
-                if (!result && ssiAgent.connectUrl) {
-                  dispatch(
-                    setConnectUrl(removeLastSlash(ssiAgent.connectUrl.trim()))
-                  );
-                }
-              }}
-              value={ssiAgent.connectUrl || ""}
-              error={showConnectionUrlError}
-            />
-            <InputError
-              showError={showConnectionUrlError}
-              errorMessage={`${i18n.t(connectionUrlError)}`}
-            />
-          </div>
-          <PageFooter
-            pageId={pageId}
-            primaryButtonText={`${i18n.t("ssiagent.button.validate")}`}
-            primaryButtonAction={() => handleValidate()}
-            primaryButtonDisabled={!validated || loading}
-            tertiaryButtonText={buttonLabel}
-            tertiaryButtonAction={() => setSwitchModeModal(true)}
-            tertiaryButtonIcon={isRecoveryMode ? addOutline : refreshOutline}
-          />
-        </div>
-      </ScrollablePageLayout>
+      {renderContent()}
       {loading && (
         <div
-          className="ssi-spinner-container"
+          className="ssi-spinner-container max-zindex"
           data-testid="ssi-spinner-container"
         >
           <IonSpinner name="circular" />
         </div>
       )}
-      <TermsModal
-        name={`about-ssi-agent-${
-          isRecoveryMode ? OnboardingMode.Recovery : OnboardingMode.Create
-        }`}
-        isOpen={openInfo}
-        setIsOpen={setOpenInfo}
-      >
-        <IonButton
-          onClick={handleOpenUrl}
-          fill="outline"
-          data-testid="open-ssi-documentation-button"
-          className="open-ssi-documentation-button secondary-button"
-        >
-          <IonIcon
-            slot="end"
-            icon={openOutline}
-          />
-          {isRecoveryMode
-            ? `${i18n.t("ssiagent.button.recoverydocumentation")}`
-            : `${i18n.t("ssiagent.button.onboardingdocumentation")}`}
-        </IonButton>
-      </TermsModal>
-      <SwitchOnboardingModeModal
-        mode={mode}
-        isOpen={showSwitchModeModal}
-        setOpen={setSwitchModeModal}
-      />
     </>
   );
 };

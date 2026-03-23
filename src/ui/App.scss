@@ -52,7 +52,8 @@ body {
     display: none;
   }
 
-  &.scanner-active {
+  &.scanner-active,
+  &.scan-active {
     background-color: transparent;
 
     > div:last-child {
@@ -71,8 +72,16 @@ body {
 
 ion-content {
   --offset-bottom: auto !important;
-  --overflow: hidden;
-  overflow: auto;
+
+  /* Ionic 8 fix: Ensure Shadow DOM scroll container has explicit height */
+  &::part(scroll) {
+    height: 100%;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
   &::-webkit-scrollbar {
     display: none;
   }
@@ -236,13 +245,24 @@ p {
 .decline-button,
 .archive-button {
   font-size: 1rem;
-  height: 3.25rem;
+  height: 3.5rem;
+  margin: 0;
   --background-activated: var(--ion-color-neutral-400);
   --border-radius: 1rem;
 
   &.button-disabled {
     --background: var(--ion-color-neutral-400);
     --color: var(--ion-color-neutral-800);
+  }
+
+  &.button-slim {
+    height: 2.5rem;
+  }
+
+  @media screen and (min-height: 300px) and (max-height: 580px) {
+    &.button-slim {
+      height: 2rem;
+    }
   }
 }
 
@@ -251,10 +271,15 @@ p {
   .secondary-button,
   .tertiary-button,
   .delete-button,
+  .decline-button,
   .archive-button {
     font-size: 0.8rem;
-    height: 2.5rem;
+    height: 2.8rem;
     margin: 0 auto 0.8rem;
+
+    &.button-slim {
+      height: 2rem;
+    }
   }
 }
 
@@ -297,10 +322,21 @@ ion-segment {
   --background: var(--ion-color-neutral-300);
 
   ion-segment-button {
+    height: 2.25rem;
+
+    &.md {
+      height: 2.25rem;
+    }
+
     &.segment-button-checked {
       --color-checked: var(--ion-color-neutral-100);
+
       &::part(indicator-background) {
         background: var(--ion-color-primary-700);
+      }
+
+      &.md {
+        --color-checked: var(--ion-color-primary-700);
       }
     }
   }
@@ -313,9 +349,13 @@ ion-segment {
       margin: 0 auto;
     }
 
-    ion-segment-button.md {
-      height: 2.4rem;
-      min-height: 2.4rem;
+    ion-segment-button {
+      height: 1.8rem;
+
+      &.md {
+        height: 2.4rem;
+        min-height: 2.4rem;
+      }
     }
   }
 }

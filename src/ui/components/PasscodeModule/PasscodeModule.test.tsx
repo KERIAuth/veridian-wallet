@@ -1,39 +1,38 @@
 import { fireEvent, render } from "@testing-library/react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { PasscodeModule } from "./PasscodeModule";
-import { StoreMockedProps } from "../../pages/LockPage/LockPage.test";
+
 import { RoutePath } from "../../../routes";
-import { OperationType } from "../../globals/types";
+import { StoreMockedProps } from "../../pages/LockPage/LockPage.test";
+import { makeTestStore } from "../../utils/makeTestStore";
+import { PasscodeModule } from "./PasscodeModule";
 
 const initialState = {
   stateCache: {
-    routes: [RoutePath.GENERATE_SEED_PHRASE],
+    routes: [RoutePath.SSI_AGENT],
     authentication: {
       loggedIn: false,
       time: Date.now(),
       passcodeIsSet: true,
       seedPhraseIsSet: false,
+      loginAttempt: {
+        attempts: 0,
+        lockedUntil: Date.now(),
+      },
     },
-    currentOperation: OperationType.IDLE,
   },
   seedPhraseCache: {
     seedPhrase: "",
     bran: "",
-  },
-  cryptoAccountsCache: {
-    cryptoAccounts: [],
   },
   biometricsCache: {
     enabled: false,
   },
 };
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const storeMocked = (initialState: StoreMockedProps) => {
   return {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 };

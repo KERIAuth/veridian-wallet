@@ -1,13 +1,13 @@
-import {
-  BiometryError,
-  BiometryErrorType,
-} from "@aparajita/capacitor-biometric-auth";
 import { App, AppState } from "@capacitor/app";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, PluginListenerHandle } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { useHistory } from "react-router-dom";
+import {
+  useBiometricAuth,
+  BiometricAuthOutcome,
+} from "../../hooks/useBiometricsHook";
 import { Agent } from "../../../core/agent/agent";
 import { MiscRecordId } from "../../../core/agent/agent.types";
 import { KeyStoreKeys, SecureStorage } from "../../../core/storage";
@@ -26,6 +26,8 @@ import {
   resetAllRoutes,
   setAuthentication,
   setFirstAppLaunchComplete,
+  setInitializationPhase,
+  showGenericError,
 } from "../../../store/reducers/stateCache";
 import { Alert } from "../../components/Alert";
 import {
@@ -44,9 +46,9 @@ import { ResponsivePageLayout } from "../../components/layout/ResponsivePageLayo
 import { BackEventPriorityType } from "../../globals/types";
 import { useExitAppWithDoubleTap } from "../../hooks/exitAppWithDoubleTapHook";
 import { usePrivacyScreen } from "../../hooks/privacyScreenHook";
-import { useBiometricAuth } from "../../hooks/useBiometricsHook";
 import { showError } from "../../utils/error";
 import "./LockPage.scss";
+import { InitializationPhase } from "../../../store/reducers/stateCache/stateCache.types";
 
 const LockPageContainer = () => {
   const pageId = "lock-page";
@@ -54,15 +56,28 @@ const LockPageContainer = () => {
   const [passcode, setPasscode] = useState("");
   const [alertIsOpen, setAlertIsOpen] = useState(false);
   const [passcodeIncorrect, setPasscodeIncorrect] = useState(false);
-  const preventBiometricOnEvent = useRef(false);
+  const [showMaxAttemptsAlert, setShowMaxAttemptsAlert] = useState(false);
 
-  const { handleBiometricAuth } = useBiometricAuth(true);
+  const preventBiometricOnEvent = useRef(false);
+  const isBiometricPromptActive = useRef(false);
+  const hasTriggeredInitialBiometrics = useRef(false);
+
+  const {
+    handleBiometricAuth,
+    remainingLockoutSeconds,
+    lockoutEndTime,
+    isInBiometricProcess,
+  } = useBiometricAuth(true);
+
   const biometricsCache = useSelector(getBiometricsCache);
   const firstAppLaunch = useSelector(getFirstAppLaunch);
   const [openRecoveryAuth, setOpenRecoveryAuth] = useState(false);
   const { enablePrivacy, disablePrivacy } = usePrivacyScreen();
   const authentication = useAppSelector(getAuthentication);
   const router = useHistory();
+
+  const [showPermanentLockoutAlert, setShowPermanentLockoutAlert] =
+    useState(false);
 
   const {
     isLock,
@@ -88,6 +103,12 @@ const LockPageContainer = () => {
   };
 
   useEffect(() => {
+    if (!lockoutEndTime && showMaxAttemptsAlert) {
+      setShowMaxAttemptsAlert(false);
+    }
+  }, [lockoutEndTime, showMaxAttemptsAlert]);
+
+  useEffect(() => {
     if (passcodeIncorrect) {
       setTimeout(() => {
         setPasscodeIncorrect(false);
@@ -96,21 +117,85 @@ const LockPageContainer = () => {
     }
   }, [passcodeIncorrect]);
 
+  const handleBiometrics = useCallback(async () => {
+    if (isInBiometricProcess) {
+      return;
+    }
+
+    let authenResult: BiometricAuthOutcome;
+    try {
+      await disablePrivacy();
+      authenResult = await handleBiometricAuth();
+
+      if (authenResult === BiometricAuthOutcome.SUCCESS) {
+        await resetLoginAttempt();
+      }
+
+      preventBiometricOnEvent.current =
+        authenResult === BiometricAuthOutcome.USER_CANCELLED ||
+        authenResult === BiometricAuthOutcome.SUCCESS;
+    } finally {
+      await enablePrivacy();
+    }
+
+    switch (authenResult) {
+      case BiometricAuthOutcome.SUCCESS:
+        dispatch(login());
+        dispatch(setFirstAppLaunchComplete());
+        break;
+      case BiometricAuthOutcome.USER_CANCELLED:
+        break;
+      case BiometricAuthOutcome.TEMPORARY_LOCKOUT:
+        setShowMaxAttemptsAlert(true);
+        break;
+      case BiometricAuthOutcome.PERMANENT_LOCKOUT:
+        setShowPermanentLockoutAlert(true);
+        break;
+      default:
+        dispatch(showGenericError(true));
+        break;
+    }
+  }, [
+    isInBiometricProcess,
+    disablePrivacy,
+    handleBiometricAuth,
+    resetLoginAttempt,
+    enablePrivacy,
+    dispatch,
+  ]);
+
+  const handleUseBiometrics = useCallback(async () => {
+    if (remainingLockoutSeconds > 0) {
+      setShowMaxAttemptsAlert(true);
+      return;
+    }
+
+    if (isLock) return;
+
+    if (biometricsCache.enabled && !isBiometricPromptActive.current) {
+      isBiometricPromptActive.current = true;
+      try {
+        await handleBiometrics();
+      } finally {
+        isBiometricPromptActive.current = false;
+      }
+    }
+  }, [
+    biometricsCache.enabled,
+    handleBiometrics,
+    isLock,
+    remainingLockoutSeconds,
+  ]);
+
   useEffect(() => {
-    if (firstAppLaunch) {
+    if (firstAppLaunch && !hasTriggeredInitialBiometrics.current && !isLock) {
+      hasTriggeredInitialBiometrics.current = true;
       handleUseBiometrics();
     }
-  }, []);
-
-  const handleUseBiometrics = async () => {
-    if (biometricsCache.enabled) {
-      await handleBiometrics();
-    }
-  };
+  }, [firstAppLaunch, handleUseBiometrics, isLock]);
 
   const handlePinChange = async (digit: number) => {
     const updatedPasscode = `${passcode}${digit}`;
-
     if (updatedPasscode.length <= 6) setPasscode(updatedPasscode);
 
     if (updatedPasscode.length === 6) {
@@ -118,7 +203,6 @@ const LockPageContainer = () => {
         KeyStoreKeys.APP_PASSCODE,
         updatedPasscode
       );
-
       if (verified) {
         await resetLoginAttempt();
         dispatch(login());
@@ -137,43 +221,19 @@ const LockPageContainer = () => {
     }
   };
 
-  const handleBiometrics = async () => {
-    let authenResult: boolean | BiometryError = false;
-    try {
-      await disablePrivacy();
-      authenResult = await handleBiometricAuth();
-      preventBiometricOnEvent.current =
-        (authenResult instanceof BiometryError &&
-          (authenResult.code === BiometryErrorType.userCancel ||
-            authenResult.code === BiometryErrorType.userFallback)) ||
-        authenResult === true;
-    } finally {
-      await enablePrivacy();
-    }
-
-    if (authenResult === true) {
-      dispatch(login());
-      dispatch(setFirstAppLaunchComplete());
-    }
-  };
-
   const resetPasscode = async () => {
     setOpenRecoveryAuth(true);
   };
 
   const error = (() => {
     if (!passcodeIncorrect || isLock) return undefined;
-
     if (errorMessage) return errorMessage;
-
     if (passcode.length === 6) return `${i18n.t("lockpage.error")}`;
-
     return undefined;
   })();
 
   const outFocusAfterLockPage = useCallback(() => {
     if (Capacitor.isNativePlatform()) {
-      // NOTE: focus to passcode button when open lock page to close keyboard and unfocus any textbox
       Keyboard.hide();
       document.getElementById("passcode-button-1")?.focus();
     }
@@ -183,43 +243,41 @@ const LockPageContainer = () => {
     outFocusAfterLockPage();
   }, [outFocusAfterLockPage]);
 
-  useEffect(() => {
-    const handleAppStateChange = async (state: AppState) => {
+  const handleAppStateChange = useCallback(
+    async (_state: AppState) => {
       outFocusAfterLockPage();
+    },
+    [outFocusAfterLockPage]
+  );
 
-      if (state.isActive && !preventBiometricOnEvent.current) {
-        handleUseBiometrics();
-      }
-    };
-
-    const listener = App.addListener("appStateChange", handleAppStateChange);
-
+  useEffect(() => {
+    let listenerHandle: PluginListenerHandle;
+    if (Capacitor.isNativePlatform()) {
+      App.addListener("appStateChange", handleAppStateChange).then((handle) => {
+        listenerHandle = handle;
+      });
+    }
     return () => {
-      listener
-        .then((value) => value.remove())
-        .catch((e) => showError("Unable to clear listener", e));
+      listenerHandle?.remove();
     };
-  }, []);
+  }, [handleAppStateChange]);
 
   const handleRecoveryButtonClick = async () => {
     if (authentication.seedPhraseIsSet) {
       setAlertIsOpen(true);
       return;
     }
-
     try {
       await Promise.all([
         SecureStorage.delete(KeyStoreKeys.APP_PASSCODE),
         SecureStorage.delete(KeyStoreKeys.APP_OP_PASSWORD),
       ]);
-
       await Promise.allSettled([
         Agent.agent.basicStorage.deleteById(MiscRecordId.OP_PASS_HINT),
         Agent.agent.basicStorage.deleteById(MiscRecordId.APP_PASSWORD_SKIPPED),
         Agent.agent.basicStorage.deleteById(MiscRecordId.APP_ALREADY_INIT),
         Agent.agent.basicStorage.deleteById(MiscRecordId.APP_BIOMETRY),
       ]);
-
       dispatch(
         setAuthentication({
           ...authentication,
@@ -227,11 +285,12 @@ const LockPageContainer = () => {
           passwordIsSet: false,
           passwordIsSkipped: false,
           loggedIn: false,
+          finishSetupBiometrics: false,
         })
       );
       dispatch(resetAllRoutes());
       dispatch(setEnableBiometricsCache(false));
-
+      dispatch(setInitializationPhase(InitializationPhase.PHASE_TWO));
       router.push(RoutePath.ROOT);
     } catch (e) {
       showError("Failed to clear app: ", e, dispatch);
@@ -242,7 +301,7 @@ const LockPageContainer = () => {
     <ResponsivePageLayout
       pageId={pageId}
       activeStatus={true}
-      customClass={"show animation-off max-overlay"}
+      customClass={"lock-page show animation-off max-overlay"}
     >
       {isLock ? (
         <MaxLoginAttemptAlert lockDuration={lockDuration} />
@@ -272,16 +331,14 @@ const LockPageContainer = () => {
             passcode={passcode}
             handlePinChange={handlePinChange}
             handleRemove={handleRemove}
-            handleBiometricButtonClick={() => {
-              handleUseBiometrics();
-            }}
+            handleBiometricButtonClick={handleUseBiometrics}
           />
         </>
       )}
       <PageFooter
         pageId={pageId}
-        secondaryButtonText={`${i18n.t("lockpage.forgotten.button")}`}
-        secondaryButtonAction={handleRecoveryButtonClick}
+        tertiaryButtonText={`${i18n.t("lockpage.forgotten.button")}`}
+        tertiaryButtonAction={handleRecoveryButtonClick}
       />
       <Alert
         isOpen={alertIsOpen}
@@ -291,7 +348,29 @@ const LockPageContainer = () => {
         confirmButtonText={confirmButtonText}
         cancelButtonText={cancelButtonText}
         actionConfirm={resetPasscode}
-        className="alert-forgotten"
+        className="force-on-top"
+      />
+      <Alert
+        isOpen={showMaxAttemptsAlert}
+        setIsOpen={setShowMaxAttemptsAlert}
+        dataTestId="alert-max-attempts"
+        headerText={`${i18n.t("biometry.lockoutheader", {
+          seconds: remainingLockoutSeconds,
+        })}`}
+        confirmButtonText={`${i18n.t("biometry.lockoutconfirm")}`}
+        actionConfirm={() => setShowMaxAttemptsAlert(false)}
+        backdropDismiss={false}
+        className="force-on-top"
+      />
+      <Alert
+        isOpen={showPermanentLockoutAlert}
+        setIsOpen={setShowPermanentLockoutAlert}
+        dataTestId="alert-permanent-lockout"
+        headerText={`${i18n.t("biometry.permanentlockoutheader")}`}
+        confirmButtonText={`${i18n.t("biometry.lockoutconfirm")}`}
+        actionConfirm={() => setShowPermanentLockoutAlert(false)}
+        backdropDismiss={false}
+        className="force-on-top"
       />
       <ForgotAuthInfo
         isOpen={openRecoveryAuth}
@@ -306,7 +385,6 @@ const LockPageContainer = () => {
 const LockPage = () => {
   const currentRoute = useAppSelector(getCurrentRoute);
   const authentication = useAppSelector(getAuthentication);
-
   const isPublicPage = PublicRoutes.includes(currentRoute?.path as RoutePath);
 
   if (isPublicPage || authentication.loggedIn) {

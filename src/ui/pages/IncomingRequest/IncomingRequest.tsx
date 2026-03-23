@@ -12,14 +12,15 @@ import {
   IncomingRequestType,
   PeerConnectSigningEventRequest,
 } from "../../../store/reducers/stateCache/stateCache.types";
-import { getConnectedWallet } from "../../../store/reducers/walletConnectionsCache";
+import { getConnectedDApp } from "../../../store/reducers/profileCache";
 import { ToastMsgType } from "../../globals/types";
+import { showError } from "../../utils/error";
 
 const IncomingRequest = ({ open, setOpenPage }: SidePageContentProps) => {
   const pageId = "incoming-request";
   const dispatch = useAppDispatch();
   const queueIncomingRequest = useAppSelector(getQueueIncomingRequest);
-  const connectedWallet = useAppSelector(getConnectedWallet);
+  const connectedDApp = useAppSelector(getConnectedDApp);
   const incomingRequest = useMemo(() => {
     if (
       !queueIncomingRequest.isProcessing ||
@@ -49,14 +50,15 @@ const IncomingRequest = ({ open, setOpenPage }: SidePageContentProps) => {
     }
     if (
       incomingRequest.type === IncomingRequestType.PEER_CONNECT_SIGN &&
-      (!connectedWallet ||
-        connectedWallet.id !== incomingRequest.peerConnection?.id)
+      (!connectedDApp ||
+        connectedDApp.meerkatId !== incomingRequest.peerConnection?.meerkatId)
     ) {
       handleReset();
     }
     setRequestData(incomingRequest);
     setOpenPage(true);
-  }, [connectedWallet, incomingRequest, setOpenPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectedDApp, incomingRequest, setOpenPage]);
 
   useEffect(() => {
     if (blur) {
@@ -85,15 +87,24 @@ const IncomingRequest = ({ open, setOpenPage }: SidePageContentProps) => {
   };
 
   const handleAccept = async () => {
-    if (!incomingRequest) {
-      return handleReset();
+    try {
+      if (!incomingRequest) {
+        return handleReset();
+      }
+      setInitiateAnimation(true);
+      incomingRequest.signTransaction?.payload.approvalCallback(true);
+      setTimeout(() => {
+        handleReset();
+        dispatch(setToastMsg(ToastMsgType.SIGN_SUCCESSFUL));
+      }, ANIMATION_DELAY);
+    } catch (e) {
+      showError(
+        "Unable to sign transaction",
+        e,
+        dispatch,
+        ToastMsgType.SIGN_ERROR
+      );
     }
-    setInitiateAnimation(true);
-    incomingRequest.signTransaction?.payload.approvalCallback(true);
-    setTimeout(() => {
-      handleReset();
-      dispatch(setToastMsg(ToastMsgType.SIGN_SUCCESSFUL));
-    }, ANIMATION_DELAY);
   };
 
   if (!requestData) {

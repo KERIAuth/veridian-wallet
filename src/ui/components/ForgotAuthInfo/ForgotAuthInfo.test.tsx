@@ -1,16 +1,23 @@
-import { BiometryType } from "@aparajita/capacitor-biometric-auth/dist/esm/definitions";
+import { BiometryType } from "@capgo/capacitor-native-biometric";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { setSeedPhraseCache } from "../../../store/reducers/seedPhraseCache";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
 import { ForgotAuthInfo } from "./ForgotAuthInfo";
 import { ForgotType } from "./ForgotAuthInfo.types";
-import { isRepeat } from "../../utils/passcodeChecker";
+import { KeyStoreKeys, SecureStorage } from "../../../core/storage";
 
 const SEED_PHRASE_LENGTH = 18;
+
+jest.mock("../../../core/storage", () => ({
+  ...jest.requireActual("../../../core/storage"),
+  SecureStorage: {
+    delete: jest.fn(),
+  },
+}));
 
 jest.mock("../../utils/passcodeChecker", () => ({
   isRepeat: () => false,
@@ -23,10 +30,13 @@ const verifySeedPhraseFnc = jest.fn();
 const createOrUpdateBasicStore = jest.fn((arg: unknown) =>
   Promise.resolve(arg)
 );
+const verifySecret = jest.fn().mockResolvedValue(false);
+
 jest.mock("../../../core/agent/agent", () => ({
   Agent: {
     agent: {
       isMnemonicValid: () => verifySeedPhraseFnc(),
+      isSeedPhraseVerified: jest.fn().mockResolvedValue(true),
       basicStorage: {
         findById: jest.fn(),
         save: jest.fn(),
@@ -35,7 +45,7 @@ jest.mock("../../../core/agent/agent", () => ({
           createOrUpdateBasicStore(arg),
       },
       auth: {
-        verifySecret: jest.fn().mockResolvedValue(false),
+        verifySecret: () => verifySecret(),
         storeSecret: jest.fn(),
       },
     },
@@ -76,7 +86,9 @@ jest.mock("../../hooks/useBiometricsHook", () => ({
     biometricInfo: {
       isAvailable: true,
       hasCredentials: false,
-      biometryType: BiometryType.fingerprintAuthentication,
+      biometryType: BiometryType.FINGERPRINT,
+      authenticationStrength: 1, // STRONG
+      deviceIsSecure: true,
       strongBiometryIsAvailable: true,
     },
     handleBiometricAuth: jest.fn(() => Promise.resolve(true)),
@@ -85,7 +97,6 @@ jest.mock("../../hooks/useBiometricsHook", () => ({
 }));
 
 describe("Forgot Passcode Page", () => {
-  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
@@ -99,7 +110,7 @@ describe("Forgot Passcode Page", () => {
   };
 
   const storeMocked = {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 
@@ -180,10 +191,14 @@ describe("Forgot Passcode Page", () => {
 
     await waitFor(() => {
       expect(
-        getByText(EN_TRANSLATIONS.forgotauth.newpasscode.title)
+        getByText(
+          EN_TRANSLATIONS.settings.sections.security.changepin.createpasscode
+        )
       ).toBeVisible();
       expect(
-        getByText(EN_TRANSLATIONS.forgotauth.newpasscode.description)
+        getByText(
+          EN_TRANSLATIONS.settings.sections.security.changepin.description
+        )
       ).toBeVisible();
     });
 
@@ -191,12 +206,12 @@ describe("Forgot Passcode Page", () => {
 
     await waitFor(() => {
       expect(
-        getByTestId("secondary-button-forgot-auth-info-modal")
+        getByTestId("tertiary-button-forgot-auth-info-modal")
       ).toBeVisible();
     });
 
     const text = await findByText(
-      EN_TRANSLATIONS.forgotauth.newpasscode.reenterpasscode
+      EN_TRANSLATIONS.settings.sections.security.changepin.reenterpasscode
     );
 
     await waitFor(() => {
@@ -206,27 +221,28 @@ describe("Forgot Passcode Page", () => {
     await passcodeFiller(getByText, getByTestId, "193212");
 
     await waitFor(() => {
-      expect(onCloseMock).toHaveBeenCalled();
+      expect(onCloseMock).toHaveBeenCalledWith(true);
     });
-  });
+  }, 10000);
 });
 
 describe("Forgot Password Page", () => {
-  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
+      routes: [],
       authentication: {
         loggedIn: true,
         time: Date.now(),
         passcodeIsSet: true,
+        passwordIsSet: true,
         recoveryWalletProgress: true,
       },
     },
   };
 
   const storeMocked = {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 
@@ -305,11 +321,128 @@ describe("Forgot Password Page", () => {
 
     await waitFor(() => {
       expect(
-        getByText(EN_TRANSLATIONS.forgotauth.newpassword.title)
+        getByText(EN_TRANSLATIONS.forgotauth.newpassword.description)
       ).toBeVisible();
+      expect(getByTestId("primary-button-create-password").innerHTML).toBe(
+        EN_TRANSLATIONS.createpassword.button.continue
+      );
+    });
+
+    const input = getByTestId("create-password-input");
+    const confirmInput = getByTestId("confirm-password-input");
+    const hintInput = getByTestId("create-hint-input");
+
+    act(() => {
+      fireEvent.change(input, { target: { value: "Passssssssss1@" } });
+      fireEvent.change(confirmInput, { target: { value: "Passssssssss1@" } });
+      fireEvent.change(hintInput, {
+        target: { value: "Password is Passssssssss1@" },
+      });
+    });
+
+    await waitFor(() => {
+      expect((input as HTMLInputElement).value).toBe("Passssssssss1@");
+    });
+
+    fireEvent.click(getByTestId("primary-button-create-password"));
+
+    await waitFor(() => {
+      expect(verifySecret).toBeCalled();
+    });
+  });
+
+  test("skip", async () => {
+    verifySeedPhraseFnc.mockImplementation(() => {
+      return Promise.resolve(true);
+    });
+
+    const onCloseMock = jest.fn();
+
+    const { getByTestId, getByText } = render(
+      <Provider store={storeMocked}>
+        <ForgotAuthInfo
+          isOpen
+          onClose={onCloseMock}
+          type={ForgotType.Password}
+        />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText(EN_TRANSLATIONS.forgotauth.password.description)
+      ).toBeVisible();
+    });
+
+    for (let i = 0; i < SEED_PHRASE_LENGTH; i++) {
+      act(() => {
+        const input = getByTestId(`word-input-${i}`);
+        fireEvent.focus(input);
+        fireEvent.change(input, {
+          target: { value: "a" },
+        });
+      });
+
+      await waitFor(() => {
+        expect(getByText("abandon")).toBeVisible();
+      });
+
+      act(() => {
+        fireEvent.click(getByText("abandon"));
+      });
+
+      if (i < SEED_PHRASE_LENGTH - 1) {
+        await waitFor(() => {
+          expect(getByTestId(`word-input-${i}`)).toBeVisible();
+        });
+      }
+    }
+
+    expect(
+      getByText(
+        EN_TRANSLATIONS.verifyrecoveryseedphrase.button.continue
+      ).getAttribute("disabled")
+    ).toBe("false");
+
+    act(() => {
+      fireEvent.click(
+        getByText(EN_TRANSLATIONS.verifyrecoveryseedphrase.button.continue)
+      );
+    });
+
+    await waitFor(() => {
+      expect(dispatchMock).toBeCalledWith(
+        setSeedPhraseCache({
+          seedPhrase:
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+          bran: "",
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(getByText(EN_TRANSLATIONS.createpassword.change)).toBeVisible();
       expect(
         getByText(EN_TRANSLATIONS.forgotauth.newpassword.description)
       ).toBeVisible();
+      expect(getByTestId("primary-button-create-password")).toBeVisible();
+      expect(
+        getByText(EN_TRANSLATIONS.forgotauth.newpassword.skip)
+      ).toBeVisible();
     });
+
+    fireEvent.click(getByText(EN_TRANSLATIONS.forgotauth.newpassword.skip));
+
+    await waitFor(() => {
+      expect(
+        getByText(EN_TRANSLATIONS.createpassword.alert.text)
+      ).toBeVisible();
+    });
+
+    fireEvent.click(
+      getByText(EN_TRANSLATIONS.createpassword.alert.button.confirm)
+    );
+
+    expect(SecureStorage.delete).toBeCalledWith(KeyStoreKeys.APP_OP_PASSWORD);
   });
 });

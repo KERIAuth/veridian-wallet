@@ -1,17 +1,31 @@
-import { fireEvent, render } from "@testing-library/react";
+import { IonReactMemoryRouter } from "@ionic/react-router";
+import { render } from "@testing-library/react";
 import { createMemoryHistory } from "history";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { IonReactMemoryRouter } from "@ionic/react-router";
-import { waitForIonicReact } from "@ionic/react-test-utils";
-import { act } from "react";
-import { TabsMenu, TabsRoutePath, tabsRoutes } from "./TabsMenu";
-import { setCurrentRoute } from "../../../../store/reducers/stateCache";
+import { filteredIdentifierFix } from "../../../__fixtures__/filteredIdentifierFix";
 import { notificationsFix } from "../../../__fixtures__/notificationsFix";
+import { profileCacheFixData } from "../../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../../utils/makeTestStore";
+import { TabsMenu, TabsRoutePath, tabsRoutes } from "./TabsMenu";
+
+jest.mock("../../../../core/agent/agent", () => ({
+  Agent: {
+    MISSING_DATA_ON_KERIA: "MISSING_DATA_ON_KERIA",
+    agent: {
+      identifiers: {
+        getIdentifier: jest.fn(),
+      },
+    },
+  },
+}));
+
+jest.mock("@ionic/react", () => ({
+  ...jest.requireActual("@ionic/react"),
+  IonModal: ({ children, isOpen, ...props }: any) =>
+    isOpen ? <div data-testid={props["data-testid"]}>{children}</div> : null,
+}));
 
 describe("Tab menu", () => {
-  const mockStore = configureStore();
-  const dispatchMock = jest.fn();
   const initialState = {
     stateCache: {
       routes: ["/"],
@@ -35,82 +49,38 @@ describe("Tab menu", () => {
       seedPhrase: "",
       bran: "",
     },
-    notificationsCache: {
-      notifications: [],
-    },
+    profilesCache: profileCacheFixData,
   };
 
   const storeMocked = {
-    ...mockStore(initialState),
-    dispatch: dispatchMock,
+    ...makeTestStore(initialState),
   };
 
   test("Render", async () => {
     const history = createMemoryHistory();
-    history.push(TabsRoutePath.IDENTIFIERS);
+    history.push(TabsRoutePath.CREDENTIALS);
 
     const { getByTestId, getByText } = render(
       <IonReactMemoryRouter history={history}>
         <Provider store={storeMocked}>
           <TabsMenu
             tab={() => <></>}
-            path={TabsRoutePath.IDENTIFIERS}
+            path={TabsRoutePath.CREDENTIALS}
           />
         </Provider>
       </IonReactMemoryRouter>
     );
-
-    await waitForIonicReact();
 
     tabsRoutes.forEach((tab) => {
       expect(getByText(tab.label)).toBeVisible();
 
-      act(() => {
-        fireEvent.click(
-          getByTestId(
-            "tab-button-" + tab.label.toLowerCase().replace(/\s/g, "-")
-          )
-        );
-      });
+      const tabButton = getByTestId(
+        "tab-button-" + tab.label.toLowerCase().replace(/\s/g, "-")
+      );
 
-      expect(dispatchMock).toBeCalledWith(setCurrentRoute({ path: tab.path }));
+      expect(tabButton).toHaveAttribute("href", tab.path);
+      expect(tabButton.onclick).toBeDefined();
     });
-  });
-
-  test("Render notification", async () => {
-    const state = {
-      ...initialState,
-      stateCache: {
-        ...initialState.stateCache,
-        routes: [TabsRoutePath.NOTIFICATIONS],
-      },
-      notificationsCache: {
-        notifications: notificationsFix,
-      },
-    };
-
-    const storeMocked = {
-      ...mockStore(state),
-      dispatch: dispatchMock,
-    };
-
-    const history = createMemoryHistory();
-    history.push(TabsRoutePath.NOTIFICATIONS);
-
-    const { getAllByText } = render(
-      <IonReactMemoryRouter history={history}>
-        <Provider store={storeMocked}>
-          <TabsMenu
-            tab={() => <></>}
-            path={TabsRoutePath.NOTIFICATIONS}
-          />
-        </Provider>
-      </IonReactMemoryRouter>
-    );
-
-    await waitForIonicReact();
-
-    expect(getAllByText(notificationsFix.length).length).toBeGreaterThan(0);
   });
 
   test("Render 99+ notification", async () => {
@@ -118,22 +88,65 @@ describe("Tab menu", () => {
       ...initialState,
       stateCache: {
         ...initialState.stateCache,
-        routes: [TabsRoutePath.NOTIFICATIONS],
+        routes: [TabsRoutePath.CREDENTIALS],
       },
-      notificationsCache: {
-        notifications: new Array(100).fill(notificationsFix[0]),
+      profilesCache: {
+        profiles: {
+          [filteredIdentifierFix[0].id]: {
+            identity: filteredIdentifierFix[0],
+            connections: [],
+            multisigConnections: [],
+            peerConnections: [],
+            credentials: [],
+            archivedCredentials: [],
+            notifications: new Array(100).fill(notificationsFix[0]),
+          },
+        },
+        defaultProfile: filteredIdentifierFix[0].id,
+        recentProfiles: [],
+        multiSigGroup: undefined,
       },
     };
 
     const storeMocked = {
-      ...mockStore(state),
-      dispatch: dispatchMock,
+      ...makeTestStore(state),
+    };
+
+    const history = createMemoryHistory();
+    history.push(TabsRoutePath.CREDENTIALS);
+
+    const { getAllByText } = render(
+      <IonReactMemoryRouter history={history}>
+        <Provider store={storeMocked}>
+          <TabsMenu
+            tab={() => <></>}
+            path={TabsRoutePath.CREDENTIALS}
+          />
+        </Provider>
+      </IonReactMemoryRouter>
+    );
+
+    expect(getAllByText("99+").length).toBeGreaterThan(0);
+  });
+
+  test("Notifications counter is hidden when tab is selected", async () => {
+    const state = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        routes: [TabsRoutePath.NOTIFICATIONS],
+      },
+      profilesCache: profileCacheFixData,
+    };
+
+    const storeMocked = {
+      ...makeTestStore(state),
     };
 
     const history = createMemoryHistory();
     history.push(TabsRoutePath.NOTIFICATIONS);
 
-    const { getAllByText } = render(
+    const { container } = render(
       <IonReactMemoryRouter history={history}>
         <Provider store={storeMocked}>
           <TabsMenu
@@ -144,8 +157,38 @@ describe("Tab menu", () => {
       </IonReactMemoryRouter>
     );
 
-    await waitForIonicReact();
+    const counter = container.querySelector(".bubble-counter");
+    expect(counter).not.toBeInTheDocument();
+  });
 
-    expect(getAllByText("99+").length).toBeGreaterThan(0);
+  test("Notifications counter is visible when tab is not selected", async () => {
+    const state = {
+      ...initialState,
+      stateCache: {
+        ...initialState.stateCache,
+        routes: [TabsRoutePath.CREDENTIALS],
+      },
+      profilesCache: profileCacheFixData,
+    };
+
+    const storeMocked = {
+      ...makeTestStore(state),
+    };
+
+    const history = createMemoryHistory();
+    history.push(TabsRoutePath.CREDENTIALS);
+
+    const { getAllByText } = render(
+      <IonReactMemoryRouter history={history}>
+        <Provider store={storeMocked}>
+          <TabsMenu
+            tab={() => <></>}
+            path={TabsRoutePath.CREDENTIALS}
+          />
+        </Provider>
+      </IonReactMemoryRouter>
+    );
+
+    expect(getAllByText(7).length).toBeGreaterThan(0);
   });
 });

@@ -1,0 +1,137 @@
+import { IonModal } from "@ionic/react";
+import { i18n } from "../../../../../i18n";
+import { useAppSelector } from "../../../../../store/hooks";
+import { getMultisigConnectionsCache } from "../../../../../store/reducers/profileCache";
+import { MemberAvatar } from "../../../Avatar";
+import { InfoCard } from "../../../InfoCard";
+import { ScrollablePageLayout } from "../../../layout/ScrollablePageLayout";
+import {
+  Member,
+  MemberAcceptStatus,
+} from "../../../MemberList/MemberList.type";
+import { PageHeader } from "../../../PageHeader";
+import { Advanced } from "./Advanced";
+import "./IdentifierAttributeDetailModal.scss";
+import {
+  DetailView,
+  IdentifierAttributeDetailModalProps,
+} from "./IdentifierAttributeDetailModal.types";
+import { List } from "./List";
+import { SignersDetails } from "./SignersDetails";
+
+const IdentifierAttributeDetailModal = ({
+  isOpen,
+  setOpen,
+  view,
+  data,
+  setViewType,
+  openEdit,
+}: IdentifierAttributeDetailModalProps) => {
+  const multisignConnectionsCache = useAppSelector(getMultisigConnectionsCache);
+
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  const renderContent = () => {
+    let currentUserIndex = 0;
+    const members = data.members?.map((member, index): Member => {
+      const memberConnection = multisignConnectionsCache.find(
+        (c) => c.id === member
+      );
+      const isCurrent = member === data.groupMemberPre;
+      const displayNameCandidate = isCurrent
+        ? data.groupUsername || data.groupMetadata?.proposedUsername || ""
+        : member;
+
+      const name = memberConnection?.label || displayNameCandidate;
+      if (isCurrent) currentUserIndex = index;
+
+      const rank = index >= 0 ? index % 5 : 0;
+
+      return {
+        name,
+        isCurrentUser: isCurrent,
+        avatar: (
+          <MemberAvatar
+            firstLetter={name.at(0)?.toLocaleUpperCase() || ""}
+            rank={rank}
+          />
+        ),
+        status: MemberAcceptStatus.None,
+      };
+    });
+
+    switch (view) {
+      case DetailView.RotationThreshold:
+      case DetailView.SigningThreshold:
+        return (
+          <SignersDetails
+            data={data}
+            setViewType={setViewType}
+          />
+        );
+      case DetailView.GroupMember: {
+        return (
+          <List
+            bottomText={`${i18n.t(
+              `profiledetails.detailsmodal.${view}.bottomtext`,
+              { members: members?.length || 0 }
+            )}`}
+            title={`${i18n.t(`profiledetails.detailsmodal.${view}.title`)}`}
+            data={members || []}
+            onButtonClick={openEdit}
+            mask
+          />
+        );
+      }
+      default:
+        return (
+          <Advanced
+            currentUserIndex={currentUserIndex}
+            data={data}
+          />
+        );
+    }
+  };
+
+  return (
+    <>
+      <IonModal
+        isOpen={isOpen}
+        className="identifier-detail-modal"
+        data-testid="identifier-detail-modal"
+        onDidDismiss={handleClose}
+      >
+        <ScrollablePageLayout
+          pageId={view}
+          header={
+            <PageHeader
+              title={`${i18n.t(`profiledetails.detailsmodal.${view}.title`)}`}
+              closeButton
+              closeButtonLabel={`${i18n.t(
+                "profiledetails.detailsmodal.button.done"
+              )}`}
+              closeButtonAction={handleClose}
+            />
+          }
+        >
+          <div className="attribute-description">
+            <h3>
+              {i18n.t(`profiledetails.detailsmodal.${view}.propexplain.title`)}
+            </h3>
+          </div>
+          <InfoCard
+            className="attribute-description-content"
+            content={i18n.t(
+              `profiledetails.detailsmodal.${view}.propexplain.content`
+            )}
+          />
+          {renderContent()}
+        </ScrollablePageLayout>
+      </IonModal>
+    </>
+  );
+};
+
+export { IdentifierAttributeDetailModal };

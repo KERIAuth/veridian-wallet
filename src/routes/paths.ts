@@ -1,25 +1,24 @@
 enum RoutePath {
   ROOT = "/",
   ONBOARDING = "/onboarding",
+  TERMS_AND_PRIVACY = "/termsandprivacy",
   SET_PASSCODE = "/setpasscode",
-  GENERATE_SEED_PHRASE = "/generateseedphrase",
-  VERIFY_SEED_PHRASE = "/verifyseedphrase",
   TABS_MENU = "/tabs",
   CREATE_PASSWORD = "/createpassword",
   SSI_AGENT = "/ssiagent",
   CONNECTION_DETAILS = "/connectiondetails",
   VERIFY_RECOVERY_SEED_PHRASE = "/verifyrecoveryseedphrase",
   SETUP_BIOMETRICS = "/setup-biometrics",
+  PROFILE_SETUP = "/profile-setup",
+  GROUP_PROFILE_SETUP = "/group-profile-setup/:id",
 }
 
 enum TabsRoutePath {
   ROOT = "/tabs",
-  IDENTIFIERS = "/tabs/identifiers",
+  HOME = "/tabs/home",
   CREDENTIALS = "/tabs/credentials",
-  SCAN = "/tabs/scan",
+  CONNECTIONS = "/tabs/connections",
   NOTIFICATIONS = "/tabs/notifications",
-  MENU = "/tabs/menu",
-  IDENTIFIER_DETAILS = "/tabs/identifiers/:id",
   CREDENTIAL_DETAILS = "/tabs/credentials/:id",
   NOTIFICATION_DETAILS = "/tabs/notifications/:id",
 }
@@ -28,6 +27,7 @@ const PublicRoutes = [
   RoutePath.ROOT,
   RoutePath.ONBOARDING,
   RoutePath.SET_PASSCODE,
+  RoutePath.TERMS_AND_PRIVACY,
 ];
 
-export { RoutePath, TabsRoutePath, PublicRoutes };
+export { PublicRoutes, RoutePath, TabsRoutePath };

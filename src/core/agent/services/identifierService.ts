@@ -1,10 +1,16 @@
 import { HabState, Operation, Signer } from "signify-ts";
 import {
+  parseHabName,
+  formatToV1_2_0_2,
+  DELETED_IDENTIFIER_THEME,
+} from "../../utils/habName";
+import {
   CreateIdentifierResult,
   IdentifierDetails,
   IdentifierShortDetails,
   RemoteSignRequest,
 } from "./identifier.types";
+import type { GroupMetadata, QueuedGroupCreation } from "./identifier.types";
 import {
   CreationStatus,
   AgentServicesProps,
@@ -19,7 +25,12 @@ import {
   IdentifierMetadataRecordProps,
 } from "../records/identifierMetadataRecord";
 import { AgentService } from "./agentService";
-import { OnlineOnly, randomSalt, deleteNotificationRecordById } from "./utils";
+import {
+  OnlineOnly,
+  SeedPhraseVerified,
+  randomSalt,
+  deleteNotificationRecordById,
+} from "./utils";
 import {
   BasicRecord,
   BasicStorage,
@@ -31,6 +42,7 @@ import { OperationPendingRecordType } from "../records/operationPendingRecord.ty
 import { Agent } from "../agent";
 import { PeerConnection } from "../../cardano/walletConnect/peerConnection";
 import { ConnectionService } from "./connectionService";
+import { CredentialService } from "./credentialService";
 import {
   EventTypes,
   IdentifierAddedEvent,
@@ -39,7 +51,6 @@ import {
 } from "../event.types";
 import { StorageMessage } from "../../storage/storage.types";
 import { OobiQueryParams } from "./connectionService.types";
-import type { KeriaNotification } from "./keriaNotificationService.types";
 
 const UI_THEMES = [
   0, 1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33, 40, 41, 42, 43,
@@ -61,15 +72,20 @@ class IdentifierService extends AgentService {
     "Misconfigured KERIA agent for this wallet type";
   static readonly INVALID_QUEUED_DISPLAY_NAMES_FORMAT =
     "Queued display names has invalid format";
+  static readonly MHAB_NAME_MISSING_GROUP_METADATA =
+    "Expected member hab name to include group metadata";
   static readonly CANNOT_FIND_EXISTING_IDENTIFIER_BY_SEARCH =
     "Identifier name taken on KERIA, but cannot be found when iterating over identifier list";
-  static readonly DELETED_IDENTIFIER_THEME = "XX";
+  // @TODO - foconnor: When we refactor this, only member identifiers will have groupMetadata
+  static readonly INVALID_GROUP_IDENTIFIER =
+    "Identifier is not a valid group or group member identifier (missing groupMetadata)";
 
   protected readonly identifierStorage: IdentifierStorage;
   protected readonly operationPendingStorage: OperationPendingStorage;
   protected readonly basicStorage: BasicStorage;
   protected readonly notificationStorage: NotificationStorage;
   protected readonly connections: ConnectionService;
+  protected readonly credentials: CredentialService;
 
   constructor(
     agentServiceProps: AgentServicesProps,
@@ -77,7 +93,8 @@ class IdentifierService extends AgentService {
     operationPendingStorage: OperationPendingStorage,
     basicStorage: BasicStorage,
     notificationStorage: NotificationStorage,
-    connections: ConnectionService
+    connections: ConnectionService,
+    credentials: CredentialService
   ) {
     super(agentServiceProps);
     this.identifierStorage = identifierStorage;
@@ -85,6 +102,7 @@ class IdentifierService extends AgentService {
     this.basicStorage = basicStorage;
     this.notificationStorage = notificationStorage;
     this.connections = connections;
+    this.credentials = credentials;
   }
 
   onIdentifierRemoved() {
@@ -106,20 +124,21 @@ class IdentifierService extends AgentService {
       ? await this.identifierStorage.getUserFacingIdentifierRecords()
       : await this.identifierStorage.getIdentifierRecords();
 
-    for (let i = 0; i < records.length; i++) {
-      const metadata = records[i];
-      const identifier: IdentifierShortDetails = {
+    for (const metadata of records) {
+      const groupMetadata = metadata.groupMemberPre
+        ? undefined
+        : metadata.groupMetadata;
+
+      identifiers.push({
         displayName: metadata.displayName,
         id: metadata.id,
         createdAtUTC: metadata.createdAt.toISOString(),
         theme: metadata.theme,
         creationStatus: metadata.creationStatus ?? false,
-        groupMetadata: metadata.groupMetadata,
-      };
-      if (metadata.groupMemberPre) {
-        identifier.groupMemberPre = metadata.groupMemberPre;
-      }
-      identifiers.push(identifier);
+        groupMetadata,
+        groupMemberPre: metadata.groupMemberPre,
+        groupUsername: metadata.groupUsername,
+      });
     }
     return identifiers;
   }
@@ -154,8 +173,12 @@ class IdentifierService extends AgentService {
     if (hab.group) {
       members = (
         await this.props.signifyClient.identifiers().members(identifier)
-      ).signing.map((member: any) => member.aid);
+      ).signing.map((member: { aid: string }) => member.aid);
     }
+
+    const groupMetadata = metadata.groupMemberPre
+      ? undefined
+      : metadata.groupMetadata;
 
     return {
       id: hab.prefix,
@@ -164,7 +187,8 @@ class IdentifierService extends AgentService {
       theme: metadata.theme,
       groupMemberPre: metadata.groupMemberPre,
       creationStatus: metadata.creationStatus,
-      groupMetadata: metadata.groupMetadata,
+      groupMetadata,
+      groupUsername: metadata.groupUsername,
       s: hab.state.s,
       dt: hab.state.dt,
       kt: hab.state.kt,
@@ -190,48 +214,47 @@ class IdentifierService extends AgentService {
     }
 
     for (const queued of pendingIdentifiersRecord.content.queued) {
+      const parsed = parseHabName(queued);
       let metadata: Omit<IdentifierMetadataRecordProps, "id" | "createdAt">;
-      const splitName = queued.split(":");
-      const theme = Number(splitName[0]);
-      const groupMatch = splitName[1].match(/^(\d)-(.+)-(.+)$/);
-      if (groupMatch) {
+
+      if (parsed.groupMetadata) {
         metadata = {
-          theme,
-          displayName: splitName[2],
+          theme: parseInt(parsed.theme, 10),
+          displayName: parsed.displayName,
           groupMetadata: {
-            groupId: splitName[1].substring(2),
-            groupInitiator: splitName[1][0] === "1",
+            groupId: parsed.groupMetadata.groupId,
             groupCreated: false,
+            groupInitiator: parsed.groupMetadata.groupInitiator,
+            proposedUsername: parsed.groupMetadata.proposedUsername,
           },
         };
       } else {
         metadata = {
-          theme,
-          displayName: splitName[1],
+          theme: parseInt(parsed.theme, 10),
+          displayName: parsed.displayName,
         };
       }
-
       await this.createIdentifier(metadata, true);
     }
   }
 
+  @SeedPhraseVerified
   @OnlineOnly
   async createIdentifier(
     metadata: Omit<IdentifierMetadataRecordProps, "id" | "createdAt">,
     backgroundTask = false
   ): Promise<CreateIdentifierResult> {
+    if (!this.props.signifyClient.agent) {
+      throw new Error("Agent not initialized");
+    }
+
     const { toad, witnesses } = await this.getAvailableWitnesses();
 
     if (!UI_THEMES.includes(metadata.theme)) {
       throw new Error(IdentifierService.INVALID_THEME);
     }
 
-    // For simplicity, it's up to the UI to provide a unique name
-    let name = `${metadata.theme}:${metadata.displayName}`;
-    if (metadata.groupMetadata) {
-      const initiatorFlag = metadata.groupMetadata.groupInitiator ? "1" : "0";
-      name = `${metadata.theme}:${initiatorFlag}-${metadata.groupMetadata.groupId}:${metadata.displayName}`;
-    }
+    const name = this.calcKeriaHabName(metadata);
 
     // For distributed reliability, store name so we can re-try on start-up
     // Hence much of this function will ignore duplicate errors
@@ -293,7 +316,7 @@ class IdentifierService extends AgentService {
 
     const addRoleOperation = await this.props.signifyClient
       .identifiers()
-      .addEndRole(identifier, "agent", this.props.signifyClient.agent!.pre);
+      .addEndRole(identifier, "agent", this.props.signifyClient.agent.pre);
     await addRoleOperation.op();
 
     const creationStatus = CreationStatus.PENDING;
@@ -336,37 +359,153 @@ class IdentifierService extends AgentService {
     });
 
     // Finally, remove from the re-try record
+    await this.clearQueuedIdentifier(name);
+    return { identifier, createdAt: identifierDetail.icp_dt };
+  }
+
+  private calcKeriaHabName(
+    metadata:
+      | IdentifierMetadataRecord
+      | Omit<IdentifierMetadataRecordProps, "id" | "createdAt">,
+    deletedVariant = false
+  ) {
+    const theme = deletedVariant
+      ? `${DELETED_IDENTIFIER_THEME}-${randomSalt()}`
+      : String(metadata.theme);
+
+    return formatToV1_2_0_2({
+      theme,
+      displayName: metadata.displayName,
+      groupMetadata: metadata.groupMetadata,
+    });
+  }
+
+  private async propagateUpdatesForIdentifier(
+    metadata: IdentifierMetadataRecord
+  ): Promise<void> {
+    if (metadata.groupMemberPre) {
+      const memberMetadata = await this.identifierStorage.getIdentifierMetadata(
+        metadata.groupMemberPre
+      );
+      if (!memberMetadata.groupMetadata) {
+        throw new Error(
+          `${IdentifierService.INVALID_GROUP_IDENTIFIER}: ${metadata.groupMemberPre}`
+        );
+      }
+
+      memberMetadata.displayName = metadata.displayName;
+      memberMetadata.theme = metadata.theme;
+
+      if (metadata.groupUsername) {
+        memberMetadata.groupMetadata = {
+          ...memberMetadata.groupMetadata,
+          proposedUsername: metadata.groupUsername,
+        };
+      }
+
+      await this.identifierStorage.updateIdentifierMetadata(memberMetadata.id, {
+        displayName: memberMetadata.displayName,
+        theme: memberMetadata.theme,
+        groupMetadata: memberMetadata.groupMetadata,
+      });
+
+      const desiredMemberName = this.calcKeriaHabName(memberMetadata);
+      const memberHab = await this.props.signifyClient
+        .identifiers()
+        .get(metadata.groupMemberPre);
+      if (memberHab.name !== desiredMemberName) {
+        await this.props.signifyClient
+          .identifiers()
+          .update(metadata.groupMemberPre, {
+            name: desiredMemberName,
+          });
+      }
+
+      const desiredGroupName = this.calcKeriaHabName(metadata);
+      const groupHab = await this.props.signifyClient
+        .identifiers()
+        .get(metadata.id);
+      if (groupHab.name !== desiredGroupName) {
+        await this.props.signifyClient.identifiers().update(metadata.id, {
+          name: desiredGroupName,
+        });
+      }
+    } else {
+      const desiredName = this.calcKeriaHabName(metadata);
+      const hab = await this.props.signifyClient.identifiers().get(metadata.id);
+      if (hab.name !== desiredName) {
+        await this.props.signifyClient.identifiers().update(metadata.id, {
+          name: desiredName,
+        });
+      }
+    }
+
+    await this.identifierStorage.updateIdentifierMetadata(metadata.id, {
+      pendingUpdate: false,
+    });
+  }
+
+  private async clearQueuedIdentifier(name: string) {
     const pendingIdentifiersRecord = await this.basicStorage.findById(
       MiscRecordId.IDENTIFIERS_PENDING_CREATION
     );
+    if (!pendingIdentifiersRecord) return;
 
-    if (pendingIdentifiersRecord) {
-      const { queued } = pendingIdentifiersRecord.content;
-      if (!Array.isArray(queued)) {
-        throw new Error(IdentifierService.INVALID_QUEUED_DISPLAY_NAMES_FORMAT);
-      }
+    const { queued } = pendingIdentifiersRecord.content;
+    if (!Array.isArray(queued)) {
+      throw new Error(IdentifierService.INVALID_QUEUED_DISPLAY_NAMES_FORMAT);
+    }
 
-      const index = queued.indexOf(name);
-      if (index !== -1) {
-        queued.splice(index, 1);
-      }
+    const index = queued.indexOf(name);
+    if (index !== -1) {
+      queued.splice(index, 1);
       await this.basicStorage.update(pendingIdentifiersRecord);
     }
-    return { identifier, createdAt: identifierDetail.icp_dt };
+  }
+
+  private async clearQueuedGroup(groupName: string) {
+    const pendingGroupsRecord = await this.basicStorage.findById(
+      MiscRecordId.MULTISIG_IDENTIFIERS_PENDING_CREATION
+    );
+    if (!pendingGroupsRecord) return;
+
+    const queued = pendingGroupsRecord.content.queued as QueuedGroupCreation[];
+
+    const index = queued.findIndex((group) => group.name === groupName);
+    if (index !== -1) {
+      queued.splice(index, 1);
+      await this.basicStorage.update(pendingGroupsRecord);
+    }
   }
 
   async deleteIdentifier(identifier: string): Promise<void> {
     const metadata = await this.identifierStorage.getIdentifierMetadata(
       identifier
     );
-    if (metadata.groupMetadata) {
-      await this.deleteGroupLinkedConnections(metadata.groupMetadata.groupId);
+
+    if (metadata.groupMemberPre) {
+      await this.cleanupPendingOperationsForIdentifier(identifier, "group");
+      await this.clearQueuedGroup(this.calcKeriaHabName(metadata));
+    } else {
+      await this.cleanupPendingOperationsForIdentifier(identifier, "witness");
+      await this.clearQueuedIdentifier(this.calcKeriaHabName(metadata));
     }
+
+    if (metadata.groupMetadata) {
+      await this.connections.deleteAllConnectionsForGroup(
+        metadata.groupMetadata.groupId
+      );
+    } else {
+      await this.connections.deleteAllConnectionsForIdentifier(identifier);
+    }
+
+    await this.credentials.deleteAllCredentialsForIdentifier(identifier);
 
     if (metadata.groupMemberPre) {
       const localMember = await this.identifierStorage.getIdentifierMetadata(
         metadata.groupMemberPre
       );
+      await this.clearQueuedIdentifier(this.calcKeriaHabName(localMember));
 
       await this.identifierStorage.updateIdentifierMetadata(
         metadata.groupMemberPre,
@@ -376,14 +515,14 @@ class IdentifierService extends AgentService {
         }
       );
       await this.props.signifyClient.identifiers().update(localMember.id, {
-        name: `${IdentifierService.DELETED_IDENTIFIER_THEME}-${randomSalt()}:${
-          localMember.groupMetadata?.groupId
-        }:${localMember.displayName}`,
+        name: this.calcKeriaHabName(localMember, true),
       });
 
-      await this.deleteGroupLinkedConnections(
-        localMember.groupMetadata!.groupId
-      );
+      if (localMember.groupMetadata?.groupId) {
+        await this.connections.deleteAllConnectionsForGroup(
+          localMember.groupMetadata.groupId
+        );
+      }
 
       for (const notification of await this.notificationStorage.findAllByQuery({
         receivingPre: metadata.groupMemberPre,
@@ -392,7 +531,8 @@ class IdentifierService extends AgentService {
           this.props.signifyClient,
           this.notificationStorage,
           notification.id,
-          notification.a.r as NotificationRoute
+          notification.a.r as NotificationRoute,
+          this.operationPendingStorage
         );
 
         this.props.eventEmitter.emit<NotificationRemovedEvent>({
@@ -405,9 +545,7 @@ class IdentifierService extends AgentService {
     }
 
     await this.props.signifyClient.identifiers().update(identifier, {
-      name: `${IdentifierService.DELETED_IDENTIFIER_THEME}-${randomSalt()}:${
-        metadata.displayName
-      }`,
+      name: this.calcKeriaHabName(metadata, true),
     });
 
     for (const notification of await this.notificationStorage.findAllByQuery({
@@ -417,7 +555,8 @@ class IdentifierService extends AgentService {
         this.props.signifyClient,
         this.notificationStorage,
         notification.id,
-        notification.a.r as NotificationRoute
+        notification.a.r as NotificationRoute,
+        this.operationPendingStorage
       );
 
       this.props.eventEmitter.emit<NotificationRemovedEvent>({
@@ -453,6 +592,23 @@ class IdentifierService extends AgentService {
     }
   }
 
+  async processIdentifiersPendingUpdate(): Promise<void> {
+    const pendingIdentifiers =
+      await this.identifierStorage.getIdentifiersPendingUpdate();
+
+    for (const identifier of pendingIdentifiers) {
+      try {
+        await this.propagateUpdatesForIdentifier(identifier);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `Failed to process pending identifier update ${identifier.id}`,
+          error
+        );
+      }
+    }
+  }
+
   async markIdentifierPendingDelete(id: string): Promise<void> {
     const identifierProps = await this.identifierStorage.getIdentifierMetadata(
       id
@@ -474,15 +630,6 @@ class IdentifierService extends AgentService {
     });
   }
 
-  private async deleteGroupLinkedConnections(groupId: string): Promise<void> {
-    const connections = await this.connections.getMultisigLinkedContacts(
-      groupId
-    );
-    for (const connection of connections) {
-      await this.connections.deleteConnectionById(connection.id);
-    }
-  }
-
   async deleteStaleLocalIdentifier(identifier: string): Promise<void> {
     const connectedDApp =
       PeerConnection.peerConnection.getConnectedDAppAddress();
@@ -496,20 +643,92 @@ class IdentifierService extends AgentService {
     await this.identifierStorage.deleteIdentifierMetadata(identifier);
   }
 
+  private async cleanupPendingOperationsForIdentifier(
+    identifierId: string,
+    operationType: string
+  ): Promise<void> {
+    const operationId = `${operationType}.${identifierId}`;
+
+    try {
+      await this.operationPendingStorage.deleteById(operationId);
+
+      this.props.eventEmitter.emit({
+        type: EventTypes.OperationRemoved,
+        payload: {
+          operationId,
+        },
+      });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Error &&
+          error.message.startsWith(
+            StorageMessage.RECORD_DOES_NOT_EXIST_ERROR_MSG
+          )
+        )
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  @OnlineOnly
   async updateIdentifier(
     identifier: string,
-    data: Pick<
-      IdentifierMetadataRecordProps,
-      "theme" | "displayName" | "groupMetadata"
-    >
+    data: Pick<IdentifierMetadataRecordProps, "theme" | "displayName">
   ): Promise<void> {
-    await this.props.signifyClient.identifiers().update(identifier, {
-      name: `${data.theme}:${data.displayName}`,
-    });
-    return this.identifierStorage.updateIdentifierMetadata(identifier, {
+    const identifierMetadata =
+      await this.identifierStorage.getIdentifierMetadata(identifier);
+    identifierMetadata.theme = data.theme;
+    identifierMetadata.displayName = data.displayName;
+    identifierMetadata.pendingUpdate = true;
+
+    await this.identifierStorage.updateIdentifierMetadata(identifier, {
       theme: data.theme,
       displayName: data.displayName,
+      pendingUpdate: true,
     });
+
+    await this.propagateUpdatesForIdentifier(identifierMetadata);
+  }
+
+  @OnlineOnly
+  async updateGroupUsername(
+    identifier: string,
+    username: string
+  ): Promise<void> {
+    const identifierMetadata =
+      await this.identifierStorage.getIdentifierMetadata(identifier);
+
+    if (identifierMetadata.groupMemberPre) {
+      identifierMetadata.groupUsername = username;
+      identifierMetadata.pendingUpdate = true;
+
+      await this.identifierStorage.updateIdentifierMetadata(identifier, {
+        groupUsername: username,
+        pendingUpdate: true,
+      });
+    } else {
+      if (!identifierMetadata.groupMetadata) {
+        throw new Error(
+          `${IdentifierService.INVALID_GROUP_IDENTIFIER}: ${identifier}`
+        );
+      }
+
+      const groupMetadata: GroupMetadata = {
+        ...identifierMetadata.groupMetadata,
+        proposedUsername: username,
+      };
+      identifierMetadata.groupMetadata = groupMetadata;
+      identifierMetadata.pendingUpdate = true;
+
+      await this.identifierStorage.updateIdentifierMetadata(identifier, {
+        groupMetadata,
+        pendingUpdate: true,
+      });
+    }
+
+    await this.propagateUpdatesForIdentifier(identifierMetadata);
   }
 
   @OnlineOnly
@@ -525,7 +744,7 @@ class IdentifierService extends AgentService {
   }
 
   async syncKeriaIdentifiers(): Promise<void> {
-    const cloudIdentifiers: any[] = [];
+    const cloudIdentifiers: HabState[] = [];
     let returned = -1;
     let iteration = 0;
 
@@ -541,8 +760,10 @@ class IdentifierService extends AgentService {
 
     const localIdentifiers = await this.identifierStorage.getAllIdentifiers();
 
-    const unSyncedDataWithGroup = [];
-    const unSyncedDataWithoutGroup = [];
+    const unSyncedDataWithGroup: (HabState & {
+      group: NonNullable<HabState["group"]>;
+    })[] = [];
+    const unSyncedDataWithoutGroup: HabState[] = [];
     for (const identifier of cloudIdentifiers) {
       if (localIdentifiers.find((item) => item.id === identifier.prefix)) {
         continue;
@@ -551,7 +772,9 @@ class IdentifierService extends AgentService {
       if (identifier.group === undefined) {
         unSyncedDataWithoutGroup.push(identifier);
       } else {
-        unSyncedDataWithGroup.push(identifier);
+        unSyncedDataWithGroup.push(
+          identifier as HabState & { group: NonNullable<HabState["group"]> }
+        );
       }
     }
 
@@ -572,67 +795,54 @@ class IdentifierService extends AgentService {
         });
       }
 
-      const nameParts = identifier.name.split(":");
-      const theme =
-        nameParts[0] === IdentifierService.DELETED_IDENTIFIER_THEME
-          ? 0
-          : parseInt(nameParts[0], 10);
+      const parsed = parseHabName(identifier.name);
+      const theme = parsed.theme.startsWith(DELETED_IDENTIFIER_THEME)
+        ? 0
+        : parseInt(parsed.theme, 10);
 
-      const localGroupMember = nameParts.length === 3;
-      const identifierDetail = (await this.props.signifyClient
+      const identifierDetail = await this.props.signifyClient
         .identifiers()
-        .get(identifier.prefix)) as HabState;
+        .get(identifier.prefix);
 
-      if (localGroupMember) {
-        const groupIdParts = nameParts[1].split("-");
-        const groupInitiator = groupIdParts[0] === "1";
-
+      if (parsed.groupMetadata) {
         await this.identifierStorage.createIdentifierMetadataRecord({
           id: identifier.prefix,
-          displayName: nameParts[2],
+          displayName: parsed.displayName,
           theme,
           groupMetadata: {
-            groupId: groupIdParts[1],
+            ...parsed.groupMetadata,
             groupCreated: false,
-            groupInitiator,
           },
           creationStatus,
           createdAt: new Date(identifierDetail.icp_dt),
           sxlt: identifierDetail.salty?.sxlt,
-          isDeleted: identifier.name.startsWith(
-            IdentifierService.DELETED_IDENTIFIER_THEME
-          ),
+          isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
         });
         continue;
       }
 
       await this.identifierStorage.createIdentifierMetadataRecord({
         id: identifier.prefix,
-        displayName: nameParts[1],
+        displayName: parsed.displayName,
         theme,
         creationStatus,
         createdAt: new Date(identifierDetail.icp_dt),
         sxlt: identifierDetail.salty?.sxlt,
-        isDeleted: identifier.name.startsWith(
-          IdentifierService.DELETED_IDENTIFIER_THEME
-        ),
+        isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
       });
     }
 
     for (const identifier of unSyncedDataWithGroup) {
-      const identifierDetail = (await this.props.signifyClient
+      const identifierDetail = await this.props.signifyClient
         .identifiers()
-        .get(identifier.prefix)) as HabState;
+        .get(identifier.prefix);
 
-      const nameParts = identifier.name.split(":");
-      const theme =
-        nameParts[0] === IdentifierService.DELETED_IDENTIFIER_THEME
-          ? 0
-          : parseInt(nameParts[0], 10);
+      const parsed = parseHabName(identifier.name);
+      const theme = parsed.theme.startsWith(DELETED_IDENTIFIER_THEME)
+        ? 0
+        : parseInt(parsed.theme, 10);
 
       const groupMemberPre = identifier.group.mhab.prefix;
-      const groupIdParts = identifier.group.mhab.name.split(":")[1].split("-");
-      const groupInitiator = groupIdParts[0] === "1";
 
       const op = await this.props.signifyClient
         .operations()
@@ -650,29 +860,33 @@ class IdentifierService extends AgentService {
         });
       }
 
+      const mhabParsed = parseHabName(identifier.group.mhab.name);
+      if (!mhabParsed.groupMetadata) {
+        throw new Error(IdentifierService.MHAB_NAME_MISSING_GROUP_METADATA);
+      }
+
       // Mark as created
       await this.identifierStorage.updateIdentifierMetadata(groupMemberPre, {
         groupMetadata: {
-          groupId: groupIdParts[1],
+          ...mhabParsed.groupMetadata,
           groupCreated: true,
-          groupInitiator,
         },
       });
 
       await this.identifierStorage.createIdentifierMetadataRecord({
         id: identifier.prefix,
-        displayName: nameParts[1],
+        displayName: parsed.displayName,
         theme,
         groupMemberPre,
+        groupUsername: mhabParsed.groupMetadata.proposedUsername,
         creationStatus,
         createdAt: new Date(identifierDetail.icp_dt),
-        isDeleted: identifier.name.startsWith(
-          IdentifierService.DELETED_IDENTIFIER_THEME
-        ),
+        isDeleted: parsed.theme.startsWith(DELETED_IDENTIFIER_THEME),
       });
     }
   }
 
+  @SeedPhraseVerified
   @OnlineOnly
   async rotateIdentifier(identifier: string): Promise<void> {
     const rotateResult = await this.props.signifyClient
@@ -697,6 +911,7 @@ class IdentifierService extends AgentService {
     };
   }
 
+  @SeedPhraseVerified
   @OnlineOnly
   async remoteSign(notificationId: string, requestSaid: string): Promise<void> {
     const noteRecord = await this.notificationStorage.findExpectedById(
@@ -736,7 +951,8 @@ class IdentifierService extends AgentService {
       this.props.signifyClient,
       this.notificationStorage,
       notificationId,
-      noteRecord.route
+      noteRecord.route,
+      this.operationPendingStorage
     );
     this.props.eventEmitter.emit<NotificationRemovedEvent>({
       type: EventTypes.NotificationRemoved,
@@ -746,6 +962,7 @@ class IdentifierService extends AgentService {
     });
   }
 
+  @OnlineOnly
   async getAvailableWitnesses(): Promise<{
     toad: number;
     witnesses: Array<{ eid: string; oobi: string }>;

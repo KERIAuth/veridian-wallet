@@ -1,14 +1,69 @@
-import { useState } from "react";
-import "./ReadMore.scss";
 import { IonButton } from "@ionic/react";
+import { useEffect, useRef, useState } from "react";
 import { i18n } from "../../../i18n";
+import "./ReadMore.scss";
 
 const ReadMore = ({ content }: { content: string }) => {
   const [isReadMore, setIsReadMore] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const textRef = useRef<HTMLSpanElement | null>(null);
+  const checkedRef = useRef(false);
 
   const toggleReadMore = () => {
     setIsReadMore(!isReadMore);
   };
+
+  useEffect(() => {
+    checkedRef.current = false;
+    setIsOverflowing(false);
+
+    const checkOverflow = () => {
+      const el = textRef.current;
+      if (!el || checkedRef.current) return;
+
+      void el.offsetHeight;
+
+      const styles = getComputedStyle(el);
+      const lineHeight = parseFloat(styles.lineHeight);
+      const actualLineHeight = isNaN(lineHeight)
+        ? parseFloat(styles.fontSize) * 1.2
+        : lineHeight;
+      const maxHeight = actualLineHeight * 2;
+      const tolerance = 2;
+      const hasOverflow = el.scrollHeight > maxHeight + tolerance;
+
+      if (hasOverflow) {
+        setIsOverflowing(true);
+        checkedRef.current = true;
+      }
+    };
+
+    let timeoutId: NodeJS.Timeout;
+    let resizeObserver: ResizeObserver | null = null;
+
+    if (textRef.current && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver((_entries) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          checkOverflow();
+        }, 50);
+      });
+
+      resizeObserver.observe(textRef.current);
+    }
+
+    const timer1 = setTimeout(checkOverflow, 100);
+    const timer2 = setTimeout(checkOverflow, 300);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+    };
+  }, [content]);
 
   return (
     <div
@@ -18,15 +73,18 @@ const ReadMore = ({ content }: { content: string }) => {
       <span
         data-testid="read-more-text"
         className={isReadMore ? "" : "clamp"}
+        ref={textRef}
       >
         {content}
       </span>
-      <IonButton
-        onClick={toggleReadMore}
-        data-testid="read-more-button"
-      >
-        {isReadMore ? i18n.t("readmore.less") : i18n.t("readmore.more")}
-      </IonButton>
+      {isOverflowing && (
+        <IonButton
+          onClick={toggleReadMore}
+          data-testid="read-more-button"
+        >
+          {isReadMore ? i18n.t("readmore.less") : i18n.t("readmore.more")}
+        </IonButton>
+      )}
     </div>
   );
 };

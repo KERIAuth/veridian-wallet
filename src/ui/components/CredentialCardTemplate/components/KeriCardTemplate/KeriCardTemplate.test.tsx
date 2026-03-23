@@ -1,15 +1,17 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
 import { store } from "../../../../../store";
-import {
-  connectionsFix,
-  connectionsMapFix,
-} from "../../../../__fixtures__/connectionsFix";
+import { connectionsFix } from "../../../../__fixtures__/connectionsFix";
 import { shortCredsFix } from "../../../../__fixtures__/shortCredsFix";
 import { TabsRoutePath } from "../../../navigation/TabsMenu";
 import { KeriCardTemplate } from "./KeriCardTemplate";
+import { makeTestStore } from "../../../../utils/makeTestStore";
+import ENG_trans from "../../../../../locales/en/en.json";
+import { CredentialStatus } from "../../../../../core/agent/services/credentialService.types";
+import { formatShortDate } from "../../../../utils/formatters";
+
+const firstConnId = connectionsFix[0].id as string;
 
 const storeState = {
   stateCache: {
@@ -28,26 +30,32 @@ const storeState = {
       "example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example13 example14 example15",
     bran: "bran",
   },
-  credsCache: { creds: [] },
-  credsArchivedCache: { creds: [] },
   biometricsCache: {
     enabled: false,
   },
-  notificationsCache: {
-    notificationDetailCache: null,
-  },
-  identifiersCache: {
-    identifiers: {},
-  },
-  connectionsCache: {
-    connections: connectionsMapFix,
+  profilesCache: {
+    profiles: {
+      [firstConnId]: {
+        identity: {
+          id: firstConnId,
+          displayName: connectionsFix[0].label,
+          createdAtUTC: "2000-01-01T00:00:00.000Z",
+        },
+        connections: [connectionsFix[0]],
+        multisigConnections: [],
+        peerConnections: [],
+        credentials: [],
+        archivedCredentials: [],
+        notifications: [],
+      },
+    },
+    defaultProfile: firstConnId,
   },
 };
 
-const mockStore = configureStore();
 const dispatchMock = jest.fn();
 const storeMocked = {
-  ...mockStore(storeState),
+  ...makeTestStore(storeState),
   dispatch: dispatchMock,
 };
 
@@ -102,7 +110,7 @@ describe("KeriCardTemplate", () => {
     });
   });
 
-  it("In active card status", async () => {
+  it("Inactive card status", async () => {
     const handleShowCardDetails = jest.fn();
     const { getByTestId } = render(
       <Provider store={store}>
@@ -118,5 +126,48 @@ describe("KeriCardTemplate", () => {
     const card = getByTestId("keri-card-template-name-index-0");
 
     expect(card.classList.contains("active")).toBe(false);
+    expect(getByTestId("card-issued-date").innerHTML).toBe("&nbsp;");
+  });
+
+  it("Revoke card status", async () => {
+    const handleShowCardDetails = jest.fn();
+    const { getByTestId } = render(
+      <Provider store={store}>
+        <KeriCardTemplate
+          name="name"
+          index={0}
+          cardData={{
+            ...shortCredsFix[4],
+            status: CredentialStatus.REVOKED,
+          }}
+          isActive={false}
+          onHandleShowCardDetails={() => handleShowCardDetails(0)}
+        />
+      </Provider>
+    );
+    const card = getByTestId("keri-card-template-name-index-0");
+    expect(card.classList.contains("active")).toBe(false);
+    expect(getByTestId("card-issued-date").innerHTML).toBe(
+      formatShortDate(shortCredsFix[4].issuanceDate)
+    );
+  });
+
+  it("Display unknown when cred connection is missing", async () => {
+    const handleShowCardDetails = jest.fn();
+    const { getByTestId } = render(
+      <Provider store={store}>
+        <KeriCardTemplate
+          name="name"
+          index={0}
+          cardData={shortCredsFix[1]}
+          isActive={false}
+          onHandleShowCardDetails={() => handleShowCardDetails(0)}
+        />
+      </Provider>
+    );
+
+    expect(getByTestId("card-connection").innerHTML).toBe(
+      ENG_trans.tabs.connections.unknown
+    );
   });
 });

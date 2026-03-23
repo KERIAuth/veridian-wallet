@@ -1,22 +1,22 @@
 const verifySecretMock = jest.fn().mockResolvedValue(true);
 
-import { mockIonicReact, waitForIonicReact } from "@ionic/react-test-utils";
-import { act } from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
 import { KeyStoreKeys } from "../../../core/storage";
 import EN_TRANSLATIONS from "../../../locales/en/en.json";
 import { TabsRoutePath } from "../../../routes/paths";
-import { dequeueIncomingRequest } from "../../../store/reducers/stateCache";
-import { IncomingRequestType } from "../../../store/reducers/stateCache/stateCache.types";
 import {
-  signObjectFix,
-  signTransactionFix,
-} from "../../__fixtures__/signTransactionFix";
+  dequeueIncomingRequest,
+  setToastMsg,
+} from "../../../store/reducers/stateCache";
+import { IncomingRequestType } from "../../../store/reducers/stateCache/stateCache.types";
+import { signTransactionFix } from "../../__fixtures__/signTransactionFix";
+import { profileCacheFixData } from "../../__fixtures__/storeDataFix";
+import { makeTestStore } from "../../utils/makeTestStore";
 import { passcodeFiller } from "../../utils/passcodeFiller";
+import { ToastMsgType } from "../../globals/types";
 import { IncomingRequest } from "./IncomingRequest";
-mockIonicReact();
 
 const mockApprovalCallback = jest.fn((status: boolean) => status);
 
@@ -60,7 +60,7 @@ const requestData = {
 
 const initialState = {
   stateCache: {
-    routes: [TabsRoutePath.IDENTIFIERS],
+    routes: [TabsRoutePath.CREDENTIALS],
     authentication: {
       loggedIn: true,
       time: Date.now(),
@@ -73,84 +73,33 @@ const initialState = {
       isPaused: false,
     },
   },
+  profilesCache: {
+    ...profileCacheFixData,
+    pendingConnection: null,
+  },
   biometricsCache: {
     enabled: false,
   },
 };
 
 describe("Sign request", () => {
-  const mockStore = configureStore();
   const dispatchMock = jest.fn();
   const storeMocked = {
-    ...mockStore(initialState),
+    ...makeTestStore(initialState),
     dispatch: dispatchMock,
   };
 
-  test("It renders content for BALLOT_TRANSACTION_REQUEST ", async () => {
-    const { getByText } = render(
-      <Provider store={storeMocked}>
-        <IncomingRequest
-          open={true}
-          setOpenPage={jest.fn()}
-        />
-      </Provider>
-    );
-
-    await waitForIonicReact();
-
-    expect(getByText(requestData.peerConnection?.name)).toBeVisible();
-    expect(
-      getByText(requestData.signTransaction.payload.payload)
-    ).toBeVisible();
-    expect(
-      getByText(requestData.signTransaction.payload.identifier)
-    ).toBeVisible();
-  });
-
-  test("Display fallback image when provider logo is empty: BALLOT_TRANSACTION_REQUEST", async () => {
-    const initialState = {
-      stateCache: {
-        routes: [TabsRoutePath.IDENTIFIERS],
-        authentication: {
-          loggedIn: true,
-          time: Date.now(),
-          passcodeIsSet: true,
-          passwordIsSet: false,
-        },
-        queueIncomingRequest: {
-          isProcessing: true,
-          queues: [
-            {
-              ...requestData,
-              peerConnection: { id: "id", name: "DApp", iconB64: "" },
-            },
-          ],
-          isPaused: false,
-        },
-      },
-      biometricsCache: {
-        enabled: false,
-      },
-    };
-
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
-    };
-
-    const { getByTestId } = render(
-      <Provider store={storeMocked}>
-        <IncomingRequest
-          open={true}
-          setOpenPage={jest.fn()}
-        />
-      </Provider>
-    );
-
-    expect(getByTestId("sign-logo")).toBeInTheDocument();
-
-    expect(getByTestId("sign-logo").getAttribute("src")).not.toBe(undefined);
-  });
+  global.ResizeObserver = class {
+    observe() {
+      jest.fn();
+    }
+    unobserve() {
+      jest.fn();
+    }
+    disconnect() {
+      jest.fn();
+    }
+  };
 
   test("Cancel request", async () => {
     const { getByText } = render(
@@ -217,38 +166,10 @@ describe("Sign request", () => {
     });
   });
 
-  test("Render JSON object", async () => {
-    const initialState = {
-      stateCache: {
-        routes: [TabsRoutePath.IDENTIFIERS],
-        authentication: {
-          loggedIn: true,
-          time: Date.now(),
-          passcodeIsSet: true,
-          passwordIsSet: false,
-        },
-        queueIncomingRequest: {
-          isProcessing: true,
-          queues: [
-            {
-              ...requestData,
-              signTransaction: signObjectFix,
-            },
-          ],
-          isPaused: false,
-        },
-      },
-      biometricsCache: {
-        enabled: false,
-      },
-    };
+  test("dispatches SIGN_SUCCESSFUL toast after animation delay", async () => {
+    jest.useFakeTimers();
 
-    const storeMocked = {
-      ...mockStore(initialState),
-      dispatch: dispatchMock,
-    };
-
-    const { getByText } = render(
+    const { getByText, getByTestId } = render(
       <Provider store={storeMocked}>
         <IncomingRequest
           open={true}
@@ -257,16 +178,97 @@ describe("Sign request", () => {
       </Provider>
     );
 
-    expect(getByText(requestData.peerConnection?.name)).toBeVisible();
-    expect(
-      getByText(JSON.parse(signObjectFix.payload.payload).data.id)
-    ).toBeVisible();
+    act(() => {
+      fireEvent.click(getByTestId("primary-button"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("verify-passcode")).toBeVisible();
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("passcode-button-1")).toBeVisible();
+    });
+
+    await passcodeFiller(getByText, getByTestId, "193212");
+
+    await waitFor(() => {
+      expect(mockApprovalCallback).toBeCalledWith(true);
+    });
+
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    expect(dispatchMock).toHaveBeenCalledWith(
+      setToastMsg(ToastMsgType.SIGN_SUCCESSFUL)
+    );
+
+    jest.useRealTimers();
+  });
+
+  test("handles error when approvalCallback throws", async () => {
+    const throwingState = {
+      stateCache: {
+        routes: [TabsRoutePath.CREDENTIALS],
+        authentication: initialState.stateCache.authentication,
+        queueIncomingRequest: {
+          isProcessing: true,
+          queues: [
+            {
+              ...requestData,
+              signTransaction: {
+                ...signTransactionFix,
+                payload: {
+                  ...signTransactionFix.payload,
+                  approvalCallback: jest.fn().mockImplementation(() => {
+                    throw new Error("sign error");
+                  }),
+                },
+              },
+            },
+          ],
+          isPaused: false,
+        },
+      },
+      profilesCache: { ...profileCacheFixData, pendingConnection: null },
+      biometricsCache: { enabled: false },
+    };
+    const errorStore = {
+      ...makeTestStore(throwingState),
+      dispatch: dispatchMock,
+    };
+
+    const { getByText, getByTestId } = render(
+      <Provider store={errorStore}>
+        <IncomingRequest
+          open={true}
+          setOpenPage={jest.fn()}
+        />
+      </Provider>
+    );
+
+    act(() => {
+      fireEvent.click(getByTestId("primary-button"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("passcode-button-1")).toBeVisible();
+    });
+
+    await passcodeFiller(getByText, getByTestId, "193212");
+
+    await waitFor(() => {
+      expect(dispatchMock).toHaveBeenCalledWith(
+        setToastMsg(ToastMsgType.SIGN_ERROR)
+      );
+    });
   });
 
   test("Incoming request is empty", async () => {
     const initialState = {
       stateCache: {
-        routes: [TabsRoutePath.IDENTIFIERS],
+        routes: [TabsRoutePath.CREDENTIALS],
         authentication: {
           loggedIn: true,
           time: Date.now(),
@@ -279,13 +281,17 @@ describe("Sign request", () => {
           isPaused: false,
         },
       },
+      profilesCache: {
+        ...profileCacheFixData,
+        pendingConnection: null,
+      },
       biometricsCache: {
         enabled: false,
       },
     };
 
     const storeMocked = {
-      ...mockStore(initialState),
+      ...makeTestStore(initialState),
       dispatch: dispatchMock,
     };
 

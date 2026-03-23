@@ -13,6 +13,9 @@ const CardBlock = ({
   flatBorder,
   className,
   copyContent,
+  icon,
+  endSlotIcon,
+  showIcon,
 }: CardBlockProps) => {
   const classes = combineClassNames("card-block", className, {
     "flat-border-bot": flatBorder === FlatBorderType.BOT,
@@ -36,16 +39,16 @@ const CardBlock = ({
           copyContent={copyContent}
           info={title}
           copyButton={!!copyContent}
+          icon={icon}
           endSlot={
-            !copyContent &&
-            onClick && (
+            ((!copyContent && onClick) || showIcon) && (
               <IonButton
                 slot="end"
                 shape="round"
                 className="action-button"
                 data-testid={buttonTestId}
               >
-                <IonIcon icon={chevronForwardOutline} />
+                <IonIcon icon={endSlotIcon ?? chevronForwardOutline} />
               </IonButton>
             )
           }
