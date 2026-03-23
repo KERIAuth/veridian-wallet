@@ -323,6 +323,7 @@ jobs:
 
   dispatch-build-success-event:
     runs-on: arc-runner-set
+    if: github.repository == vars.DISPATCHER_REPO
     needs:
       - merge-multi-platform-manifests
     steps:
