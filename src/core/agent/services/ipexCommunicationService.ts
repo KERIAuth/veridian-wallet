@@ -404,7 +404,7 @@ class IpexCommunicationService extends AgentService {
         }
       });
 
-    const attributes = exchange.exn.a?.a ?? {};
+    const attributes = exchange.exn.a.a ?? {};
     const filter = {
       "-s": { $eq: schemaSaid },
       "-a-i": exchange.exn.rp,
