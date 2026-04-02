@@ -78,10 +78,12 @@ services:
       - "traefik.http.routers.keria-ext-http.entrypoints=web"
       - "traefik.http.routers.keria-ext-http.middlewares=redirect-to-https"
 
+      - "traefik.http.middlewares.keria-boot-auth.basicauth.users=${KERIA_BOOT_BASIC_AUTH_USERS}"
       - "traefik.http.routers.keria-boot.rule=Host(`${KERIA_BOOT_HOST:-keria-boot}`)"
       - "traefik.http.routers.keria-boot.entrypoints=websecure"
       - "traefik.http.routers.keria-boot.tls.certresolver=myresolver"
       - "traefik.http.routers.keria-boot.service=keria-boot"
+      - "traefik.http.routers.keria-boot.middlewares=keria-boot-auth"
       - "traefik.http.services.keria-boot.loadbalancer.server.port=3903"
       - "traefik.http.routers.keria-boot-http.rule=Host(`${KERIA_BOOT_HOST:-keria-boot}`)"
       - "traefik.http.routers.keria-boot-http.entrypoints=web"
