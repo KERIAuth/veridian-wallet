@@ -89,6 +89,14 @@ services:
       - "traefik.http.routers.keria-boot-http.entrypoints=web"
       - "traefik.http.routers.keria-boot-http.middlewares=redirect-to-https"
 
+      - "traefik.http.routers.keria-boot-open.rule=Host(`${KERIA_BOOT_OPEN_HOST:-keria-boot-open}`)"
+      - "traefik.http.routers.keria-boot-open.entrypoints=websecure"
+      - "traefik.http.routers.keria-boot-open.tls.certresolver=myresolver"
+      - "traefik.http.routers.keria-boot-open.service=keria-boot"
+      - "traefik.http.routers.keria-boot-open-http.rule=Host(`${KERIA_BOOT_OPEN_HOST:-keria-boot-open}`)"
+      - "traefik.http.routers.keria-boot-open-http.entrypoints=web"
+      - "traefik.http.routers.keria-boot-open-http.middlewares=redirect-to-https"
+
   witness-init:
     profiles: [witness-init]
     restart: no
