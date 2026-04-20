@@ -6,9 +6,8 @@ export const RARE_EVO_DEMO_SCHEMA_SAID =
 export const LE_SCHEMA_SAID = "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY";
 export const F_EMPLOYEE_DEMO_SCHEMA_SAID =
   "EL9oOWU_7zQn_rD--Xsgi3giCWnFDaNvFMUGTOZx1ARO";
-// Run scripts/compute-sedi-said.ts to obtain the real SAID and replace this placeholder.
 export const SEDI_SCHEMA_SAID =
-  "EKEIy4dKkg1ygomPyDNJH4AiI3khx4ADy2s3hWBbsj2_";
+  "EHiLGNXjNR31E8hQR1Vs9OSWrG_CSpOOkVW76ZvUkaxq";
 
 export const ACDC_SCHEMAS_ID = [
   QVI_SCHEMA_SAID,
